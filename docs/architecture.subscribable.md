@@ -1,6 +1,6 @@
 # Architecture: Subscribable — shared change subscriptions
 
-**Status:** Agreed target architecture; not yet implemented.
+**Status:** Stage 1 implemented in the accompanying PR (shared subscription\nprimitives). Filesystem, Resource hierarchy and producer migrations remain\nplanned.
 
 ## Intent
 
@@ -82,7 +82,7 @@ No content is transmitted by the subscription mechanism. Notifications are
 invalidation hints: consumers reread only when necessary. A change may be
 coalesced with others; subscriptions do not constitute an event history.
 
-## Shared dispatch and distinct producers
+## Stage 1 API and execution rules\n\n`a.Subscribable` is itself a service singleton and can be instantiated\ndirectly for tests or extended by a concrete producer. It does not require\n`initialize()` because its registration storage is established by `__new__`.\nConcrete services retain their own optional explicit initializers.\n\n```python\nimport a\n\nsource = a.Subscribable()\n\n# An unfiltered subscription; callbacks run synchronously during delivery.\nsubscription = source.subscribe(lambda changed: print(changed))\nsubscription.update({12, 35})\nsubscription.cancel()\n```\n\nAccepted filters are `set`, `frozenset`, or `None` (all changes).\n`subscribe(callback)` abbreviates `subscribe(None, callback)`. Every call\nreturns a distinct `a.Subscription`; the same callback can be registered\nmore than once. `update()` on a canceled handle raises `RuntimeError`;\n`cancel()` is idempotent.\n\nInternal producers call `_dispatch(changed)` with a set, frozenset or\n`None`. The batch is snapshotted once. Filter changes made during delivery\napply to later batches, while cancellation suppresses not-yet-reserved\ncallbacks. A callback already selected for invocation may finish after\n`cancel()` returns. Callbacks run in the dispatching thread, without\nlocks held across their bodies. Exceptions are logged and do not halt\nother deliveries.\n\n## Shared dispatch and distinct producers
 
 `Subscribable` implements registration, scope replacement, cancellation,
 matching and dispatch once. It exposes an internal delivery operation to
@@ -175,7 +175,7 @@ not a claim that global shared cache invalidation already exists.
 
 ## Migration and verification
 
-This is an architectural target, not current API behavior. Today,
+Only the shared subscription primitive is implemented by Stage 1. Today,
 `Directory` extends `File`; file carriers provide `is_directory()`;
 there is no Filesystem subscription service. The existing Almasi filesystem
 contract is documented in `almasi_invariants8.md`.
