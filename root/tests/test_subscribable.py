@@ -19,10 +19,12 @@ class TestSubscribable(a.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def _source(cls):
-		class Source(a.Subscribable):
-			pass
+		source = a.Subscribable()
 
-		return Source()
+		for subscription in tuple(source._subscriptions):
+			subscription.cancel()
+
+		return source
 
 	# ==========================================================================
 	# PUBLIC METHODS
