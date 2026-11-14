@@ -26,6 +26,7 @@ class Subscribable(Service):
 		if '_subscriptions' not in instance.__dict__:
 			instance._subscription_lock = threading.RLock()
 			instance._subscriptions     = {}
+			instance._snapshot          = ()
 
 		return instance
 
@@ -46,6 +47,14 @@ class Subscribable(Service):
 
 		return scope
 
+	# Refresh the immutable delivery view only when registrations change.
+	# ----------------------------------------------------------------------
+	def _refresh(self):
+		self._snapshot = tuple(
+			(subscription, subscription._identifiers)
+			for subscription in self._subscriptions
+		)
+
 	# Replace a live subscription's scope atomically with dispatch snapshots.
 	# ----------------------------------------------------------------------
 	def _update_subscription(self, subscription, identifiers):
@@ -54,6 +63,7 @@ class Subscribable(Service):
 		with self._subscription_lock:
 			if subscription._active:
 				subscription._identifiers = scope
+				self._refresh()
 			else:
 				raise RuntimeError('Cannot update a canceled subscription')
 
@@ -63,31 +73,26 @@ class Subscribable(Service):
 		with self._subscription_lock:
 			subscription._active = False
 			self._subscriptions.pop(subscription, None)
+			self._refresh()
 
 	# Deliver one batch using a stable scope snapshot and no callback lock.
 	# ----------------------------------------------------------------------
 	def _dispatch(self, changed):
-		changes = self._scope(changed)
+		changes = changed if changed is None or isinstance(changed, frozenset) else self._scope(changed)
 
-		with self._subscription_lock:
-			snapshot = tuple(
-				(subscription, subscription._identifiers)
-				for subscription in self._subscriptions
-			)
+		for subscription, identifiers in self._snapshot:
+			if not subscription._active:
+				continue
 
-		for subscription, identifiers in snapshot:
 			matching = None if changes is None else (
 				changes if identifiers is None else changes & identifiers
 			)
 
 			if changes is None or matching:
-				with self._subscription_lock:
-					active = subscription._active
-
-				if active:
+				if subscription._active:
 					try:
 						subscription._callback(matching)
-					except Exception:
+						except Exception:
 						logging.exception('Subscription callback failed')
 
 	# ==========================================================================
@@ -109,5 +114,6 @@ class Subscribable(Service):
 
 		with self._subscription_lock:
 			self._subscriptions[subscription] = None
+			self._refresh()
 
 		return subscription
