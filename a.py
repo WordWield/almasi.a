@@ -11,7 +11,9 @@ import os, sys
 
 from lib.imports   import Imports
 from lib.module    import Module, ModuleMeta
-from lib.service   import Service
+from lib.service      import Service
+from lib.subscribable import Subscribable
+from lib.subscription import Subscription
 from lib.logger    import Logger
 from lib.string    import String
 from lib.file      import File
@@ -100,6 +102,8 @@ class A(metaclass=AMeta, plugins=['Py', 'Json', 'Text', 'Bytes']):
 	Directory     = Directory
 	Plugin        = Plugin
 	Service       = Service
+	Subscribable  = Subscribable
+	Subscription = Subscription
 	Imports       = Imports
 	Undefined     = Undefined
 	String        = String
