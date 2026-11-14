@@ -1,0 +1,84 @@
+name: Subscribable dispatch comparison
+
+on:
+  pull_request:
+    paths:
+      - 'lib/subscribable.py'
+      - '.github/workflows/subscribable-performance.yml'
+  workflow_dispatch:
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install baseline and candidate
+        run: |
+          git worktree add ../almasi-baseline origin/master
+          python -m venv /tmp/almasi-baseline-venv
+          python -m venv /tmp/almasi-pr-venv
+          /tmp/almasi-baseline-venv/bin/pip install -q -e ../almasi-baseline
+          /tmp/almasi-pr-venv/bin/pip install -q -e .
+      - name: Compare identical dispatch workloads
+        run: |
+          python - <<'PY'
+          import json
+          import statistics
+          import subprocess
+          import textwrap
+
+          program = textwrap.dedent('''
+              import json
+              import time
+              import a
+
+              source = a.Subscribable()
+              changed = frozenset({7})
+              results = {}
+
+              for observers in (0, 1, 10):
+                  handles = [source.subscribe({7}, lambda ids: None) for _ in range(observers)]
+                  for iteration in range(20000):
+                      source._dispatch(changed)
+                  start = time.perf_counter_ns()
+                  for iteration in range(100000):
+                      source._dispatch(changed)
+                  results[str(observers)] = (time.perf_counter_ns() - start) / 100000 / 1000
+                  for handle in handles:
+                      handle.cancel()
+
+              print(json.dumps(results))
+          ''')
+
+          versions = {
+              'master': '/tmp/almasi-baseline-venv/bin/python',
+              'pr': '/tmp/almasi-pr-venv/bin/python',
+          }
+          samples = {version: {} for version in versions}
+
+          for round_index in range(7):
+              order = tuple(versions) if round_index % 2 == 0 else tuple(reversed(versions))
+              for version in order:
+                  result = subprocess.run(
+                      [versions[version], '-c', program],
+                      cwd='../almasi-baseline' if version == 'master' else '.',
+                      capture_output=True, text=True, check=True,
+                  )
+                  values = json.loads(result.stdout.strip().splitlines()[-1])
+                  for count, microseconds in values.items():
+                      samples[version].setdefault(count, []).append(microseconds)
+              print(f'Round {round_index + 1}/7 complete', flush=True)
+
+          print('Dispatch microseconds per batch, median of 7 rounds:')
+          print('Subscribers   master       PR     change')
+          for count in ('0', '1', '10'):
+              before = statistics.median(samples['master'][count])
+              after = statistics.median(samples['pr'][count])
+              print(f'{count:>6}       {before:7.3f}  {after:7.3f}  {(after / before - 1) * 100:+7.1f}%')
+          PY
