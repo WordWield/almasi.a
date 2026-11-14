@@ -25,7 +25,7 @@ class Subscribable(Service):
 
 		if '_subscriptions' not in instance.__dict__:
 			instance._subscription_lock = threading.RLock()
-			instance._subscriptions     = set()
+			instance._subscriptions     = {}
 
 		return instance
 
@@ -62,7 +62,7 @@ class Subscribable(Service):
 	def _cancel_subscription(self, subscription):
 		with self._subscription_lock:
 			subscription._active = False
-			self._subscriptions.discard(subscription)
+			self._subscriptions.pop(subscription, None)
 
 	# Deliver one batch using a stable scope snapshot and no callback lock.
 	# ----------------------------------------------------------------------
@@ -108,6 +108,6 @@ class Subscribable(Service):
 		subscription = Subscription(self, scope, callback)
 
 		with self._subscription_lock:
-			self._subscriptions.add(subscription)
+			self._subscriptions[subscription] = None
 
 		return subscription
