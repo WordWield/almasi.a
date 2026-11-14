@@ -97,12 +97,13 @@ class TestSubscribable(a.Tester):
 	def test_dispatch_scope_snapshot(cls):
 		source   = cls._source()
 		received = []
-		handle   = source.subscribe({1}, received.append)
+		handle   = None
 
 		def change_scope(changed):
 			handle.update({2})
 
 		source.subscribe(change_scope)
+		handle = source.subscribe({1}, received.append)
 		source._dispatch({1})
 		source._dispatch({2})
 
@@ -114,16 +115,17 @@ class TestSubscribable(a.Tester):
 	def test_cancel_during_dispatch(cls):
 		source   = cls._source()
 		received = []
-		handle   = source.subscribe(received.append)
+		handle   = None
 
 		def cancel(changed):
 			handle.cancel()
 
 		source.subscribe(cancel)
+		handle = source.subscribe(received.append)
 		source._dispatch({1})
 		source._dispatch({2})
 
-		assert len(received) <= 1
+		assert received == []
 
 	# Isolate callback errors and allow reentrant registration.
 	# ----------------------------------------------------------------------
