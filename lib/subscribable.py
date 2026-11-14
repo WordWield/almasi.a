@@ -81,9 +81,6 @@ class Subscribable(Service):
 		changes = changed if changed is None or isinstance(changed, frozenset) else self._scope(changed)
 
 		for subscription, identifiers in self._snapshot:
-			if not subscription._active:
-				continue
-
 			matching = None if changes is None else (
 				changes if identifiers is None else changes & identifiers
 			)
