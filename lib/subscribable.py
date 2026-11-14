@@ -89,7 +89,7 @@ class Subscribable(Service):
 				if subscription._active:
 					try:
 						subscription._callback(matching)
-						except Exception:
+					except Exception:
 						logging.exception('Subscription callback failed')
 
 	# ==========================================================================
