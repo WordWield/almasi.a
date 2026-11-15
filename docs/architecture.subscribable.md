@@ -1,6 +1,7 @@
 # Architecture: Subscribable — shared change subscriptions
 
-**Status:** Shared Subscribable and filesystem resource subscriptions implemented.\nO and Web integrate their own source-specific subscriptions separately.
+**Status:** Shared Subscribable and filesystem resource subscriptions implemented.
+O and Web integrate their own source-specific subscriptions separately.
 
 ## Intent
 
@@ -34,9 +35,9 @@ a.Resource
   receives changes from its own producer.
 - `Subscription` owns one registration: its identifier set, callback and
   cancellation/update state. It is a runtime object, not a service.
-- `Resource` is the common filesystem carrier identity. `File` and
-  `Directory` extend it as distinct types. The proposed hierarchy supersedes
-  the current `Directory(File)` relationship and `is_directory()` predicate.
+- `Resource` holds the common filesystem carrier identity and `subscribe()`.
+  `File` and `Directory` inherit it separately, preserving their existing
+  `is_directory()` methods.
 - `Filesystem` is the Almasi service that receives filesystem change events,
   resolves their effective resource identities and dispatches notifications.
 - `Resource.subscribe(callback)` delegates to the Filesystem service. It does
@@ -117,9 +118,9 @@ on the caller's thread.
 
 ## Filesystem source
 
-The proposed `a.services.Filesystem(a.Subscribable)` uses an OS-backed
-watcher, with `watchfiles` as the candidate adapter. It is a dependency of
-the filesystem implementation, not of `Subscribable`.
+`a.services.Filesystem(a.Subscribable)` uses an OS-backed
+`watchfiles` watcher. This dependency belongs to the filesystem producer,
+not to `Subscribable`.
 
 Filesystem events are physical: added, modified and deleted paths. The
 subscriber-facing identifiers represent the **effective Almasi resource**
@@ -175,10 +176,10 @@ not a claim that global shared cache invalidation already exists.
 
 ## Migration and verification
 
-Only the shared subscription primitive is implemented by Stage 1. Today,
-`Directory` extends `File`; file carriers provide `is_directory()`;
-there is no Filesystem subscription service. The existing Almasi filesystem
-contract is documented in `almasi_invariants8.md`.
+The shared subscription primitive and filesystem producer are implemented.
+`Resource` is the common parent of `File` and `Directory`; both retain
+`is_directory()`. The filesystem carrier contract is documented in
+`almasi_invariants8.md`.
 
 Implementation should proceed without inventing additional public API:
 
