@@ -80,7 +80,37 @@ No content is transmitted by the subscription mechanism. Notifications are
 invalidation hints: consumers reread only when necessary. A change may be
 coalesced with others; subscriptions do not constitute an event history.
 
-## Stage 1 API and execution rules\n\n`a.Subscribable` is a service singleton that concrete producers extend.\nIts `_matches_generator()` raises `NotImplementedError` unless implemented. It does not require\n`initialize()` because its registration storage is established by `__new__`.\nConcrete services retain their own optional explicit initializers.\n\n```python\nimport a\n\nsource = concrete_subscribable\n\n# An unfiltered subscription; callbacks run synchronously during delivery.\nsubscription = source.subscribe(lambda changed: print(changed))\nsubscription.update({12, 35})\nsubscription.cancel()\n```\n\nAccepted filters are `set`, `frozenset`, or `None` (all changes).\n`subscribe(callback)` abbreviates `subscribe(None, callback)`. Every call\nreturns a distinct `a.Subscription`; the same callback can be registered\nmore than once. `update()` on a canceled handle raises `RuntimeError`;\n`cancel()` is idempotent.\n\nInternal producers call `_dispatch(changed)` with their own change format.\nThe producer snapshots matching scopes before the first callback. Filter changes made during delivery\napply to later batches, while cancellation suppresses not-yet-reserved\ncallbacks. A callback already selected for invocation may finish after\n`cancel()` returns. Callbacks run in the dispatching thread, without\nlocks held across their bodies. Exceptions are logged and do not halt\nother deliveries.\n\n## Shared dispatch and distinct producers
+## Subscription API and execution rules
+
+`a.Subscribable` is a service singleton that concrete producers extend.
+Each source implements `_matches_generator(changed)` to yield
+`(subscription, notification)` pairs. The base implementation raises
+`NotImplementedError` when delivery is attempted without an override.
+
+A concrete resource subscription can be used directly:
+
+```python
+import a
+
+resource = a.File(a, '/tmp/example.txt', 'a.example')
+subscription = resource.subscribe(lambda changes: print(changes))
+subscription.cancel()
+```
+
+Filters accept `set`, `frozenset`, or `None` (all identifiers).
+`subscribe(callback)` abbreviates `subscribe(None, callback)` for
+sources supporting broad registration. Each call returns a distinct
+`a.Subscription`. Updating a canceled handle raises `RuntimeError`;
+cancellation is idempotent.
+
+Internal producers call `_dispatch(changed)` with their own change
+representation. Matching snapshots are selected by the concrete source.
+A scope update during delivery affects later batches; cancellation skips
+callbacks not yet invoked. Callback bodies execute in the producer's
+thread, outside the registration lock. Callback exceptions are logged
+and do not halt other deliveries.
+
+## Shared dispatch and distinct producers
 
 `Subscribable` implements registration, scope replacement, cancellation and
 callback delivery once. Each concrete source implements
