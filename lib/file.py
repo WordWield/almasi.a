@@ -40,6 +40,11 @@ class File(Resource):
 	# PUBLIC METHODS
 	# ======================================================================
 
+	# Preserve the established public carrier-type predicate.
+	# ----------------------------------------------------------------------
+	def is_directory(self):
+		return False
+
 	# Memoize legitimate null values as well as other plugin results.
 	# ----------------------------------------------------------------------
 	def load(self):
