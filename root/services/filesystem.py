@@ -8,7 +8,9 @@ import logging
 import os
 import threading
 
-from watchfiles import watch
+from contextvars import ContextVar
+
+from watchfiles import Change, watch
 
 import a
 
@@ -27,6 +29,7 @@ class Filesystem(a.Subscribable):
 		if '_resources' not in instance.__dict__:
 			instance._resources = {}
 			instance._watchers  = {}
+			instance._events    = ContextVar('filesystem_events', default={})
 
 		return instance
 
@@ -109,15 +112,34 @@ class Filesystem(a.Subscribable):
 	def _watch(self, root, stop):
 		try:
 			for changes in watch(root, stop_event=stop, debounce=100, step=50, rust_timeout=500):
-				paths = {
-					os.path.realpath(path) for change, path in changes
-					if not os.path.basename(path).startswith('.almasi-')
-				}
+				paths = self._changes(changes)
 
 				if paths:
 					self._changed_paths(root, paths)
 		except Exception:
 			logging.exception('Filesystem observer failed: %s', root)
+
+	# Collapse one OS event batch to the final observed status of each path.
+	# --------------------------------------------------------------------------
+	def _changes(self, events):
+		changes = {}
+
+		for change, path in events:
+			if not os.path.basename(path).startswith('.almasi-'):
+				path   = os.path.abspath(path)
+				status = 'created' if change == Change.added else 'deleted' if change == Change.deleted else 'modified'
+
+				if path in changes:
+					if not os.path.exists(path):
+						status = 'deleted'
+					elif status == 'created' or changes[path] == 'created':
+						status = 'created'
+					else:
+						status = 'modified'
+
+				changes[path] = status
+
+		return changes
 
 	# Register one resource and reuse watchers already serving its roots.
 	# --------------------------------------------------------------------------
@@ -242,9 +264,19 @@ class Filesystem(a.Subscribable):
 	def _invalidate_path(self, namespace, path):
 		layer_index, relative = self._event_source(namespace, path)
 
-		if layer_index is not None:
-			layer = tuple(namespace.__instances__())[layer_index]
-			a.Directory(layer, os.path.dirname(path), layer.__name__)._invalidate_children(path)
+		layer = tuple(namespace.__instances__())[layer_index] if layer_index is not None else namespace
+		a.Directory(layer, os.path.dirname(path), layer.__name__)._invalidate_children(path)
+
+	# Express the event path relative to its effective library or external root.
+	# --------------------------------------------------------------------------
+	def _event_name(self, resource, path, relative):
+		if relative is not None:
+			name = relative
+		else:
+			base = resource.get_path() if isinstance(resource, a.Directory) else os.path.dirname(resource.get_path())
+			name = os.path.relpath(path, os.path.dirname(base))
+
+		return name.replace(os.sep, '/')
 
 	# Deliver only changes that affect the currently visible resource.
 	# --------------------------------------------------------------------------
@@ -255,9 +287,9 @@ class Filesystem(a.Subscribable):
 				for resource, entry in self._resources.items()
 			)
 
-		changed = set()
+		changed = {}
 
-		for path in paths:
+		for path, status in paths.items():
 			namespaces = {
 				resource._namespace_lib for resource, old, roots in observed if root in roots
 			}
@@ -284,26 +316,48 @@ class Filesystem(a.Subscribable):
 					if affected:
 						if isinstance(resource, a.File):
 							resource._invalidate()
-						changed.add(resource)
+						changed.setdefault(resource, {})[self._event_name(resource, path, relative)] = status
 
 					with self._subscription_lock:
 						if resource in self._resources:
 							self._resources[resource]['path'] = current
 
 		if changed:
-			self._dispatch(changed)
+			token = self._events.set(changed)
+
+			try:
+				self._dispatch(set(changed))
+			finally:
+				self._events.reset(token)
 
 	# ==========================================================================
 	# PUBLIC METHODS
 	# ==========================================================================
+
+	# Reuse Subscribable dispatch, enriching filesystem invalidations with paths.
+	# --------------------------------------------------------------------------
+	def _notify(self, callback, matched):
+		events  = self._events.get()
+		changes = {}
+
+		for resource in matched:
+			changes.update(events.get(resource, {}))
+
+		callback(changes)
 
 	# Register interest in one or more resources with no eager watcher at import.
 	# --------------------------------------------------------------------------
 	def subscribe(self, identifiers=None, callback=None):
 		resources = self._resources_in(identifiers)
 
+		if not callable(callback):
+			raise TypeError('Subscription callback must be callable')
+
+		def deliver(matched):
+			self._notify(callback, matched)
+
 		with self._subscription_lock:
-			subscription = super().subscribe(resources, callback)
+			subscription = super().subscribe(resources, deliver)
 			retained     = []
 
 			try:
