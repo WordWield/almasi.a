@@ -100,6 +100,13 @@ transport on producers. An existing producer can deliver a batch from its
 own worker after it has completed source-specific processing. This keeps
 subscription matching behind the producer's write/commit hot path.
 
+A producer may call `_dispatch(ids, transform)` to convert the matched
+identifiers to source-specific callback data. `transform(matched_ids)`
+is local to that dispatch, so overlapping or reentrant batches cannot
+overwrite a shared payload. Standard `_dispatch(ids)` semantics are
+unchanged. Filesystem uses this to deliver `{path: change}` without
+`ContextVar`, callback wrappers or a second subscription dispatcher.
+
 The dispatch implementation must support:
 
 - Subscription registration/update/cancellation while delivery is underway,
