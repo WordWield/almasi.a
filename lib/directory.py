@@ -12,12 +12,12 @@ import weakref
 
 from functools import partial
 
-from .resource import Resource
+from .filesystem_resource import FilesystemResource
 from .file     import File
 from .imports import Imports
 
 
-class Directory(Resource):
+class Directory(FilesystemResource):
 
 	# Weak references keep namespace tracking from extending object lifetimes.
 	__namespace_faces__ = weakref.WeakSet()
@@ -278,17 +278,22 @@ class Directory(Resource):
 
 	# Read one exact filename through its registered format plugin.
 	# ----------------------------------------------------------------------
-	def read(self, name):
-		self._destination(name)
-		self._plugin(name)
-		file = self.__resolve__(name)
+	def read(self, name=None):
+		result = self.load()
 
-		if file is None:
-			raise FileNotFoundError(self.join(name))
-		if isinstance(file, Directory):
-			raise IsADirectoryError(file.get_path())
+		if name is not None:
+			self._destination(name)
+			self._plugin(name)
+			file = self.__resolve__(name)
 
-		return file.load()
+			if file is None:
+				raise FileNotFoundError(self.join(name))
+			if isinstance(file, Directory):
+				raise IsADirectoryError(file.get_path())
+
+			result = file.load()
+
+		return result
 
 	# Serialize through the format owner and atomically replace the destination.
 	# ----------------------------------------------------------------------
