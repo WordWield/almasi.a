@@ -1,0 +1,92 @@
+name: Indexed dispatch comparison
+
+on:
+  pull_request:
+    paths:
+      - 'lib/subscribable.py'
+      - '.github/workflows/subscribable-index-performance.yml'
+  workflow_dispatch:
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Prepare common baseline and candidate
+        run: |
+          git worktree add ../almasi-cow origin/perf/subscribable-cow-dispatch
+          python -m venv /tmp/almasi-cow-env
+          python -m venv /tmp/almasi-index-env
+          /tmp/almasi-cow-env/bin/python -m pip install -q -e ../almasi-cow
+          /tmp/almasi-index-env/bin/python -m pip install -q -e .
+      - name: Run paired direct-dispatch benchmarks
+        run: |
+          python - <<'PY'
+          import json
+          import statistics
+          import subprocess
+          import textwrap
+
+          program = textwrap.dedent('''
+              import json
+              import time
+              import a
+
+              scenarios = [
+                  ('small-sparse', 10, 1, False, 30000),
+                  ('medium-sparse', 100, 1, False, 20000),
+                  ('large-sparse', 1000, 1, False, 10000),
+                  ('large-dense', 1000, 1, True, 5000),
+                  ('large-dense-16', 1000, 16, True, 3000),
+              ]
+              values = {}
+
+              for name, count, changed_count, dense, iterations in scenarios:
+                  source = a.Subscribable()
+                  for handle in tuple(source._subscriptions):
+                      handle.cancel()
+                  for number in range(count):
+                      source.subscribe({number + 1 if not dense else 1}, lambda ids: None)
+                  changed = frozenset({1} if changed_count == 1 else range(1, changed_count + 1))
+
+                  for iteration in range(100):
+                      source._dispatch(changed)
+
+                  start = time.perf_counter_ns()
+                  for iteration in range(iterations):
+                      source._dispatch(changed)
+                  values[name] = (time.perf_counter_ns() - start) / iterations / 1000
+
+              print(json.dumps(values))
+          ''')
+
+          environments = {
+              'cow': ('/tmp/almasi-cow-env/bin/python', '../almasi-cow'),
+              'index': ('/tmp/almasi-index-env/bin/python', '.'),
+          }
+          samples = {name: {} for name in environments}
+
+          for round_index in range(5):
+              order = tuple(environments) if round_index % 2 == 0 else tuple(reversed(environments))
+              for name in order:
+                  executable, directory = environments[name]
+                  completed = subprocess.run([executable, '-c', program], cwd=directory, capture_output=True, text=True)
+                  if completed.returncode:
+                      raise RuntimeError(f'{name}: {completed.stderr}')
+                  for scenario, value in json.loads(completed.stdout.strip().splitlines()[-1]).items():
+                      samples[name].setdefault(scenario, []).append(value)
+              print(f'Round {round_index + 1}/5 complete', flush=True)
+
+          print('Direct _dispatch, median microseconds per batch')
+          print('scenario                   COW     index      change')
+          for scenario in samples['cow']:
+              before = statistics.median(samples['cow'][scenario])
+              after = statistics.median(samples['index'][scenario])
+              print(f'{scenario:22} {before:8.3f} {after:8.3f} {(after / before - 1) * 100:+8.1f}%')
+          PY
