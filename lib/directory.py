@@ -13,6 +13,7 @@ import weakref
 from functools import partial
 
 from .resource import Resource
+from .file     import File
 from .imports import Imports
 
 
@@ -163,7 +164,7 @@ class Directory(Resource):
 					is_same_file = child.get_path() == path
 					is_same_name = name == stem or source_lib.String.camel_to_snake(name) == stem
 
-					if is_same_file:
+					if is_same_file and isinstance(child, File):
 						child._invalidate()
 
 					if is_same_file or is_same_name:
