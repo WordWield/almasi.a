@@ -314,6 +314,53 @@ class TestResourceSubscriptions(a.Tester):
 
 				handle.cancel()
 
+	# Resolve inherited unregistered file extensions without plugin filtering.
+	# --------------------------------------------------------------------------
+	@classmethod
+	def test_unknown_extension_override_visibility(cls):
+		from a import tests
+
+		with tempfile.TemporaryDirectory() as parent_root, tempfile.TemporaryDirectory() as child_root:
+			parent = tests.TestFilesystem._library('binary_parent_subscribe', parent_root, a.A)
+			child  = tests.TestFilesystem._library('binary_child_subscribe', child_root, type(parent))
+			parent.mkdir('static')
+			child.mkdir('static')
+
+			parent_path = parent.static.join('logo.opaque')
+			child_path  = child.static.join('logo.opaque')
+
+			with open(parent_path, 'wb') as stream:
+				stream.write(b'inherited')
+
+			file = a.File(parent, parent_path, 'binary_child_subscribe.static.logo')
+			file._namespace_lib = child
+			events = []
+			source = child.services.Filesystem
+
+			with patch.object(type(source), '_watch', return_value=None):
+				handle = file.subscribe(events.append)
+				cls._threads(source)
+				assert source._effective(file) == parent_path
+
+				with open(child_path, 'wb') as stream:
+					stream.write(b'local')
+
+				source._changed_paths(child_root, {child_path: 'created'})
+				assert source._effective(file) == child_path
+				assert len(events) == 1
+
+				with open(parent_path, 'wb') as stream:
+					stream.write(b'hidden')
+
+				source._changed_paths(parent_root, {parent_path: 'modified'})
+				assert len(events) == 1
+
+				os.unlink(child_path)
+				source._changed_paths(child_root, {child_path: 'deleted'})
+				assert source._effective(file) == parent_path
+				assert len(events) == 2
+				handle.cancel()
+
 	# A fork resolves its own concrete Filesystem singleton and registrations.
 	# --------------------------------------------------------------------------
 	@classmethod
