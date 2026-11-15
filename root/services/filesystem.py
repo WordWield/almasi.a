@@ -8,8 +8,6 @@ import logging
 import os
 import threading
 
-from contextvars import ContextVar
-
 from watchfiles import Change, watch
 
 import a
@@ -29,7 +27,6 @@ class Filesystem(a.Subscribable):
 		if '_resources' not in instance.__dict__:
 			instance._resources = {}
 			instance._watchers  = {}
-			instance._events    = ContextVar('filesystem_events', default={})
 
 		return instance
 
@@ -306,23 +303,14 @@ class Filesystem(a.Subscribable):
 						entry['path'] = current
 
 		if changed:
-			token = self._events.set(changed)
-
-			try:
-				self._dispatch(set(changed))
-			finally:
-				self._events.reset(token)
-
-	# Reuse Subscribable dispatch, enriching filesystem invalidations with paths.
-	# --------------------------------------------------------------------------
-	def _notify(self, callback, matched):
-		events  = self._events.get()
-		changes = {}
-
-		for resource in matched:
-			changes.update(events.get(resource, {}))
-
-		callback(changes)
+			self._dispatch(
+				set(changed),
+				lambda matched: {
+					path: event
+					for resource in matched
+					for path, event in changed[resource].items()
+				}
+			)
 
 	# ==========================================================================
 	# PUBLIC METHODS
@@ -336,11 +324,8 @@ class Filesystem(a.Subscribable):
 		if not callable(callback):
 			raise TypeError('Subscription callback must be callable')
 
-		def deliver(matched):
-			self._notify(callback, matched)
-
 		with self._subscription_lock:
-			subscription = super().subscribe(resources, deliver)
+			subscription = super().subscribe(resources, callback)
 
 			try:
 				self._reconcile()
