@@ -44,60 +44,56 @@ class Filesystem(a.Subscribable):
 
 		return resources
 
-	# Separate a resource's physical source from its observed logical route.
+	# Find the physical source layer and its path relative to that layer.
 	# --------------------------------------------------------------------------
-	def _location(self, resource):
-		namespace = resource._namespace_lib
-		path      = resource.get_path()
-		route     = resource.get_route()
-		name      = resource.get_name()
-		parts     = ()
-		component = None
-		logical   = route == namespace.__name__ and path == os.path.realpath(namespace.__path__)
+	def _source(self, namespace, path):
+		index    = None
+		relative = None
 
-		if route.startswith(namespace.__name__ + '.'):
-			component = name if route.endswith('.' + name) else route.rsplit('.', 1)[-1]
-			parent    = route[:-(len(component) + 1)]
-			relative  = parent[len(namespace.__name__):].lstrip('.')
-			parts     = tuple(relative.split('.')) if relative else ()
-			stem      = os.path.splitext(name)[0]
-			matching  = component in (name, stem) or namespace.String.camel_to_snake(component) == stem
+		for position, layer in enumerate(namespace.__instances__()):
+			root = os.path.realpath(layer.__path__)
 
-			if matching:
-				logical = any(
-					os.path.dirname(path) == os.path.realpath(os.path.join(layer.__path__, *parts))
-					for layer in namespace.__instances__()
-				)
+			if path == root or path.startswith(root + os.sep):
+				index    = position
+				relative = os.path.relpath(path, root)
+				break
 
-		return namespace, parts, component, logical
+		return index, relative
 
-	# Resolve the currently visible carrier, using Almasi's own namespace rules.
+	# Use Almasi's existing resolver for effective inherited resources.
+	# --------------------------------------------------------------------------
+	def _resolve(self, namespace, relative):
+		parent = os.path.dirname(relative)
+		route  = namespace.__name__ + ('.' + parent.replace(os.sep, '.') if parent else '')
+		face   = a.Directory(namespace, os.path.join(namespace.__path__, parent), route)
+		found  = face.__resolve__(os.path.basename(relative))
+
+		return found.get_path() if found is not None else None
+
+	# Keep the resolved source path to detect overridden files and removals.
 	# --------------------------------------------------------------------------
 	def _effective(self, resource):
-		namespace, parts, name, logical = self._location(resource)
-		path = resource.get_path() if os.path.exists(resource.get_path()) else None
+		_, relative = self._source(resource._namespace_lib, resource.get_path())
 
-		if logical and name is not None:
-			parent = namespace.__name__ + ('.' + '.'.join(parts) if parts else '')
-			face   = a.Directory(namespace, os.path.join(namespace.__path__, *parts), parent)
-			found  = face.__resolve__(name)
-			path   = found.get_path() if found is not None else None
+		if relative is not None and relative != '.':
+			path = self._resolve(resource._namespace_lib, relative)
+		else:
+			path = resource.get_path() if os.path.exists(resource.get_path()) else None
 
 		return path
 
-	# Watch each library source root, including roots where overrides may appear.
+	# Observe all inherited roots or the parent of an external resource.
 	# --------------------------------------------------------------------------
 	def _roots_for(self, resource):
-		namespace, parts, name, logical = self._location(resource)
-		roots = set()
+		namespace, path = resource._namespace_lib, resource.get_path()
+		_, relative     = self._source(namespace, path)
 
-		if logical:
+		if relative is not None:
 			roots = {os.path.realpath(layer.__path__) for layer in namespace.__instances__()}
 		else:
-			path = resource.get_path()
 			roots = {os.path.dirname(path)}
 
-		return {path for path in roots if os.path.isdir(path)}
+		return {root for root in roots if os.path.isdir(root)}
 
 	# Run one recursive watcher for each physical root needed by subscribers.
 	# --------------------------------------------------------------------------
@@ -181,94 +177,50 @@ class Filesystem(a.Subscribable):
 			super()._cancel_subscription(subscription)
 			self._reconcile()
 
-	# Locate an event's source layer and logical path in the observed namespace.
+	# Ignore shadowed changes, while notifying when an override disappears.
 	# --------------------------------------------------------------------------
-	def _event_source(self, namespace, path):
-		layer_index = None
-		relative    = None
-
-		for index, layer in enumerate(namespace.__instances__()):
-			root = os.path.realpath(layer.__path__)
-
-			if path == root or path.startswith(root + os.sep):
-				layer_index = index
-				relative    = os.path.relpath(path, root)
-				break
-
-		return layer_index, relative
-
-	# Resolve one changed child through the effective inherited namespace.
-	# --------------------------------------------------------------------------
-	def _visible_child(self, namespace, relative):
-		parts    = relative.split(os.sep)
-		parent   = namespace.__name__ + ('.' + '.'.join(parts[:-1]) if len(parts) > 1 else '')
-		location = os.path.join(namespace.__path__, *parts[:-1])
-		face     = a.Directory(namespace, location, parent)
-		child    = face.__resolve__(parts[-1])
-
-		return child.get_path() if child is not None else None
-
-	# Reject lower-priority physical changes masked by the effective namespace.
-	# --------------------------------------------------------------------------
-	def _is_visible_change(self, namespace, path, layer_index, relative):
-		effective = self._visible_child(namespace, relative)
+	def _visible(self, namespace, path, index, relative):
+		effective = self._resolve(namespace, relative)
 		visible   = effective is None or effective == path
 
 		if not visible:
-			effective_layer, other = self._event_source(namespace, effective)
-			visible = effective_layer is not None and layer_index < effective_layer
+			effective_index, _ = self._source(namespace, effective)
+			visible = effective_index is not None and index < effective_index
 
 		return visible
 
-	# Invalidate affected carrier caches once per physical path and namespace.
-	# --------------------------------------------------------------------------
-	def _invalidate_path(self, namespace, path, layer_index):
-		layer = tuple(namespace.__instances__())[layer_index] if layer_index is not None else namespace
-		a.Directory(layer, os.path.dirname(path), layer.__name__)._invalidate_children(path)
-
-	# Report logical library paths or paths relative to the subscribed carrier.
-	# --------------------------------------------------------------------------
-	def _event_name(self, resource, path, relative):
-		name = relative if relative is not None else os.path.relpath(path, os.path.dirname(resource.get_path()))
-
-		return name.replace(os.sep, '/')
-
-	# Resolve source layers once per changed path, and effective files once per
-	# subscribed resource. Keep notifications separate from cache invalidation.
+	# Map physical changes to subscribed resources and invalidate before dispatch.
 	# --------------------------------------------------------------------------
 	def _changed_paths(self, root, paths):
 		with self._subscription_lock:
 			observed = tuple(
-				(resource, entry['path'], self._location(resource))
+				(resource, entry['path'])
 				for resource, entry in self._resources.items()
 				if root in entry['roots']
 			)
 
-		namespaces = {location[0] for resource, old, location in observed}
+		namespaces = {resource._namespace_lib for resource, old in observed}
 		sources    = {}
-
-		for path in paths:
-			mapping = {}
-
-			for namespace in namespaces:
-				index, relative = self._event_source(namespace, path)
-				self._invalidate_path(namespace, path, index)
-				mapping[namespace] = (index, relative)
-
-			sources[path] = mapping
-
-		changed    = {}
 		visibility = {}
 
-		for resource, old, location in observed:
-			namespace, parts, name, logical = location
-			is_file = isinstance(resource, a.File)
-			current = self._effective(resource) if is_file else None
-			base    = resource.get_path()
-			prefix  = os.sep.join(parts + ((name,) if name is not None else ()))
+		for path in paths:
+			for namespace in namespaces:
+				index, relative = self._source(namespace, path)
+				layer = tuple(namespace.__instances__())[index] if index is not None else namespace
+				a.Directory(layer, os.path.dirname(path), layer.__name__)._invalidate_children(path)
+				sources[namespace, path] = (index, relative)
+
+		changed = {}
+
+		for resource, old in observed:
+			namespace   = resource._namespace_lib
+			base        = resource.get_path()
+			_, relative = self._source(namespace, base)
+			is_file     = isinstance(resource, a.File)
+			current     = self._effective(resource) if is_file else None
 
 			for path, status in paths.items():
-				index, relative = sources[path][namespace]
+				index, event = sources[namespace, path]
 
 				if is_file:
 					affected = (
@@ -276,21 +228,22 @@ class Filesystem(a.Subscribable):
 						or (old is not None and old.startswith(path + os.sep))
 						or (current is not None and current.startswith(path + os.sep))
 					)
-				elif logical and index is not None and relative is not None:
-					within = not prefix or relative == prefix or relative.startswith(prefix + os.sep)
+				elif relative is not None and event is not None:
+					within = relative == '.' or event == relative or event.startswith(relative + os.sep)
 					affected = False
 
 					if within:
 						key = (namespace, path)
 						if key not in visibility:
-							visibility[key] = self._is_visible_change(namespace, path, index, relative)
+							visibility[key] = self._visible(namespace, path, index, event)
 
 						affected = visibility[key]
 				else:
 					affected = path == base or path.startswith(base + os.sep)
 
 				if affected:
-					changed.setdefault(resource, {})[self._event_name(resource, path, relative)] = status
+					name = event if event is not None else os.path.relpath(path, os.path.dirname(base))
+					changed.setdefault(resource, {})[name.replace(os.sep, '/')] = status
 
 			if resource in changed and is_file:
 				resource._invalidate()
