@@ -169,6 +169,42 @@ class TestResourceSubscriptions(a.Tester):
 				handle.cancel()
 				assert not service._watchers
 
+	# Share one OS watcher across subscriptions and release it with the last.
+	# --------------------------------------------------------------------------
+	@classmethod
+	def test_shared_watcher_lifetime(cls):
+		with tempfile.TemporaryDirectory() as root:
+			path = os.path.join(root, 'shared.txt')
+
+			with open(path, 'w', encoding='utf-8') as stream:
+				stream.write('initial')
+
+			file     = a.File(a, path, 'a.shared')
+			service  = a.services.Filesystem
+			first    = []
+			second   = []
+
+			with patch.object(type(service), '_watch', return_value=None):
+				left  = file.subscribe(first.append)
+				right = file.subscribe(second.append)
+				cls._threads(service)
+
+				assert len(service._watchers) == 1
+				service._changed_paths(root, {path: 'modified'})
+				assert first == [{'shared.txt': 'modified'}]
+				assert second == [{'shared.txt': 'modified'}]
+
+				left.cancel()
+				assert len(service._watchers) == 1
+
+				service._changed_paths(root, {path: 'modified'})
+				assert len(first) == 1
+				assert len(second) == 2
+
+				right.cancel()
+				assert not service._watchers
+				assert not service._resources
+
 	# Preserve one change per path in an unordered OS event batch.
 	# --------------------------------------------------------------------------
 	@classmethod
