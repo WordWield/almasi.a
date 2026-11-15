@@ -12,11 +12,11 @@ import weakref
 
 from functools import partial
 
-from .file    import File
+from .resource import Resource
 from .imports import Imports
 
 
-class Directory(File):
+class Directory(Resource):
 
 	# Weak references keep namespace tracking from extending object lifetimes.
 	__namespace_faces__ = weakref.WeakSet()
@@ -87,6 +87,9 @@ class Directory(File):
 
 				if value is not None:
 					self.__children__[name] = value
+
+		if value is not None:
+			value._namespace_lib = self._namespace_lib
 
 		return value
 
@@ -210,11 +213,6 @@ class Directory(File):
 	# PUBLIC METHODS
 	# ======================================================================
 
-	# Distinguish directories through the public carrier contract.
-	# ----------------------------------------------------------------------
-	def is_directory(self):
-		return True
-
 	# Join relative components without creating or requiring the result.
 	# ----------------------------------------------------------------------
 	def join(self, *parts):
@@ -261,7 +259,7 @@ class Directory(File):
 				directory._invalidate_children(path)
 
 			directory = directory.__resolve__(name).load()
-			if not directory.is_directory():
+			if not isinstance(directory, Directory):
 				raise TypeError(f'Not a directory: {path}')
 
 		return directory
@@ -281,7 +279,7 @@ class Directory(File):
 
 		if file is None:
 			raise FileNotFoundError(self.join(name))
-		if file.is_directory():
+		if isinstance(file, Directory):
 			raise IsADirectoryError(file.get_path())
 
 		return file.load()
