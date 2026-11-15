@@ -109,7 +109,7 @@ class Filesystem(a.Subscribable):
 			for changes in watch(root, stop_event=stop, debounce=100, step=50, rust_timeout=500):
 				paths = self._changes(changes)
 
-				if paths:
+				if paths and not stop.is_set():
 					self._changed_paths(root, paths)
 		except Exception:
 			logging.exception('Filesystem observer failed: %s', root)
@@ -193,7 +193,7 @@ class Filesystem(a.Subscribable):
 		for index, layer in enumerate(namespace.__instances__()):
 			root = os.path.realpath(layer.__path__)
 
-			if os.path.commonpath([root, path]) == root:
+			if path == root or path.startswith(root + os.sep):
 				layer_index = index
 				relative    = os.path.relpath(path, root)
 				break
@@ -313,10 +313,6 @@ class Filesystem(a.Subscribable):
 			finally:
 				self._events.reset(token)
 
-	# ==========================================================================
-	# PUBLIC METHODS
-	# ==========================================================================
-
 	# Reuse Subscribable dispatch, enriching filesystem invalidations with paths.
 	# --------------------------------------------------------------------------
 	def _notify(self, callback, matched):
@@ -327,6 +323,10 @@ class Filesystem(a.Subscribable):
 			changes.update(events.get(resource, {}))
 
 		callback(changes)
+
+	# ==========================================================================
+	# PUBLIC METHODS
+	# ==========================================================================
 
 	# Register interest in one or more resources with no eager watcher at import.
 	# --------------------------------------------------------------------------
