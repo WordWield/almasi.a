@@ -39,13 +39,61 @@ class TestResourceSubscriptions(a.Tester):
 	# --------------------------------------------------------------------------
 	@classmethod
 	def test_resource_hierarchy(cls):
-		assert issubclass(a.File, a.Resource)
-		assert issubclass(a.Directory, a.Resource)
+		assert issubclass(a.File, a.FilesystemResource)
+		assert issubclass(a.Directory, a.FilesystemResource)
+		assert issubclass(a.FilesystemResource, a.Resource)
 		assert not issubclass(a.Directory, a.File)
 		assert a.File.is_directory(a.File(a, __file__, 'a.file')) is False
 		assert a.Directory(a, os.path.dirname(__file__), 'a.tests').is_directory() is True
-		assert a.File.subscribe is a.Resource.subscribe
-		assert a.Directory.subscribe is a.Resource.subscribe
+		assert a.File.subscribe is a.FilesystemResource.subscribe
+		assert a.Directory.subscribe is a.FilesystemResource.subscribe
+		assert a.File.read is a.FilesystemResource.read
+		assert a.Directory.read is not a.FilesystemResource.read
+
+	# Base resources have no dependency on filesystem APIs or runtime services.
+	# --------------------------------------------------------------------------
+	@classmethod
+	def test_generic_resource_contract(cls):
+		resource = a.Resource()
+
+		for operation in (resource.read, lambda: resource.subscribe(lambda changed: None)):
+			try:
+				operation()
+			except NotImplementedError:
+				error = True
+			else:
+				error = False
+
+			assert error
+
+	# Keep the generic read route compatible with file and directory APIs.
+	# --------------------------------------------------------------------------
+	@classmethod
+	def test_resource_read(cls):
+		with tempfile.TemporaryDirectory() as root:
+			directory = a.Directory(a, root, 'a.assets')
+			directory.write('notes.txt', 'text')
+			file = next(item for item in directory if item.get_name() == 'notes.txt')
+
+			assert isinstance(file, a.Resource)
+			assert file.read() == 'text'
+			assert directory.read() is directory
+			assert directory.read('notes.txt') == 'text'
+
+	# Reject computed or unrelated resources at the filesystem boundary.
+	# --------------------------------------------------------------------------
+	@classmethod
+	def test_filesystem_only_observation(cls):
+		service = a.services.Filesystem
+
+		try:
+			service.subscribe({a.Resource()}, lambda changed: None)
+		except TypeError:
+			error = True
+		else:
+			error = False
+
+		assert error
 
 	# Invalidate external namespace caches before sending the change hint.
 	# --------------------------------------------------------------------------
@@ -264,6 +312,53 @@ class TestResourceSubscriptions(a.Tester):
 				source._changed_paths(child_root, {c_path: 'deleted'})
 				assert len(events) == 3
 
+				handle.cancel()
+
+	# Resolve inherited unregistered file extensions without plugin filtering.
+	# --------------------------------------------------------------------------
+	@classmethod
+	def test_unknown_extension_override_visibility(cls):
+		from a import tests
+
+		with tempfile.TemporaryDirectory() as parent_root, tempfile.TemporaryDirectory() as child_root:
+			parent = tests.TestFilesystem._library('binary_parent_subscribe', parent_root, a.A)
+			child  = tests.TestFilesystem._library('binary_child_subscribe', child_root, type(parent))
+			parent.mkdir('static')
+			child.mkdir('static')
+
+			parent_path = parent.static.join('logo.opaque')
+			child_path  = child.static.join('logo.opaque')
+
+			with open(parent_path, 'wb') as stream:
+				stream.write(b'inherited')
+
+			file = a.File(parent, parent_path, 'binary_child_subscribe.static.logo')
+			file._namespace_lib = child
+			events = []
+			source = child.services.Filesystem
+
+			with patch.object(type(source), '_watch', return_value=None):
+				handle = file.subscribe(events.append)
+				cls._threads(source)
+				assert source._effective(file) == parent_path
+
+				with open(child_path, 'wb') as stream:
+					stream.write(b'local')
+
+				source._changed_paths(child_root, {child_path: 'created'})
+				assert source._effective(file) == child_path
+				assert len(events) == 1
+
+				with open(parent_path, 'wb') as stream:
+					stream.write(b'hidden')
+
+				source._changed_paths(parent_root, {parent_path: 'modified'})
+				assert len(events) == 1
+
+				os.unlink(child_path)
+				source._changed_paths(child_root, {child_path: 'deleted'})
+				assert source._effective(file) == parent_path
+				assert len(events) == 2
 				handle.cancel()
 
 	# A fork resolves its own concrete Filesystem singleton and registrations.

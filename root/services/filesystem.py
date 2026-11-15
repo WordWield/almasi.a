@@ -37,10 +37,10 @@ class Filesystem(a.Subscribable):
 	# Validate that each subscription identifies concrete Almasi resources.
 	# --------------------------------------------------------------------------
 	def _resources_in(self, identifiers):
-		resources = {identifiers} if isinstance(identifiers, a.Resource) else self._scope(identifiers)
+		resources = {identifiers} if isinstance(identifiers, a.FilesystemResource) else self._scope(identifiers)
 
-		if resources is None or any(not isinstance(item, a.Resource) for item in resources):
-			raise TypeError('Filesystem subscriptions require a set of Resources')
+		if resources is None or any(not isinstance(item, a.FilesystemResource) for item in resources):
+			raise TypeError('Filesystem subscriptions require a set of FilesystemResources')
 
 		return resources
 
@@ -60,15 +60,26 @@ class Filesystem(a.Subscribable):
 
 		return index, relative
 
-	# Use Almasi's existing resolver for effective inherited resources.
+	# Locate the effective source even when no format plugin handles the file.
+	# Preserve Almasi's own resolver for known file and directory carriers.
 	# --------------------------------------------------------------------------
 	def _resolve(self, namespace, relative):
 		parent = os.path.dirname(relative)
 		route  = namespace.__name__ + ('.' + parent.replace(os.sep, '.') if parent else '')
 		face   = a.Directory(namespace, os.path.join(namespace.__path__, parent), route)
 		found  = face.__resolve__(os.path.basename(relative))
+		result = found.get_path() if found is not None else None
 
-		return found.get_path() if found is not None else None
+		if result is None:
+			for layer in namespace.__instances__():
+				root      = os.path.realpath(layer.__path__)
+				candidate = os.path.realpath(os.path.join(root, relative))
+
+				if os.path.commonpath((root, candidate)) == root and os.path.isfile(candidate):
+					result = candidate
+					break
+
+		return result
 
 	# Keep the resolved source path to detect overridden files and removals.
 	# --------------------------------------------------------------------------
