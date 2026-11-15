@@ -214,6 +214,11 @@ class Directory(Resource):
 	# PUBLIC METHODS
 	# ======================================================================
 
+	# Preserve the established public carrier-type predicate.
+	# ----------------------------------------------------------------------
+	def is_directory(self):
+		return True
+
 	# Join relative components without creating or requiring the result.
 	# ----------------------------------------------------------------------
 	def join(self, *parts):
