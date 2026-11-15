@@ -4,7 +4,7 @@ This is the current filesystem contract. It supplements invariants 1–7 and sup
 
 ## Identity and ownership
 
-Every `File` or `Directory` has three canonical coordinates: `__lib__`, `__path__`, and `__route__`. Only `File` accesses their storage directly. All callers, including `Directory`, use public methods:
+Every `Resource` has three canonical coordinates: `__lib__`, `__path__`, and `__route__`. Only `Resource` accesses their storage directly. `File` and `Directory` are distinct subclasses. All callers use public methods:
 
 ```python
 item.get_lib()
@@ -15,9 +15,9 @@ item.is_directory()
 item.load()
 ```
 
-`get_path()` returns the canonical physical path; `get_route()` returns the logical namespace route; `get_name()` derives the physical basename. `Directory` inherits the identity getters and overrides `is_directory()` to return `True`. `File.is_directory()` returns `False`.
+`get_path()` returns the canonical physical path; `get_route()` returns the logical namespace route; `get_name()` derives the physical basename. Both subclasses inherit their identity getters; `Directory.is_directory()` returns `True`, `File.is_directory()` returns `False`. `Resource.subscribe(callback)` registers interest in the resource through the owning filesystem service and returns a cancellable `Subscription` handle.
 
-There are no `.lib`, `.path`, `.route`, `.name`, `.data`, `.hash`, `.load_method`, or `.hash_method` compatibility properties. Those ordinary names can resolve filesystem children. Methods remain reserved: `get_lib`, `get_path`, `get_route`, `get_name`, `is_directory`, `load`, `join`, `mkdir`, `read`, `write`, `copy`, and `link`. Explicit `read('is_directory.md')` can read a resource whose stem coincides with a method.
+There are no `.lib`, `.path`, `.route`, `.name`, `.data`, `.hash`, `.load_method`, or `.hash_method` compatibility properties. Those ordinary names can resolve filesystem children. Methods remain reserved: `get_lib`, `get_path`, `get_route`, `get_name`, `is_directory`, `subscribe`, `load`, `join`, `mkdir`, `read`, `write`, `copy`, and `link`. Explicit `read('is_directory.md')` can read a resource whose stem coincides with a method.
 
 Library class metadata, Python module special attributes, plugin ownership, and domain fields are separate contracts. For example, `A.__path__`, `module.__file__`, `Plugin.lib`, and `Container.path` are not carrier property aliases.
 
@@ -59,7 +59,7 @@ These methods provide atomic replacement on the filesystem. They do not synchron
 
 ## Memoization and mutation
 
-The namespace face owns `__children__` carriers. `File` owns `_data`, `_hash`, `_load_method`, `_hash_method`, and its loaded state. Legitimate `None` is memoized. Normal reads do not probe timestamps or hashes on every access.
+The namespace face owns `__children__` carriers. `Resource` owns canonical path, source-library and route identity. `File` owns `_data`, `_hash`, `_load_method`, `_hash_method`, and its loaded state. Legitimate `None` is memoized. Normal reads do not probe timestamps or hashes on every access.
 
 Successful mutations invalidate related bindings and reset affected retained file carriers in the receiving face. Unrelated cached resources remain intact. A root `Directory` representing the owning library root shares that library's existing child cache. Creating a local override preserves local-first resolution and existing plugin priority. Retargeting a link removes its old namespace binding.
 
@@ -87,3 +87,20 @@ local layer. Plugin priority and namespace traversal remain unchanged.
 `sys.modules` are reused without rebinding their owner or changing class/service
 identity. This refines the older three-argument plugin call shape in invariants 5;
 custom loader plugins must accept and forward the explicit `source_lib` argument.
+
+## Subscribed filesystem changes
+
+The `a.services.Filesystem` watcher is lazy and scoped to the relevant
+library/fork service. Observed external filesystem edits invalidate affected
+cached carriers before delivering notifications. Ordinary resource reads
+remain memoized and do not probe the filesystem for freshness.
+
+`File` subscriptions observe their effective logical resource. `Directory`
+subscriptions cover the entire descendant tree; deletion does not cancel a
+subscription, so recreation can be observed. The callback receives a
+`{relative_path: change}` dictionary, with changes `'created'`,
+`'modified'` or `'deleted'`, not replacement file contents.
+Subscription handles support `update()` and `cancel()`.
+
+The source `get_lib()` identifies the supplying library, while the
+observing namespace can be a different inheriting library/fork.
