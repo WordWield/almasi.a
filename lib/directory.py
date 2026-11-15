@@ -12,11 +12,12 @@ import weakref
 
 from functools import partial
 
-from .file    import File
+from .resource import Resource
+from .file     import File
 from .imports import Imports
 
 
-class Directory(File):
+class Directory(Resource):
 
 	# Weak references keep namespace tracking from extending object lifetimes.
 	__namespace_faces__ = weakref.WeakSet()
@@ -87,6 +88,9 @@ class Directory(File):
 
 				if value is not None:
 					self.__children__[name] = value
+
+		if value is not None:
+			value._namespace_lib = self._namespace_lib
 
 		return value
 
@@ -160,7 +164,7 @@ class Directory(File):
 					is_same_file = child.get_path() == path
 					is_same_name = name == stem or source_lib.String.camel_to_snake(name) == stem
 
-					if is_same_file:
+					if is_same_file and isinstance(child, File):
 						child._invalidate()
 
 					if is_same_file or is_same_name:
@@ -210,7 +214,7 @@ class Directory(File):
 	# PUBLIC METHODS
 	# ======================================================================
 
-	# Distinguish directories through the public carrier contract.
+	# Preserve the established public carrier-type predicate.
 	# ----------------------------------------------------------------------
 	def is_directory(self):
 		return True
@@ -261,7 +265,7 @@ class Directory(File):
 				directory._invalidate_children(path)
 
 			directory = directory.__resolve__(name).load()
-			if not directory.is_directory():
+			if not isinstance(directory, Directory):
 				raise TypeError(f'Not a directory: {path}')
 
 		return directory
@@ -281,7 +285,7 @@ class Directory(File):
 
 		if file is None:
 			raise FileNotFoundError(self.join(name))
-		if file.is_directory():
+		if isinstance(file, Directory):
 			raise IsADirectoryError(file.get_path())
 
 		return file.load()

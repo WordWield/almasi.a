@@ -1,6 +1,7 @@
 # Architecture: Subscribable — shared change subscriptions
 
-**Status:** Stage 1 implemented in the accompanying PR (shared subscription\nprimitives). Filesystem, Resource hierarchy and producer migrations remain\nplanned.
+**Status:** Shared Subscribable and filesystem resource subscriptions implemented.
+O and Web integrate their own source-specific subscriptions separately.
 
 ## Intent
 
@@ -34,9 +35,9 @@ a.Resource
   receives changes from its own producer.
 - `Subscription` owns one registration: its identifier set, callback and
   cancellation/update state. It is a runtime object, not a service.
-- `Resource` is the common filesystem carrier identity. `File` and
-  `Directory` extend it as distinct types. The proposed hierarchy supersedes
-  the current `Directory(File)` relationship and `is_directory()` predicate.
+- `Resource` holds the common filesystem carrier identity and `subscribe()`.
+  `File` and `Directory` inherit it separately, preserving their existing
+  `is_directory()` methods.
 - `Filesystem` is the Almasi service that receives filesystem change events,
   resolves their effective resource identities and dispatches notifications.
 - `Resource.subscribe(callback)` delegates to the Filesystem service. It does
@@ -99,6 +100,12 @@ transport on producers. An existing producer can deliver a batch from its
 own worker after it has completed source-specific processing. This keeps
 subscription matching behind the producer's write/commit hot path.
 
+The filesystem producer delivers its resource-specific `{path: change}`
+dictionary using the existing immutable subscription snapshot. The
+generic `Subscribable._dispatch(ids)` contract remains unchanged.
+Each filesystem batch keeps its own event details, including nested
+and concurrent notifications; no `ContextVar` or shared event state is used.
+
 The dispatch implementation must support:
 
 - Subscription registration/update/cancellation while delivery is underway,
@@ -117,9 +124,9 @@ on the caller's thread.
 
 ## Filesystem source
 
-The proposed `a.services.Filesystem(a.Subscribable)` uses an OS-backed
-watcher, with `watchfiles` as the candidate adapter. It is a dependency of
-the filesystem implementation, not of `Subscribable`.
+`a.services.Filesystem(a.Subscribable)` uses an OS-backed
+`watchfiles` watcher. This dependency belongs to the filesystem producer,
+not to `Subscribable`.
 
 Filesystem events are physical: added, modified and deleted paths. The
 subscriber-facing identifiers represent the **effective Almasi resource**
@@ -175,10 +182,10 @@ not a claim that global shared cache invalidation already exists.
 
 ## Migration and verification
 
-Only the shared subscription primitive is implemented by Stage 1. Today,
-`Directory` extends `File`; file carriers provide `is_directory()`;
-there is no Filesystem subscription service. The existing Almasi filesystem
-contract is documented in `almasi_invariants8.md`.
+The shared subscription primitive and filesystem producer are implemented.
+`Resource` is the common parent of `File` and `Directory`; both retain
+`is_directory()`. The filesystem carrier contract is documented in
+`almasi_invariants8.md`.
 
 Implementation should proceed without inventing additional public API:
 
@@ -196,6 +203,38 @@ Implementation should proceed without inventing additional public API:
 commonality lives once in Almasi; each source retains its essential
 change-detection and identity semantics. No consuming library is referenced
 or required by this core architecture.
+
+## Filesystem callback and event metadata
+
+`Resource.subscribe(callback)` returns an `a.Subscription` handle.
+File and directory subscriptions use the same registration and cancellation
+mechanism; `Filesystem` alone owns the OS watcher.
+
+Filesystem callbacks receive one dictionary per observed batch, mapping
+relative resource paths to their final observed event:
+
+```python
+# Directory carrier, for example from a library namespace.
+subscription = directory.subscribe(lambda resources: print(resources))
+# {'static/app.js': 'modified', 'static/theme.css': 'created'}
+subscription.cancel()
+```
+
+Event values are `'created'`, `'modified'`, or `'deleted'`.
+Directory subscriptions observe descendants recursively, and removing a
+directory does not terminate its subscription. An observed path can be
+recreated later. Duplicate changes for one path within the same batch are
+collapsed to one final observed event. There is no application-level batch
+size limit.
+
+The callback is an invalidation hint, not changed file contents. Consumers
+may refetch when needed. In MCP, the consumer can publish the subscribed
+resource URI with the dictionary in `_meta.resources`; transport delivery
+and authorization remain outside Almasi.
+
+Filesystem change detection is not a durable ordered change log: missed
+or overflowed OS events may require a fresh resource read. A subscription
+does not make content reads probe file timestamps or hashes.
 
 ## Indexed invalidation dispatch
 
