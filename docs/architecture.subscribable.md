@@ -196,3 +196,20 @@ Implementation should proceed without inventing additional public API:
 commonality lives once in Almasi; each source retains its essential
 change-detection and identity semantics. No consuming library is referenced
 or required by this core architecture.
+
+## Indexed invalidation dispatch
+
+The shared Subscribable maintains an inverted mapping from identifier to
+interested Subscription handles. An ordinary batch looks up its changed
+identifiers, unifies matching handles, and invokes each at most once with the
+intersection of that handle's frozen scope and the change batch.
+
+A complete immutable subscription view serves full invalidation, small
+registrations and dense changes. The indexed route is used for sparse changes
+on larger subscription sets. The choice affects execution cost, not observable
+delivery behavior. Callback errors remain isolated and callbacks run outside
+the registration lock. Filters are snapshotted at dispatch start; cancellation
+remains nonblocking and suppresses callbacks not yet selected for invocation.
+
+The index and immutable view are derived registration state, never independent
+subscription authorities. Both are maintained by the same Subscribable.
