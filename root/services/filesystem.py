@@ -37,10 +37,10 @@ class Filesystem(a.Subscribable):
 	# Validate that each subscription identifies concrete Almasi resources.
 	# --------------------------------------------------------------------------
 	def _resources_in(self, identifiers):
-		resources = {identifiers} if isinstance(identifiers, a.Resource) else self._scope(identifiers)
+		resources = {identifiers} if isinstance(identifiers, a.FilesystemResource) else self._scope(identifiers)
 
-		if resources is None or any(not isinstance(item, a.Resource) for item in resources):
-			raise TypeError('Filesystem subscriptions require a set of Resources')
+		if resources is None or any(not isinstance(item, a.FilesystemResource) for item in resources):
+			raise TypeError('Filesystem subscriptions require a set of FilesystemResources')
 
 		return resources
 
