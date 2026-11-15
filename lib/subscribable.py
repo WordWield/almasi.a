@@ -100,9 +100,10 @@ class Subscribable(Service):
 				self._subscriptions.pop(subscription, None)
 				self._refresh()
 
-	# Use indexed routing when it is cheaper than the full subscription view.
+	# Use indexed routing and optionally adapt a batch's matched identifiers
+	# into source-specific callback data, without keeping dispatch state.
 	# ----------------------------------------------------------------------
-	def _dispatch(self, changed):
+	def _dispatch(self, changed, transform=None):
 		changes = changed if changed is None or isinstance(changed, frozenset) else self._scope(changed)
 
 		if changes is None or len(self._snapshot) <= 16:
@@ -136,7 +137,7 @@ class Subscribable(Service):
 			if changes is None or matching:
 				if subscription._active:
 					try:
-						subscription._callback(matching)
+						subscription._callback(matching if transform is None else transform(matching))
 					except Exception:
 						logging.exception('Subscription callback failed')
 
