@@ -4,7 +4,9 @@
 
 ## Common contract
 
-`a.Resource` is source-independent. It defines `read()` and
+`a.Resource(a.Module)` provides a single shared Module ancestry for all
+resource specializations, including filesystem and computed resources. It
+remains source-independent and defines `read()` and
 `subscribe(callback)`, each raising `NotImplementedError` until implemented
 by a concrete resource. It does not own caching, a filesystem path, an O object
 ID, subscription indexes or a notification transport.
