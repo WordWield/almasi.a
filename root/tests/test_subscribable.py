@@ -178,6 +178,102 @@ class TestSubscribable(a.Tester):
 		assert not worker.is_alive()
 		assert calls == [frozenset({1})]
 
+	# Multiple changed IDs notify each listener once with its intersection.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_indexed_overlap_and_broad_scope(cls):
+		source   = cls._source()
+		received = []
+		source.subscribe({1, 2}, lambda ids: received.append(('first', ids)))
+		source.subscribe({2, 3}, lambda ids: received.append(('second', ids)))
+		source.subscribe(lambda ids: received.append(('broad', ids)))
+		source.subscribe({8}, lambda ids: received.append(('other', ids)))
+		source._dispatch(frozenset({1, 2, 3}))
+
+		assert received == [
+			('first', frozenset({1, 2})),
+			('second', frozenset({2, 3})),
+			('broad', frozenset({1, 2, 3})),
+		]
+
+	# Updating and canceling a subscription release old index entries.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_index_scope_changes_and_cleanup(cls):
+		source   = cls._source()
+		received = []
+		handle   = source.subscribe({1, 2}, received.append)
+		handle.update({3})
+		assert 1 not in source._by_id and 2 not in source._by_id
+		source._dispatch({1, 2, 3})
+		assert received == [frozenset({3})]
+
+		handle.update(None)
+		source._dispatch({4})
+		assert received[-1] == frozenset({4})
+		handle.update(set())
+		source._dispatch({4})
+		source._dispatch(set())
+		assert len(received) == 2
+
+		handle.cancel()
+		assert not source._by_id and not source._broad
+
+	# Registration order survives cancel/update and new subscriptions.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_indexed_delivery_order(cls):
+		source   = cls._source()
+		received = []
+		first    = source.subscribe({1}, lambda ids: received.append('first'))
+		second   = source.subscribe({1}, lambda ids: received.append('second'))
+		first.cancel()
+		third    = source.subscribe({1}, lambda ids: received.append('third'))
+		second.update({2})
+		second.update({1})
+		source._dispatch({1})
+
+		assert received == ['second', 'third']
+		third.cancel()
+
+	# Reentrant update preserves old filters through the current batch.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_indexed_reentrant_update(cls):
+		source   = cls._source()
+		received = []
+		handle   = None
+
+		def update(ids):
+			handle.update({3})
+
+		source.subscribe({2}, update)
+		handle = source.subscribe({2}, received.append)
+		source._dispatch({2})
+		source._dispatch({3})
+		assert received == [frozenset({2}), frozenset({3})]
+
+	# Large sparse and dense batches take different routes with equal semantics.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_indexed_sparse_and_dense_dispatch(cls):
+		source   = cls._source()
+		received = []
+		handles  = [
+			source.subscribe({index}, lambda ids, index=index: received.append((index, ids)))
+			for index in range(100)
+		]
+		source._dispatch({27})
+		assert received == [(27, frozenset({27}))]
+
+		received.clear()
+		for handle in handles:
+			handle.update({5})
+
+		source._dispatch({5, 27})
+		assert len(received) == 100
+		assert received == [(index, frozenset({5})) for index in range(100)]
+
 	# Reject malformed registration values before creating a handle.
 	# ----------------------------------------------------------------------
 	@classmethod
