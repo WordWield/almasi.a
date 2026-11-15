@@ -143,7 +143,7 @@ class TestResourceSubscriptions(a.Tester):
 		with tempfile.TemporaryDirectory() as root:
 			service = a.services.Filesystem
 			path    = os.path.join(root, 'created.js')
-			hidden  = os.path.join(root, '.almas-temp.js')
+			hidden  = os.path.join(root, '.almasi-temp.js')
 
 			with open(path, 'w', encoding='utf-8') as stream:
 				stream.write('ok')
