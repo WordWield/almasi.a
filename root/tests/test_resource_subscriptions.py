@@ -42,6 +42,10 @@ class TestResourceSubscriptions(a.Tester):
 		assert issubclass(a.File, a.FilesystemResource)
 		assert issubclass(a.Directory, a.FilesystemResource)
 		assert issubclass(a.FilesystemResource, a.Resource)
+		assert issubclass(a.Resource, a.Module)
+		assert issubclass(a.File, a.Module)
+		assert issubclass(a.Directory, a.Module)
+		assert a.Resource.__bases__ == (a.Module,)
 		assert not issubclass(a.Directory, a.File)
 		assert a.File.is_directory(a.File(a, __file__, 'a.file')) is False
 		assert a.Directory(a, os.path.dirname(__file__), 'a.tests').is_directory() is True
