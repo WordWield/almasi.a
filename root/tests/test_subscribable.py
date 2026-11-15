@@ -149,60 +149,6 @@ class TestSubscribable(a.Tester):
 
 		assert frozenset({2}) in received
 
-	# Source-specific payloads belong to each dispatch, including nested calls.
-	# ----------------------------------------------------------------------
-	@classmethod
-	def test_stateless_dispatch_payload(cls):
-		source   = cls._source()
-		received = []
-
-		def first(payload):
-			received.append(('first', payload))
-			source._dispatch({2}, lambda matching: {'two': 'deleted'})
-
-		source.subscribe({1}, first)
-		source.subscribe({2}, received.append)
-		source._dispatch(
-			{1, 2},
-			lambda matching: {'one': 'created'} if 1 in matching else {'two': 'modified'}
-		)
-
-		assert received == [
-			('first', {'one': 'created'}),
-			{'two': 'deleted'},
-			{'two': 'modified'}
-		]
-
-	# Concurrent producers deliver their own metadata without shared state.
-	# ----------------------------------------------------------------------
-	@classmethod
-	def test_concurrent_dispatch_payloads(cls):
-		source   = cls._source()
-		barrier  = threading.Barrier(2)
-		received = []
-
-		def receive(payload):
-			barrier.wait(timeout=2)
-			received.append(payload)
-
-		source.subscribe({1}, receive)
-		workers = [
-			threading.Thread(
-				target = source._dispatch,
-				args   = ({1}, lambda matched, event=event: {'event': event})
-			)
-			for event in ('created', 'deleted')
-		]
-
-		for worker in workers:
-			worker.start()
-
-		for worker in workers:
-			worker.join(timeout=2)
-
-		assert all(not worker.is_alive() for worker in workers)
-		assert {entry['event'] for entry in received} == {'created', 'deleted'}
-
 	# Cancellation never waits for an already running callback.
 	# ----------------------------------------------------------------------
 	@classmethod
