@@ -4,10 +4,10 @@
 # Load and memoize content for a filesystem resource.
 # ==============================================================================
 
-from .resource import Resource
+from .filesystem_resource import FilesystemResource
 
 
-class File(Resource):
+class File(FilesystemResource):
 
 	# ==========================================================================
 	# FRAMEWORK METHODS
