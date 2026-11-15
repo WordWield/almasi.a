@@ -162,9 +162,8 @@ class TestResourceSubscriptions(a.Tester):
 		from a import tests
 
 		with tempfile.TemporaryDirectory() as parent_root, tempfile.TemporaryDirectory() as child_root:
-			name   = uuid.uuid4().hex
-			parent = tests.TestFilesystem._library('resource_parent_' + name, parent_root, a.A)
-			child  = tests.TestFilesystem._library('resource_child_' + name, child_root, type(parent))
+			parent = tests.TestFilesystem._library('resource_parent_subscribe', parent_root, a.A)
+			child  = tests.TestFilesystem._library('resource_child_subscribe', child_root, type(parent))
 			parent.mkdir('shared').write('note.md', 'inherited')
 			face   = child.mkdir('shared')
 			file   = face.__resolve__('note.md')
