@@ -47,37 +47,31 @@ class Filesystem(a.Subscribable):
 
 		return resources
 
-	# Describe a resource's namespace path without confusing its source owner.
+	# Separate a resource's physical source from its observed logical route.
 	# --------------------------------------------------------------------------
 	def _location(self, resource):
 		namespace = resource._namespace_lib
 		path      = resource.get_path()
 		route     = resource.get_route()
 		name      = resource.get_name()
-		logical   = False
 		parts     = ()
 		component = None
+		logical   = route == namespace.__name__ and path == os.path.realpath(namespace.__path__)
 
-		if route == namespace.__name__ and path == os.path.realpath(namespace.__path__):
-			logical = True
-		elif route.startswith(namespace.__name__ + '.'):
-			component = name if route.endswith('.' + name) else route.rsplit('.', 1)[-1]
-			parent    = route[:-(len(component) + 1)]
-			relative  = parent[len(namespace.__name__):].lstrip('.')
-			parts     = tuple(relative.split('.')) if relative else ()
-			matching  = component == name or component == os.path.splitext(name)[0]
-
-			if not matching:
-				matching = namespace.String.camel_to_snake(component) == os.path.splitext(name)[0]
+		if route.startswith(namespace.__name__ + '.'):
+			parts     = tuple(route[len(namespace.__name__) + 1:].split('.'))
+			component = parts[-1]
+			parts     = parts[:-1]
+			stem      = os.path.splitext(name)[0]
+			matching  = component in (name, stem) or namespace.String.camel_to_snake(component) == stem
 
 			if matching:
-				for layer in namespace.__instances__():
-					expected = os.path.realpath(os.path.join(layer.__path__, *parts))
-					if os.path.dirname(path) == expected:
-						logical = True
-						break
+				logical = any(
+					os.path.dirname(path) == os.path.realpath(os.path.join(layer.__path__, *parts))
+					for layer in namespace.__instances__()
+				)
 
-		return namespace, parts, component if route != namespace.__name__ else None, logical
+		return namespace, parts, component, logical
 
 	# Resolve the currently visible carrier, using Almasi's own namespace rules.
 	# --------------------------------------------------------------------------
@@ -119,7 +113,7 @@ class Filesystem(a.Subscribable):
 		except Exception:
 			logging.exception('Filesystem observer failed: %s', root)
 
-	# Collapse one OS event batch to the final observed status of each path.
+	# Collapse unordered OS events to one final observed status per path.
 	# --------------------------------------------------------------------------
 	def _changes(self, events):
 		changes = {}
@@ -130,12 +124,11 @@ class Filesystem(a.Subscribable):
 				status = 'created' if change == Change.added else 'deleted' if change == Change.deleted else 'modified'
 
 				if path in changes:
-					if not os.path.exists(path):
-						status = 'deleted'
-					elif status == 'created' or changes[path] == 'created':
-						status = 'created'
-					else:
-						status = 'modified'
+					status = (
+						'deleted' if not os.path.exists(path)
+						else 'created' if 'created' in (status, changes[path])
+						else 'modified'
+					)
 
 				changes[path] = status
 
