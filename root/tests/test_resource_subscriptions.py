@@ -136,6 +136,39 @@ class TestResourceSubscriptions(a.Tester):
 
 				handle.cancel()
 
+	# Updating a subscription moves its watched scope without leaking observers.
+	# --------------------------------------------------------------------------
+	@classmethod
+	def test_update_and_cancel_subscription(cls):
+		with tempfile.TemporaryDirectory() as root:
+			one_path = os.path.join(root, 'one.txt')
+			two_path = os.path.join(root, 'two.txt')
+
+			for path in (one_path, two_path):
+				with open(path, 'w', encoding='utf-8') as stream:
+					stream.write('before')
+
+			one     = a.File(a, one_path, 'a.one')
+			two     = a.File(a, two_path, 'a.two')
+			service = a.services.Filesystem
+			events  = []
+
+			with patch.object(type(service), '_watch', return_value=None):
+				handle = service.subscribe({one}, events.append)
+				cls._threads(service)
+				handle.update({two})
+				assert one not in service._resources
+				assert two in service._resources
+
+				service._changed_paths(root, {one_path: 'modified'})
+				assert not events
+				service._changed_paths(root, {two_path: 'modified'})
+				assert len(events) == 1
+
+				handle.cancel()
+				handle.cancel()
+				assert not service._watchers
+
 	# Preserve one change per path in an unordered OS event batch.
 	# --------------------------------------------------------------------------
 	@classmethod
