@@ -39,13 +39,61 @@ class TestResourceSubscriptions(a.Tester):
 	# --------------------------------------------------------------------------
 	@classmethod
 	def test_resource_hierarchy(cls):
-		assert issubclass(a.File, a.Resource)
-		assert issubclass(a.Directory, a.Resource)
+		assert issubclass(a.File, a.FilesystemResource)
+		assert issubclass(a.Directory, a.FilesystemResource)
+		assert issubclass(a.FilesystemResource, a.Resource)
 		assert not issubclass(a.Directory, a.File)
 		assert a.File.is_directory(a.File(a, __file__, 'a.file')) is False
 		assert a.Directory(a, os.path.dirname(__file__), 'a.tests').is_directory() is True
-		assert a.File.subscribe is a.Resource.subscribe
-		assert a.Directory.subscribe is a.Resource.subscribe
+		assert a.File.subscribe is a.FilesystemResource.subscribe
+		assert a.Directory.subscribe is a.FilesystemResource.subscribe
+		assert a.File.read is a.FilesystemResource.read
+		assert a.Directory.read is not a.FilesystemResource.read
+
+	# Base resources have no dependency on filesystem APIs or runtime services.
+	# --------------------------------------------------------------------------
+	@classmethod
+	def test_generic_resource_contract(cls):
+		resource = a.Resource()
+
+		for operation in (resource.read, lambda: resource.subscribe(lambda changed: None)):
+			try:
+				operation()
+			except NotImplementedError:
+				error = True
+			else:
+				error = False
+
+			assert error
+
+	# Keep the generic read route compatible with file and directory APIs.
+	# --------------------------------------------------------------------------
+	@classmethod
+	def test_resource_read(cls):
+		with tempfile.TemporaryDirectory() as root:
+			directory = a.Directory(a, root, 'a.assets')
+			directory.write('notes.txt', 'text')
+			file = next(item for item in directory if item.get_name() == 'notes.txt')
+
+			assert isinstance(file, a.Resource)
+			assert file.read() == 'text'
+			assert directory.read() is directory
+			assert directory.read('notes.txt') == 'text'
+
+	# Reject computed or unrelated resources at the filesystem boundary.
+	# --------------------------------------------------------------------------
+	@classmethod
+	def test_filesystem_only_observation(cls):
+		service = a.services.Filesystem
+
+		try:
+			service.subscribe({a.Resource()}, lambda changed: None)
+		except TypeError:
+			error = True
+		else:
+			error = False
+
+		assert error
 
 	# Invalidate external namespace caches before sending the change hint.
 	# --------------------------------------------------------------------------
