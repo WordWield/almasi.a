@@ -16,7 +16,8 @@ from lib.subscribable import Subscribable
 from lib.subscription import Subscription
 from lib.logger       import Logger
 from lib.string       import String
-from lib.resource     import Resource
+from lib.resource            import Resource
+from lib.filesystem_resource import FilesystemResource
 from lib.file         import File
 from lib.directory    import Directory
 from lib.plugin       import Plugin
@@ -99,7 +100,8 @@ class A(metaclass=AMeta, plugins=['Py', 'Json', 'Text', 'Bytes']):
 	ModuleMeta    = ModuleMeta
 	Module        = Module
 	Logger        = Logger
-	Resource      = Resource
+	Resource           = Resource
+	FilesystemResource = FilesystemResource
 	File          = File
 	Directory     = Directory
 	Plugin        = Plugin
