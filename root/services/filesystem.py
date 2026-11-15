@@ -134,75 +134,54 @@ class Filesystem(a.Subscribable):
 
 		return changes
 
-	# Register one resource and reuse watchers already serving its roots.
+	# Derive OS watchers from Subscribable's existing active identifier index.
+	# No second reference-counting system is needed for registered resources.
 	# --------------------------------------------------------------------------
-	def _retain(self, resource):
-		entry = self._resources.get(resource)
+	def _reconcile(self):
+		active = set(self._by_id)
 
-		if entry is None:
-			roots = self._roots_for(resource)
-			entry = {'references': 0, 'roots': roots, 'path': self._effective(resource) if isinstance(resource, a.File) else None}
-			self._resources[resource] = entry
+		for resource in active - self._resources.keys():
+			self._resources[resource] = {
+				'roots': self._roots_for(resource),
+				'path' : self._effective(resource) if isinstance(resource, a.File) else None
+			}
 
-			for root in roots:
-				watcher = self._watchers.get(root)
-
-				if watcher is None:
-					stop    = threading.Event()
-					thread  = threading.Thread(target=self._watch, args=(root, stop), daemon=True)
-					watcher = {'stop': stop, 'thread': thread, 'references': 0}
-					self._watchers[root] = watcher
-					thread.start()
-
-				watcher['references'] += 1
-
-		entry['references'] += 1
-
-	# Release the OS observer when no subscribed resources need its root.
-	# --------------------------------------------------------------------------
-	def _release(self, resource):
-		entry = self._resources[resource]
-		entry['references'] -= 1
-
-		if entry['references'] == 0:
+		for resource in self._resources.keys() - active:
 			del self._resources[resource]
 
-			for root in entry['roots']:
-				watcher = self._watchers[root]
-				watcher['references'] -= 1
+		roots = {root for entry in self._resources.values() for root in entry['roots']}
 
-				if watcher['references'] == 0:
-					watcher['stop'].set()
-					del self._watchers[root]
+		for root in roots - self._watchers.keys():
+			stop   = threading.Event()
+			thread = threading.Thread(target=self._watch, args=(root, stop), daemon=True)
+			thread.start()
+			self._watchers[root] = {'stop': stop, 'thread': thread}
 
-	# Replace a resource scope while maintaining its watcher ownership.
+		for root in self._watchers.keys() - roots:
+			self._watchers.pop(root)['stop'].set()
+
+	# Replace the scope in the common registry, then reconcile OS observers.
 	# --------------------------------------------------------------------------
 	def _update_subscription(self, subscription, identifiers):
 		resources = self._resources_in(identifiers)
 
 		with self._subscription_lock:
-			if not subscription._active:
-				raise RuntimeError('Cannot update a canceled subscription')
-
 			before = subscription._identifiers
-			for resource in resources - before:
-				self._retain(resource)
-
 			super()._update_subscription(subscription, resources)
 
-			for resource in before - resources:
-				self._release(resource)
+			try:
+				self._reconcile()
+			except BaseException:
+				super()._update_subscription(subscription, before)
+				self._reconcile()
+				raise
 
-	# Release watchers through the same idempotent handle cancellation path.
+	# The common registry already knows whether the subscription is active.
 	# --------------------------------------------------------------------------
 	def _cancel_subscription(self, subscription):
 		with self._subscription_lock:
-			if subscription._active:
-				resources = subscription._identifiers
-				super()._cancel_subscription(subscription)
-
-				for resource in resources:
-					self._release(resource)
+			super()._cancel_subscription(subscription)
+			self._reconcile()
 
 	# Locate an event's source layer and logical path in the observed namespace.
 	# --------------------------------------------------------------------------
@@ -361,17 +340,12 @@ class Filesystem(a.Subscribable):
 
 		with self._subscription_lock:
 			subscription = super().subscribe(resources, deliver)
-			retained     = []
 
 			try:
-				for resource in resources:
-					self._retain(resource)
-					retained.append(resource)
+				self._reconcile()
 			except BaseException:
-				for resource in retained:
-					self._release(resource)
-
 				super()._cancel_subscription(subscription)
+				self._reconcile()
 				raise
 
 		return subscription
