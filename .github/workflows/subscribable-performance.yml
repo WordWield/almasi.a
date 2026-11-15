@@ -38,7 +38,7 @@ jobs:
               import time
               import a
 
-              source = a.Subscribable()
+              source = a.tests.TestSubscribable._source()
               changed = frozenset({7})
               results = {}
 
