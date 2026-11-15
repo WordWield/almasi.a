@@ -1,56 +1,22 @@
 # ==============================================================================
 # RESOURCE
 # ==============================================================================
-# Share filesystem carrier identity and delegate observation to its service.
+# Define the source-independent read and subscription contract.
 # ==============================================================================
-
-import os
 
 
 class Resource:
 
 	# ==========================================================================
-	# FRAMEWORK METHODS
-	# ==========================================================================
-
-	# Keep source ownership distinct from the namespace through which it is seen.
-	# --------------------------------------------------------------------------
-	def __init__(self, lib, path, route):
-		self.__lib__         = lib
-		self.__path__        = os.path.realpath(path)
-		self.__route__       = route
-		self._namespace_lib = lib
-
-	# Describe the carrier without realizing its content.
-	# --------------------------------------------------------------------------
-	def __repr__(self):
-		return f'<{type(self).__name__} `{self.get_route()}` path=`{self.get_path()}`>'
-
-	# ==========================================================================
 	# PUBLIC METHODS
 	# ==========================================================================
 
-	# Return the canonical physical path.
-	# --------------------------------------------------------------------------
-	def get_path(self):
-		return self.__path__
+	# Read the resource through its concrete source.
+	# ----------------------------------------------------------------------
+	def read(self):
+		raise NotImplementedError
 
-	# Return the logical route in the Almasi namespace.
-	# --------------------------------------------------------------------------
-	def get_route(self):
-		return self.__route__
-
-	# Return the library that supplied this filesystem carrier.
-	# --------------------------------------------------------------------------
-	def get_lib(self):
-		return self.__lib__
-
-	# Return the physical filename or directory name.
-	# --------------------------------------------------------------------------
-	def get_name(self):
-		return os.path.basename(self.__path__)
-
-	# Observe the effective resource without owning a filesystem watcher.
-	# --------------------------------------------------------------------------
+	# Subscribe to changes through its concrete source.
+	# ----------------------------------------------------------------------
 	def subscribe(self, callback):
-		return self._namespace_lib.services.Filesystem.subscribe({self}, callback)
+		raise NotImplementedError
