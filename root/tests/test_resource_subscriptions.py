@@ -288,6 +288,67 @@ class TestResourceSubscriptions(a.Tester):
 				handle.cancel()
 				assert not one._watchers
 
+	# Nested filesystem notifications keep each batch's own change details.
+	# --------------------------------------------------------------------------
+	@classmethod
+	def test_reentrant_filesystem_payload(cls):
+		with tempfile.TemporaryDirectory() as root:
+			file    = a.File(a, os.path.join(root, 'nested.txt'), 'a.nested')
+			service = a.services.Filesystem
+			events  = []
+
+			def callback(resources):
+				events.append(resources)
+
+				if resources['nested.txt'] == 'created':
+					service._publish({file: {'nested.txt': 'deleted'}})
+
+			with patch.object(type(service), '_watch', return_value=None):
+				handle = file.subscribe(callback)
+				cls._threads(service)
+				service._publish({file: {'nested.txt': 'created'}})
+
+				assert events == [
+					{'nested.txt': 'created'},
+					{'nested.txt': 'deleted'}
+				]
+				handle.cancel()
+
+	# Concurrent producers do not exchange or overwrite filesystem metadata.
+	# --------------------------------------------------------------------------
+	@classmethod
+	def test_concurrent_filesystem_payload(cls):
+		with tempfile.TemporaryDirectory() as root:
+			file     = a.File(a, os.path.join(root, 'parallel.txt'), 'a.parallel')
+			service  = a.services.Filesystem
+			barrier  = threading.Barrier(2)
+			received = []
+
+			def callback(resources):
+				barrier.wait(timeout=2)
+				received.append(resources)
+
+			with patch.object(type(service), '_watch', return_value=None):
+				handle  = file.subscribe(callback)
+				cls._threads(service)
+				threads = [
+					threading.Thread(
+						target = service._publish,
+						args   = ({file: {'parallel.txt': change}},)
+					)
+					for change in ('modified', 'deleted')
+				]
+
+				for thread in threads:
+					thread.start()
+
+				for thread in threads:
+					thread.join(timeout=3)
+
+				assert all(not thread.is_alive() for thread in threads)
+				assert {entry['parallel.txt'] for entry in received} == {'modified', 'deleted'}
+				handle.cancel()
+
 	# The real watchfiles producer observes an external file modification.
 	# --------------------------------------------------------------------------
 	@classmethod
