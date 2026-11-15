@@ -1,6 +1,6 @@
 # Architecture: Subscribable — shared change subscriptions
 
-**Status:** Stage 1 implemented in the accompanying PR (shared subscription\nprimitives). Filesystem, Resource hierarchy and producer migrations remain\nplanned.
+**Status:** Shared Subscribable and filesystem resource subscriptions implemented.\nO and Web integrate their own source-specific subscriptions separately.
 
 ## Intent
 
@@ -196,6 +196,38 @@ Implementation should proceed without inventing additional public API:
 commonality lives once in Almasi; each source retains its essential
 change-detection and identity semantics. No consuming library is referenced
 or required by this core architecture.
+
+## Filesystem callback and event metadata
+
+`Resource.subscribe(callback)` returns an `a.Subscription` handle.
+File and directory subscriptions use the same registration and cancellation
+mechanism; `Filesystem` alone owns the OS watcher.
+
+Filesystem callbacks receive one dictionary per observed batch, mapping
+relative resource paths to their final observed event:
+
+```python
+# Directory carrier, for example from a library namespace.
+subscription = directory.subscribe(lambda resources: print(resources))
+# {'static/app.js': 'modified', 'static/theme.css': 'created'}
+subscription.cancel()
+```
+
+Event values are `'created'`, `'modified'`, or `'deleted'`.
+Directory subscriptions observe descendants recursively, and removing a
+directory does not terminate its subscription. An observed path can be
+recreated later. Duplicate changes for one path within the same batch are
+collapsed to one final observed event. There is no application-level batch
+size limit.
+
+The callback is an invalidation hint, not changed file contents. Consumers
+may refetch when needed. In MCP, the consumer can publish the subscribed
+resource URI with the dictionary in `_meta.resources`; transport delivery
+and authorization remain outside Almasi.
+
+Filesystem change detection is not a durable ordered change log: missed
+or overflowed OS events may require a fresh resource read. A subscription
+does not make content reads probe file timestamps or hashes.
 
 ## Indexed invalidation dispatch
 
