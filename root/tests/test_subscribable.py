@@ -9,6 +9,45 @@ import threading
 import a
 
 
+class IndexedSource(a.Subscribable):
+
+	# Preserve owner-ID matching as a concrete test fixture.
+	# ----------------------------------------------------------------------
+	def _matches_generator(self, changed):
+		changes = changed if changed is None or isinstance(changed, frozenset) else self._scope(changed)
+
+		if changes is None or len(self._snapshot) <= 16:
+			candidates = self._snapshot
+		elif changes:
+			with self._subscription_lock:
+				potential = len(self._broad) + sum(
+					len(self._by_id.get(identifier, ())) for identifier in changes
+				)
+
+				if potential * 2 >= len(self._subscriptions):
+					candidates = self._snapshot
+				else:
+					matched = set(self._broad)
+
+					for identifier in changes:
+						matched.update(self._by_id.get(identifier, ()))
+
+					candidates = tuple(
+						(subscription, subscription._identifiers)
+						for subscription in sorted(matched, key=self._subscriptions.__getitem__)
+					)
+		else:
+			candidates = ()
+
+		for subscription, identifiers in candidates:
+			matching = None if changes is None else (
+				changes if identifiers is None else changes & identifiers
+			)
+
+			if changes is None or matching:
+				yield subscription, matching
+
+
 class TestSubscribable(a.Tester):
 
 	# ==========================================================================
@@ -19,7 +58,7 @@ class TestSubscribable(a.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def _source(cls):
-		source = a.Subscribable()
+		source = IndexedSource()
 
 		for subscription in tuple(source._subscriptions):
 			subscription.cancel()
@@ -29,6 +68,21 @@ class TestSubscribable(a.Tester):
 	# ==========================================================================
 	# PUBLIC METHODS
 	# ==========================================================================
+
+	# Require sources to implement matching without an ABC metaclass.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_unimplemented_matching(cls):
+		source = a.Subscribable()
+
+		try:
+			source._dispatch({1})
+		except NotImplementedError:
+			error = True
+		else:
+			error = False
+
+		assert error
 
 	# Keep broad, selective and empty scopes distinct.
 	# ----------------------------------------------------------------------
