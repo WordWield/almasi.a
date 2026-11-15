@@ -173,6 +173,36 @@ class TestSubscribable(a.Tester):
 			{'two': 'modified'}
 		]
 
+	# Concurrent producers deliver their own metadata without shared state.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_concurrent_dispatch_payloads(cls):
+		source   = cls._source()
+		barrier  = threading.Barrier(2)
+		received = []
+
+		def receive(payload):
+			barrier.wait(timeout=2)
+			received.append(payload)
+
+		source.subscribe({1}, receive)
+		workers = [
+			threading.Thread(
+				target = source._dispatch,
+				args   = ({1}, lambda matched, event=event: {'event': event})
+			)
+			for event in ('created', 'deleted')
+		]
+
+		for worker in workers:
+			worker.start()
+
+		for worker in workers:
+			worker.join(timeout=2)
+
+		assert all(not worker.is_alive() for worker in workers)
+		assert {entry['event'] for entry in received} == {'created', 'deleted'}
+
 	# Cancellation never waits for an already running callback.
 	# ----------------------------------------------------------------------
 	@classmethod
