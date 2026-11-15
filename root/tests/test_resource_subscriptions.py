@@ -301,12 +301,12 @@ class TestResourceSubscriptions(a.Tester):
 				events.append(resources)
 
 				if resources['nested.txt'] == 'created':
-					service._publish({file: {'nested.txt': 'deleted'}})
+					service._dispatch({file: {'nested.txt': 'deleted'}})
 
 			with patch.object(type(service), '_watch', return_value=None):
 				handle = file.subscribe(callback)
 				cls._threads(service)
-				service._publish({file: {'nested.txt': 'created'}})
+				service._dispatch({file: {'nested.txt': 'created'}})
 
 				assert events == [
 					{'nested.txt': 'created'},
@@ -333,7 +333,7 @@ class TestResourceSubscriptions(a.Tester):
 				cls._threads(service)
 				threads = [
 					threading.Thread(
-						target = service._publish,
+						target = service._dispatch,
 						args   = ({file: {'parallel.txt': change}},)
 					)
 					for change in ('modified', 'deleted')
