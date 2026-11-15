@@ -148,7 +148,7 @@ class Filesystem(a.Subscribable):
 
 		if entry is None:
 			roots = self._roots_for(resource)
-			entry = {'references': 0, 'roots': roots, 'path': self._effective(resource)}
+			entry = {'references': 0, 'roots': roots, 'path': self._effective(resource) if isinstance(resource, a.File) else None}
 			self._resources[resource] = entry
 
 			for root in roots:
@@ -250,77 +250,87 @@ class Filesystem(a.Subscribable):
 
 		return visible
 
-	# Check whether a directory's logical subtree contains this event.
+	# Invalidate affected carrier caches once per physical path and namespace.
 	# --------------------------------------------------------------------------
-	def _in_directory(self, resource, relative):
-		namespace, parts, name, logical = self._location(resource)
-		prefix = tuple(parts) + ((name,) if name is not None else ())
-		path   = tuple(relative.split(os.sep))
-
-		return len(path) >= len(prefix) and path[:len(prefix)] == prefix
-
-	# Invalidate all affected namespace caches before delivering notifications.
-	# --------------------------------------------------------------------------
-	def _invalidate_path(self, namespace, path):
-		layer_index, relative = self._event_source(namespace, path)
-
+	def _invalidate_path(self, namespace, path, layer_index):
 		layer = tuple(namespace.__instances__())[layer_index] if layer_index is not None else namespace
 		a.Directory(layer, os.path.dirname(path), layer.__name__)._invalidate_children(path)
 
-	# Express the event path relative to its effective library or external root.
+	# Report logical library paths or paths relative to the subscribed carrier.
 	# --------------------------------------------------------------------------
 	def _event_name(self, resource, path, relative):
-		if relative is not None:
-			name = relative
-		else:
-			base = resource.get_path() if isinstance(resource, a.Directory) else os.path.dirname(resource.get_path())
-			name = os.path.relpath(path, os.path.dirname(base))
+		name = relative if relative is not None else os.path.relpath(path, os.path.dirname(resource.get_path()))
 
 		return name.replace(os.sep, '/')
 
-	# Deliver only changes that affect the currently visible resource.
+	# Resolve source layers once per changed path, and effective files once per
+	# subscribed resource. Keep notifications separate from cache invalidation.
 	# --------------------------------------------------------------------------
 	def _changed_paths(self, root, paths):
 		with self._subscription_lock:
 			observed = tuple(
-				(resource, entry['path'], entry['roots'])
+				(resource, entry['path'], self._location(resource))
 				for resource, entry in self._resources.items()
+				if root in entry['roots']
 			)
 
-		changed = {}
+		namespaces = {location[0] for resource, old, location in observed}
+		sources    = {}
 
-		for path, status in paths.items():
-			namespaces = {
-				resource._namespace_lib for resource, old, roots in observed if root in roots
-			}
+		for path in paths:
+			mapping = {}
 
 			for namespace in namespaces:
-				self._invalidate_path(namespace, path)
+				index, relative = self._event_source(namespace, path)
+				self._invalidate_path(namespace, path, index)
+				mapping[namespace] = (index, relative)
 
-			for resource, old, roots in observed:
-				if root in roots:
-					namespace, parts, name, logical = self._location(resource)
-					layer_index, relative = self._event_source(namespace, path)
-					current = self._effective(resource)
+			sources[path] = mapping
 
-					if isinstance(resource, a.File):
-						affected = old != current or path == old or path == current
-					elif logical and layer_index is not None and relative is not None:
-						affected = self._in_directory(resource, relative) and self._is_visible_change(
-							namespace, path, layer_index, relative
-						)
-					else:
-						base = resource.get_path()
-						affected = path == base or path.startswith(base + os.sep)
+		changed    = {}
+		visibility = {}
 
-					if affected:
-						if isinstance(resource, a.File):
-							resource._invalidate()
-						changed.setdefault(resource, {})[self._event_name(resource, path, relative)] = status
+		for resource, old, location in observed:
+			namespace, parts, name, logical = location
+			is_file = isinstance(resource, a.File)
+			current = self._effective(resource) if is_file else None
+			base    = resource.get_path()
+			prefix  = os.sep.join(parts + ((name,) if name is not None else ()))
 
-					with self._subscription_lock:
-						if resource in self._resources:
-							self._resources[resource]['path'] = current
+			for path, status in paths.items():
+				index, relative = sources[path][namespace]
+
+				if is_file:
+					affected = (
+						path == old or path == current
+						or (old is not None and old.startswith(path + os.sep))
+						or (current is not None and current.startswith(path + os.sep))
+					)
+				elif logical and index is not None and relative is not None:
+					within = not prefix or relative == prefix or relative.startswith(prefix + os.sep)
+					affected = False
+
+					if within:
+						key = (namespace, path)
+						if key not in visibility:
+							visibility[key] = self._is_visible_change(namespace, path, index, relative)
+
+						affected = visibility[key]
+				else:
+					affected = path == base or path.startswith(base + os.sep)
+
+				if affected:
+					changed.setdefault(resource, {})[self._event_name(resource, path, relative)] = status
+
+			if resource in changed and is_file:
+				resource._invalidate()
+
+			if is_file:
+				with self._subscription_lock:
+					entry = self._resources.get(resource)
+
+					if entry is not None:
+						entry['path'] = current
 
 		if changed:
 			token = self._events.set(changed)
