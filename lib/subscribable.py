@@ -100,45 +100,20 @@ class Subscribable(Service):
 				self._subscriptions.pop(subscription, None)
 				self._refresh()
 
-	# Use indexed routing when it is cheaper than the full subscription view.
+	# Let concrete producers determine recipients and notification contents.
+	# ----------------------------------------------------------------------
+	def _matches_generator(self, changed):
+		raise NotImplementedError
+
+	# Deliver producer-selected notifications without interpreting their data.
 	# ----------------------------------------------------------------------
 	def _dispatch(self, changed):
-		changes = changed if changed is None or isinstance(changed, frozenset) else self._scope(changed)
-
-		if changes is None or len(self._snapshot) <= 16:
-			candidates = self._snapshot
-		elif changes:
-			with self._subscription_lock:
-				potential = len(self._broad) + sum(
-					len(self._by_id.get(identifier, ())) for identifier in changes
-				)
-
-				if potential * 2 >= len(self._subscriptions):
-					candidates = self._snapshot
-				else:
-					matched = set(self._broad)
-
-					for identifier in changes:
-						matched.update(self._by_id.get(identifier, ()))
-
-					candidates = tuple(
-						(subscription, subscription._identifiers)
-						for subscription in sorted(matched, key=self._subscriptions.__getitem__)
-					)
-		else:
-			candidates = ()
-
-		for subscription, identifiers in candidates:
-			matching = None if changes is None else (
-				changes if identifiers is None else changes & identifiers
-			)
-
-			if changes is None or matching:
-				if subscription._active:
-					try:
-						subscription._callback(matching)
-					except Exception:
-						logging.exception('Subscription callback failed')
+		for subscription, notification in self._matches_generator(changed):
+			if subscription._active:
+				try:
+					subscription._callback(notification)
+				except Exception:
+					logging.exception('Subscription callback failed')
 
 	# ==========================================================================
 	# PUBLIC METHODS

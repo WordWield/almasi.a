@@ -256,25 +256,22 @@ class Filesystem(a.Subscribable):
 						entry['path'] = current
 
 		if changed:
-			self._publish(changed)
+			self._dispatch(changed)
 
-	# Deliver filesystem details using existing Subscribable registrations.
-	# Each batch remains local, including concurrent and nested notifications.
+	# Match resource changes and build subscriber-specific event dictionaries.
+	# Keep each batch local for nested and concurrent notifications.
 	# --------------------------------------------------------------------------
-	def _publish(self, changed):
+	def _matches_generator(self, changed):
 		for subscription, identifiers in self._snapshot:
 			matching = changed.keys() & identifiers
 
-			if matching and subscription._active:
+			if matching:
 				resources = {}
 
 				for resource in matching:
 					resources.update(changed[resource])
 
-				try:
-					subscription._callback(resources)
-				except Exception:
-					logging.exception('Filesystem subscription callback failed')
+				yield subscription, resources
 
 	# ==========================================================================
 	# PUBLIC METHODS

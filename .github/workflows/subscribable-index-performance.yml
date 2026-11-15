@@ -48,7 +48,7 @@ jobs:
               values = {}
 
               for name, count, changed_count, dense, iterations in scenarios:
-                  source = a.Subscribable()
+                  source = a.tests.TestSubscribable._source()
                   for handle in tuple(source._subscriptions):
                       handle.cancel()
                   for number in range(count):
