@@ -27,6 +27,9 @@ class Subscribable(Service):
 			instance._subscription_lock = threading.RLock()
 			instance._subscriptions     = {}
 			instance._snapshot          = ()
+			instance._by_id             = {}
+			instance._broad             = set()
+			instance._next_order        = 0
 
 		return instance
 
@@ -47,7 +50,26 @@ class Subscribable(Service):
 
 		return scope
 
-	# Refresh the immutable delivery view only when registrations change.
+	# Keep only interested subscriptions under each identifier.
+	# ----------------------------------------------------------------------
+	def _reindex(self, subscription, before, after):
+		if before is None:
+			self._broad.discard(subscription)
+		else:
+			for identifier in before:
+				bucket = self._by_id[identifier]
+				bucket.discard(subscription)
+
+				if not bucket:
+					del self._by_id[identifier]
+
+		if after is None:
+			self._broad.add(subscription)
+		else:
+			for identifier in after:
+				self._by_id.setdefault(identifier, set()).add(subscription)
+
+	# Keep a complete immutable view for broad and dense invalidations.
 	# ----------------------------------------------------------------------
 	def _refresh(self):
 		self._snapshot = tuple(
@@ -62,6 +84,7 @@ class Subscribable(Service):
 
 		with self._subscription_lock:
 			if subscription._active:
+				self._reindex(subscription, subscription._identifiers, scope)
 				subscription._identifiers = scope
 				self._refresh()
 			else:
@@ -71,16 +94,41 @@ class Subscribable(Service):
 	# ----------------------------------------------------------------------
 	def _cancel_subscription(self, subscription):
 		with self._subscription_lock:
-			subscription._active = False
-			self._subscriptions.pop(subscription, None)
-			self._refresh()
+			if subscription._active:
+				subscription._active = False
+				self._reindex(subscription, subscription._identifiers, frozenset())
+				self._subscriptions.pop(subscription, None)
+				self._refresh()
 
-	# Deliver one batch using a stable scope snapshot and no callback lock.
+	# Use indexed routing when it is cheaper than the full subscription view.
 	# ----------------------------------------------------------------------
 	def _dispatch(self, changed):
 		changes = changed if changed is None or isinstance(changed, frozenset) else self._scope(changed)
 
-		for subscription, identifiers in self._snapshot:
+		if changes is None or len(self._snapshot) <= 16:
+			candidates = self._snapshot
+		elif changes:
+			with self._subscription_lock:
+				potential = len(self._broad) + sum(
+					len(self._by_id.get(identifier, ())) for identifier in changes
+				)
+
+				if potential * 2 >= len(self._subscriptions):
+					candidates = self._snapshot
+				else:
+					matched = set(self._broad)
+
+					for identifier in changes:
+						matched.update(self._by_id.get(identifier, ()))
+
+					candidates = tuple(
+						(subscription, subscription._identifiers)
+						for subscription in sorted(matched, key=self._subscriptions.__getitem__)
+					)
+		else:
+			candidates = ()
+
+		for subscription, identifiers in candidates:
 			matching = None if changes is None else (
 				changes if identifiers is None else changes & identifiers
 			)
@@ -110,7 +158,9 @@ class Subscribable(Service):
 		subscription = Subscription(self, scope, callback)
 
 		with self._subscription_lock:
-			self._subscriptions[subscription] = None
+			self._subscriptions[subscription] = self._next_order
+			self._next_order += 1
+			self._reindex(subscription, frozenset(), scope)
 			self._refresh()
 
 		return subscription
