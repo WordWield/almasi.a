@@ -53,6 +53,7 @@ class Filesystem(a.Subscribable):
 		name      = resource.get_name()
 		logical   = False
 		parts     = ()
+		component = None
 
 		if route == namespace.__name__ and path == os.path.realpath(namespace.__path__):
 			logical = True
@@ -303,11 +304,16 @@ class Filesystem(a.Subscribable):
 
 		with self._subscription_lock:
 			subscription = super().subscribe(resources, callback)
+			retained     = []
 
 			try:
 				for resource in resources:
 					self._retain(resource)
+					retained.append(resource)
 			except BaseException:
+				for resource in retained:
+					self._release(resource)
+
 				super()._cancel_subscription(subscription)
 				raise
 
