@@ -65,29 +65,27 @@ identifier set is copied/snapshotted on registration and on update.
 `update(identifiers)` atomically replaces the scope of this registration;
 `cancel()` unregisters it and is idempotent.
 
-The abstract change unit is a set of identifiers, not a changed value or
-object snapshot. For an ordinary batch:
+Each source owns its change representation and matching semantics.
+For O owner-ID invalidations, the matching rule is:
 
 ```python
 matching = changed_identifiers & subscription.identifiers
 ```
 
-A nonempty intersection triggers the callback with the matching identifiers.
-An empty subscription set matches no ordinary changes. A special
-full-invalidation signal may be supported by a concrete producer when its
-contract requires it; it is not an ordinary identifier and cannot collide
-with a legitimate identifier. The precise common representation of that
-signal must be selected before implementation.
+O delivers matching owner IDs, including its full-invalidation sentinel.
+Filesystem delivers resource paths and change statuses. The generic base
+neither interprets these notifications nor imposes a common event format.
 
 No content is transmitted by the subscription mechanism. Notifications are
 invalidation hints: consumers reread only when necessary. A change may be
 coalesced with others; subscriptions do not constitute an event history.
 
-## Stage 1 API and execution rules\n\n`a.Subscribable` is itself a service singleton and can be instantiated\ndirectly for tests or extended by a concrete producer. It does not require\n`initialize()` because its registration storage is established by `__new__`.\nConcrete services retain their own optional explicit initializers.\n\n```python\nimport a\n\nsource = a.Subscribable()\n\n# An unfiltered subscription; callbacks run synchronously during delivery.\nsubscription = source.subscribe(lambda changed: print(changed))\nsubscription.update({12, 35})\nsubscription.cancel()\n```\n\nAccepted filters are `set`, `frozenset`, or `None` (all changes).\n`subscribe(callback)` abbreviates `subscribe(None, callback)`. Every call\nreturns a distinct `a.Subscription`; the same callback can be registered\nmore than once. `update()` on a canceled handle raises `RuntimeError`;\n`cancel()` is idempotent.\n\nInternal producers call `_dispatch(changed)` with a set, frozenset or\n`None`. The batch is snapshotted once. Filter changes made during delivery\napply to later batches, while cancellation suppresses not-yet-reserved\ncallbacks. A callback already selected for invocation may finish after\n`cancel()` returns. Callbacks run in the dispatching thread, without\nlocks held across their bodies. Exceptions are logged and do not halt\nother deliveries.\n\n## Shared dispatch and distinct producers
+## Stage 1 API and execution rules\n\n`a.Subscribable` is a service singleton that concrete producers extend.\nIts `_matches_generator()` raises `NotImplementedError` unless implemented. It does not require\n`initialize()` because its registration storage is established by `__new__`.\nConcrete services retain their own optional explicit initializers.\n\n```python\nimport a\n\nsource = concrete_subscribable\n\n# An unfiltered subscription; callbacks run synchronously during delivery.\nsubscription = source.subscribe(lambda changed: print(changed))\nsubscription.update({12, 35})\nsubscription.cancel()\n```\n\nAccepted filters are `set`, `frozenset`, or `None` (all changes).\n`subscribe(callback)` abbreviates `subscribe(None, callback)`. Every call\nreturns a distinct `a.Subscription`; the same callback can be registered\nmore than once. `update()` on a canceled handle raises `RuntimeError`;\n`cancel()` is idempotent.\n\nInternal producers call `_dispatch(changed)` with their own change format.\nThe producer snapshots matching scopes before the first callback. Filter changes made during delivery\napply to later batches, while cancellation suppresses not-yet-reserved\ncallbacks. A callback already selected for invocation may finish after\n`cancel()` returns. Callbacks run in the dispatching thread, without\nlocks held across their bodies. Exceptions are logged and do not halt\nother deliveries.\n\n## Shared dispatch and distinct producers
 
-`Subscribable` implements registration, scope replacement, cancellation,
-matching and dispatch once. It exposes an internal delivery operation to
-concrete services. Producers remain responsible for determining *what*
+`Subscribable` implements registration, scope replacement, cancellation and
+callback delivery once. Each concrete source implements
+`_matches_generator(changed)`, yielding `(subscription, notification)` pairs.
+The source decides how to match and what to deliver. Producers remain responsible for determining *what*
 changed and *when* it is safe to report it.
 
 The generator loop, if a producer uses one, belongs to the producer/service
@@ -100,9 +98,9 @@ transport on producers. An existing producer can deliver a batch from its
 own worker after it has completed source-specific processing. This keeps
 subscription matching behind the producer's write/commit hot path.
 
-The filesystem producer delivers its resource-specific `{path: change}`
-dictionary using the existing immutable subscription snapshot. The
-generic `Subscribable._dispatch(ids)` contract remains unchanged.
+Filesystem yields resource-specific `{path: change}` dictionaries from
+`_matches_generator(changed)`. Generic `Subscribable._dispatch(changed)`
+checks active subscriptions, invokes callbacks and isolates failures.
 Each filesystem batch keeps its own event details, including nested
 and concurrent notifications; no `ContextVar` or shared event state is used.
 
@@ -138,7 +136,7 @@ after namespace resolution, including library inheritance and overrides.
 - `Directory`: invalidations of the directory's logical subtree, including
   child additions/removals and modifications.
 
-The generic dispatcher still uses set intersection. The Filesystem producer
+The Filesystem matcher uses set intersection on resource identities. It
 must map physical paths to the relevant logical identifiers; for subtree
 subscriptions it may include affected ancestor-directory identifiers in the
 published set, or maintain an equivalent producer-specific index. Do **not**
@@ -236,12 +234,12 @@ Filesystem change detection is not a durable ordered change log: missed
 or overflowed OS events may require a fresh resource read. A subscription
 does not make content reads probe file timestamps or hashes.
 
-## Indexed invalidation dispatch
+## Indexed invalidation matching
 
 The shared Subscribable maintains an inverted mapping from identifier to
-interested Subscription handles. An ordinary batch looks up its changed
-identifiers, unifies matching handles, and invokes each at most once with the
-intersection of that handle's frozen scope and the change batch.
+interested Subscription handles. O's `_matches_generator()` uses that index
+to find candidates and their matched owner IDs. Filesystem instead matches
+resources and builds source-specific event dictionaries.
 
 A complete immutable subscription view serves full invalidation, small
 registrations and dense changes. The indexed route is used for sparse changes
