@@ -59,9 +59,10 @@ class Filesystem(a.Subscribable):
 		logical   = route == namespace.__name__ and path == os.path.realpath(namespace.__path__)
 
 		if route.startswith(namespace.__name__ + '.'):
-			parts     = tuple(route[len(namespace.__name__) + 1:].split('.'))
-			component = parts[-1]
-			parts     = parts[:-1]
+			component = name if route.endswith('.' + name) else route.rsplit('.', 1)[-1]
+			parent    = route[:-(len(component) + 1)]
+			relative  = parent[len(namespace.__name__):].lstrip('.')
+			parts     = tuple(relative.split('.')) if relative else ()
 			stem      = os.path.splitext(name)[0]
 			matching  = component in (name, stem) or namespace.String.camel_to_snake(component) == stem
 
