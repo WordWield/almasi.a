@@ -14,8 +14,7 @@ from .service import Service
 
 class Reloadable:
 
-	_records   = {}
-	_listeners = {}
+	_records = {}
 
 	# ==========================================================================
 	# PRIVATE METHODS
@@ -47,7 +46,7 @@ class Reloadable:
 
 		return record
 
-	# Replace the class, then tell every subscriber about each live instance.
+	# Replace the class, then report each live instance to its callback.
 	# ----------------------------------------------------------------------
 	@classmethod
 	def _refresh(cls, record):
@@ -56,39 +55,42 @@ class Reloadable:
 		fresh   = target.__reload__()
 		new     = type(fresh) if isinstance(fresh, Service) else fresh
 
-		listeners = Reloadable._listeners.pop(current, ())
-		Reloadable._listeners.setdefault(new, []).extend(listeners)
+		callback = current.__dict__.get('__reload_callback__')
+		if callback is not None:
+			new.__reload_callback__ = callback
+
 		record['target'] = new
 
 		for instance in gc.get_objects():
 			if type(instance) is new:
 				Reloadable._notify(instance)
 
-	# Report constructed and reloaded instances to observers of their classes.
+	# Use the nearest callback in the class hierarchy.
 	# ----------------------------------------------------------------------
 	@classmethod
 	def _notify(cls, instance):
 		for base in type(instance).__mro__:
-			for callback in tuple(Reloadable._listeners.get(base, ())):
+			callback = base.__dict__.get('__reload_callback__')
+
+			if callback is not None:
 				try:
 					callback(instance)
 				except Exception:
 					logging.exception('Reloadable callback failed')
+				break
 
 	# ==========================================================================
 	# FRAMEWORK METHODS
 	# ==========================================================================
 
-	# Register a callback invoked on initial construction and after source reload.
+	# Set the sole callback for this class and its inheriting subclasses.
 	# ----------------------------------------------------------------------
 	@classmethod
 	def __on_reload__(cls, callback):
 		if not callable(callback):
 			raise TypeError('Reload callback must be callable')
 
-		listeners = Reloadable._listeners.setdefault(cls, [])
-		if callback not in listeners:
-			listeners.append(callback)
+		cls.__reload_callback__ = callback
 
 
 class ReloadableModule(Reloadable, Module):
