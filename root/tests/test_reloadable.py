@@ -1,7 +1,7 @@
 # ==============================================================================
 # TEST RELOADABLE
 # ==============================================================================
-# Verify deferred source changes and persistent service identity.
+# Verify automatic source reload and persistent service identity.
 # ==============================================================================
 
 import os
@@ -18,7 +18,7 @@ class TestReloadable(a.Tester):
 	# PUBLIC METHODS
 	# ==========================================================================
 
-	# A filesystem change stays pending until a caller-selected quiet boundary.
+	# Source notifications reload services without an external dispatcher.
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_service_reload(cls):
@@ -37,7 +37,7 @@ class TestReloadable(a.Tester):
 				service.initialize()
 				assert service.read() == 6
 				seen   = []
-				handle = type(service).__on_reload__(seen.append)
+				type(service).__on_reload__(seen.append)
 
 				with open(file_path, 'w', encoding='utf-8') as stream:
 					stream.write(
@@ -46,15 +46,14 @@ class TestReloadable(a.Tester):
 						'\tdef read(self):\n\t\treturn self.value + 2\n'
 					)
 				a.services.Filesystem._changed_paths(a.__path__, {file_path: 'modified'})
-				assert service.read() == 6
-				assert a.Reloadable.apply_pending() == [type(service)]
+				assert service.read() == 7
 				assert directory.Counter is service
 				assert service.read() == 7
 				assert seen == [service]
-				handle.cancel()
 
 				key = (id(a), file_path)
 				a.Reloadable._records.pop(key)['subscription'].cancel()
+				a.Reloadable._listeners.pop(type(service), None)
 
 	# Report initialized instances and retain class-specific listeners after reload.
 	# ----------------------------------------------------------------------
@@ -69,7 +68,7 @@ class TestReloadable(a.Tester):
 			with patch.object(type(a.services.Filesystem), '_watch', return_value=None):
 				handler = directory.Handler
 				seen     = []
-				handle  = handler.__on_reload__(seen.append)
+				handler.__on_reload__(seen.append)
 				first   = handler()
 				second  = handler()
 
@@ -79,8 +78,6 @@ class TestReloadable(a.Tester):
 					stream.write('import a\nclass Handler(a.ReloadableModule):\n\tversion = 2\n')
 
 				a.services.Filesystem._changed_paths(a.__path__, {file_path: 'modified'})
-				assert handler.__dict__.get('version') is None
-				a.Reloadable.apply_pending()
 
 				assert seen == [first, second, first, second]
 				assert type(first).version == 2
