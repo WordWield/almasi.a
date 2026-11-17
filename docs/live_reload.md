@@ -105,7 +105,7 @@ Almasi cannot infer one from a filesystem notification.
 
 ## Lifecycle callbacks
 
-`Reloadable.on_reload(callback)` is a **class method** inherited by
+`Reloadable.__on_reload__(callback)` is a **class method** inherited by
 `ReloadableModule` and `ReloadableService`. The callback accepts exactly one
 argument: the existing, fully constructed instance. It fires once after the
 first instance construction (after `__init__`), then after each successful
@@ -114,7 +114,7 @@ A subscription on a parent class also observes its subclasses. Callbacks
 registered on a replaced source class survive that replacement.
 
 ```python
-subscription = Controller.on_reload(mcp.register_controller)
+subscription = Controller.__on_reload__(mcp.register_controller)
 # Load classes, then construct controller instances: callbacks fire.
 # At a safe boundary, a.Reloadable.apply_pending() fires callbacks again.
 subscription.cancel()
