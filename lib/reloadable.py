@@ -8,7 +8,7 @@ import gc
 import logging
 import os
 
-from .module  import Module
+from .module       import Module
 from .service      import Service
 from .subscription import Subscription
 
@@ -62,14 +62,14 @@ class Reloadable:
 						logging.exception('Reloadable callback failed')
 
 	# ==========================================================================
-	# PUBLIC METHODS
+	# FRAMEWORK METHODS
 	# ==========================================================================
 
 	# Subscribe to newly constructed and successfully reloaded instances.
 	# The returned subscription can be canceled; callbacks receive an instance.
 	# ----------------------------------------------------------------------
 	@classmethod
-	def on_reload(cls, callback):
+	def __on_reload__(cls, callback):
 		if not callable(callback):
 			raise TypeError('Reload callback must be callable')
 
@@ -78,6 +78,9 @@ class Reloadable:
 
 		return subscription
 
+	# ==========================================================================
+	# PUBLIC METHODS
+	# ==========================================================================
 
 	# Apply observed source changes only after affected executions have settled.
 	# ----------------------------------------------------------------------
