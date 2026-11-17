@@ -82,6 +82,46 @@ extend_child = extend_parent.extend('extend_child')
 			assert parent.api.Shared is child.api.Shared
 			assert sys.modules[type(child.api.Shared).__module__].__lib__ is parent
 
+	# Import inherited Python definitions and prefer local files on collision.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_import_python_inherited(cls):
+		with cls._runtime() as root:
+			parent_dir = cls._source(root, 'import_parent', '''import a
+
+import_parent = a.extend('import_parent')
+''')
+			child_dir = cls._source(root, 'import_child', '''import import_parent
+
+import_child = import_parent.extend('import_child')
+''')
+			parent_schemas = os.path.join(parent_dir, 'root', 'schemas')
+			child_schemas  = os.path.join(child_dir, 'root', 'schemas')
+			os.makedirs(parent_schemas)
+			os.makedirs(child_schemas)
+
+			for name, value in (('shared.py', 11), ('preferred.py', 12)):
+				with open(os.path.join(parent_schemas, name), 'w') as source:
+					source.write(f'VALUE = {value}\n')
+
+			with open(os.path.join(child_schemas, 'preferred.py'), 'w') as source:
+				source.write('VALUE = 22\n')
+
+			sys.path[:0] = [child_dir, parent_dir]
+			child  = importlib.import_module('import_child')
+			parent = importlib.import_module('import_parent')
+
+			shared    = child.schemas.import_python('shared')
+			preferred = child.schemas.import_python('preferred.py')
+
+			assert shared.VALUE == 11
+			assert shared.__lib__ is parent
+			assert shared.__route__ == 'import_child.schemas.shared'
+			assert preferred.VALUE == 22
+			assert preferred.__lib__ is child
+			assert preferred.__route__ == 'import_child.schemas.preferred'
+			assert child.schemas.import_python('shared.py') is shared
+
 	# Reject legacy class declarations; library creation is explicit.
 	# ----------------------------------------------------------------------
 	@classmethod
