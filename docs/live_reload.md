@@ -112,9 +112,10 @@ Controller.__on_reload__(mcp.register_controller)
 # A successful source reload re-registers those same controller instances.
 ```
 
-The callback registry is shared between source revisions, including
-class-specific callbacks. Registering the same callable twice on one class
-has no additional effect. There is no per-callback cancellation method.
+Each class has at most one callback. Calling `__on_reload__()` again replaces
+that callback. Subclasses inherit the nearest callback in their MRO unless
+they install their own. A class-specific callback is retained across source
+revisions. No listener registry or cancellation mechanism is needed.
 
 For ordinary modules the initial notification occurs after `__init__`.
 For services it happens when the singleton is first created, **before**
