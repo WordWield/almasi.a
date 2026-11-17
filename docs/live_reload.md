@@ -87,9 +87,10 @@ class Counter(a.ReloadableService):
 		return self.value
 ```
 
-The shared `a.Reloadable` mixin owns the subscription. When the source
-changes, it invokes the existing `__reload__()` behavior, preserving live
-instances and state. No separate pending queue or public apply method exists.
+The loaded source class owns one `a.File` subscription. A successful reload
+transfers that subscription to its replacement class, without a global registry
+of observed source paths. When the source changes, it invokes the existing
+`__reload__()` behavior, preserving live instances and state.
 If replacement fails, the current published class remains in place and the
 exception is logged.
 
@@ -113,8 +114,8 @@ Controller.__on_reload__(mcp.register_controller)
 ```
 
 Each class has at most one callback. Calling `__on_reload__()` again replaces
-that callback. Subclasses inherit the nearest callback in their MRO unless
-they install their own. A class-specific callback is retained across source
+that callback. Subclasses inherit it through ordinary Python attribute lookup
+unless they install their own. A class-specific callback is retained across source
 revisions. No listener registry or cancellation mechanism is needed.
 
 For ordinary modules the initial notification occurs after `__init__`.
