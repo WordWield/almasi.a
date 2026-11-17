@@ -276,6 +276,28 @@ class Directory(FilesystemResource):
 		path = self._destination(name)
 		self._invalidate_children(path, local=local)
 
+	# Import a Python file from this namespace or its inherited libraries.
+	# Return the Python module without requiring an exported Almasi class.
+	# ----------------------------------------------------------------------
+	def import_python(self, name):
+		self._destination(name)
+
+		if not name.endswith('.py'):
+			name += '.py'
+
+		file = self.__resolve__(name)
+
+		if file is not None:
+			if isinstance(file, File):
+				route  = f'{self.get_route()}.{name[:-3]}'
+				module = Imports.load_module(file.get_lib(), file.get_path(), route)
+			else:
+				raise TypeError(f'Not a file: {name}')
+		else:
+			raise FileNotFoundError(self.join(name))
+
+		return module
+
 	# Read one exact filename through its registered format plugin.
 	# ----------------------------------------------------------------------
 	def read(self, name=None):
