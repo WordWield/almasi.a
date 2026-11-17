@@ -43,7 +43,7 @@ class TestReloadable(a.Tester):
 						'\tdef initialize(self):\n\t\traise AssertionError()\n'
 						'\tdef read(self):\n\t\treturn self.value + 2\n'
 					)
-				a.services.Filesystem._changed_paths(path, {file_path: 'modified'})
+				a.services.Filesystem._changed_paths(a.__path__, {file_path: 'modified'})
 				assert service.read() == 6
 				assert a.Reloadable.apply_pending() == [type(service)]
 				assert directory.Counter is service
