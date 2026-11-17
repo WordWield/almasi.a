@@ -69,6 +69,19 @@ class ModuleMeta(type):
 
 		return super().__new__(mcls, name, bases, namespace)
 
+	# Notify opt-in lifecycle listeners only after instance initialization.
+	# ----------------------------------------------------------------------
+	def __call__(cls, *args, **kwargs):
+		from .reloadable import Reloadable
+
+		instance = super().__call__(*args, **kwargs)
+
+		if isinstance(instance, Reloadable) and not instance.__dict__.get('_reloadable_loaded', False):
+			instance.__dict__['_reloadable_loaded'] = True
+			Reloadable._notify(instance)
+
+		return instance
+
 	# String representation
 	# ----------------------------------------------------------------------
 	def __repr__(cls):

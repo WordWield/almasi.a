@@ -36,6 +36,8 @@ class TestReloadable(a.Tester):
 				service = directory.Counter
 				service.initialize()
 				assert service.read() == 6
+				seen   = []
+				handle = type(service).on_reload(seen.append)
 
 				with open(file_path, 'w', encoding='utf-8') as stream:
 					stream.write(
@@ -48,6 +50,42 @@ class TestReloadable(a.Tester):
 				assert a.Reloadable.apply_pending() == [type(service)]
 				assert directory.Counter is service
 				assert service.read() == 7
+				assert seen == [service]
+				handle.cancel()
+
+				key = (id(a), file_path)
+				a.Reloadable._records.pop(key)['subscription'].cancel()
+
+	# Report initialized instances and retain class-specific listeners after reload.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_module_callbacks(cls):
+		with tempfile.TemporaryDirectory(dir=a.__path__, prefix='__reloadable_') as path:
+			file_path = os.path.join(path, 'handler.py')
+			with open(file_path, 'w', encoding='utf-8') as stream:
+				stream.write('import a\nclass Handler(a.ReloadableModule):\n\tpass\n')
+
+			directory = a.Directory(a, path, 'a.' + os.path.basename(path))
+			with patch.object(type(a.services.Filesystem), '_watch', return_value=None):
+				handler = directory.Handler
+				seen     = []
+				handle  = handler.on_reload(seen.append)
+				first   = handler()
+				second  = handler()
+
+				assert seen == [first, second]
+
+				with open(file_path, 'w', encoding='utf-8') as stream:
+					stream.write('import a\nclass Handler(a.ReloadableModule):\n\tversion = 2\n')
+
+				a.services.Filesystem._changed_paths(a.__path__, {file_path: 'modified'})
+				assert handler.__dict__.get('version') is None
+				a.Reloadable.apply_pending()
+
+				assert seen == [first, second, first, second]
+				assert type(first).version == 2
+				assert directory.Handler is type(first)
+				handle.cancel()
 
 				key = (id(a), file_path)
 				a.Reloadable._records.pop(key)['subscription'].cancel()

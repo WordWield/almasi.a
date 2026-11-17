@@ -4,15 +4,19 @@
 # Track opt-in source changes without interrupting executing Python methods.
 # ==============================================================================
 
+import gc
+import logging
 import os
 
 from .module  import Module
-from .service import Service
+from .service      import Service
+from .subscription import Subscription
 
 
 class Reloadable:
 
-	_records = {}
+	_records   = {}
+	_listeners = {}
 
 	# ==========================================================================
 	# PRIVATE METHODS
@@ -37,9 +41,43 @@ class Reloadable:
 
 		return record
 
+	# Stop one class-owned lifecycle subscription.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def _cancel_subscription(cls, subscription):
+		if subscription._active:
+			subscription._active = False
+			Reloadable._listeners[cls].remove(subscription)
+
+	# Report a ready instance to listeners registered on its class or ancestors.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def _notify(cls, instance):
+		for base in type(instance).__mro__:
+			for subscription in tuple(Reloadable._listeners.get(base, ())):
+				if subscription._active:
+					try:
+						subscription._callback(instance)
+					except Exception:
+						logging.exception('Reloadable callback failed')
+
 	# ==========================================================================
 	# PUBLIC METHODS
 	# ==========================================================================
+
+	# Subscribe to newly constructed and successfully reloaded instances.
+	# The returned subscription can be canceled; callbacks receive an instance.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def on_reload(cls, callback):
+		if not callable(callback):
+			raise TypeError('Reload callback must be callable')
+
+		subscription = Subscription(cls, None, callback)
+		Reloadable._listeners.setdefault(cls, []).append(subscription)
+
+		return subscription
+
 
 	# Apply observed source changes only after affected executions have settled.
 	# ----------------------------------------------------------------------
@@ -54,9 +92,22 @@ class Reloadable:
 				fresh   = target.__reload__()
 				new     = type(fresh) if isinstance(fresh, Service) else fresh
 
+				# Keep class-specific listeners when the Python class is replaced.
+				# --------------------------------------------------------------
+				listeners = Reloadable._listeners.pop(current, ())
+				for subscription in listeners:
+					subscription._source = new
+				Reloadable._listeners.setdefault(new, []).extend(listeners)
+
 				record['target']  = new
 				record['pending'] = False
 				updated.append(new)
+
+				# Module.__reload__ has already moved live objects to the new class.
+				# --------------------------------------------------------------
+				for instance in gc.get_objects():
+					if type(instance) is new:
+						Reloadable._notify(instance)
 
 		return updated
 
