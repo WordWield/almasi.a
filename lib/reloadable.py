@@ -1,7 +1,7 @@
 # ==============================================================================
 # RELOADABLE
 # ==============================================================================
-# Reload source-backed classes and notify consumers of their live instances.
+# Observe source changes and notify consumers of live instances.
 # ==============================================================================
 
 import gc
@@ -14,70 +14,49 @@ from .service import Service
 
 class Reloadable:
 
-	_records = {}
-
 	# ==========================================================================
 	# PRIVATE METHODS
 	# ==========================================================================
 
-	# Watch each source class once and refresh it when its file changes.
+	# The observed class owns one subscription, inherited by its replacements.
 	# ----------------------------------------------------------------------
 	@classmethod
 	def _observe(cls, file):
-		key    = (id(file._namespace_lib), file.get_path())
-		record = Reloadable._records.get(key)
-
-		if record is None:
-			record = {'target': cls, 'subscription': None}
-			Reloadable._records[key] = record
-
+		if '_reload_subscription' not in cls.__dict__:
 			def changed(changes):
+				nonlocal cls
+
 				if os.path.isfile(file.get_path()):
 					try:
-						Reloadable._refresh(record)
+						current = cls
+						target  = current() if issubclass(current, Service) else current
+						fresh   = target.__reload__()
+						cls     = type(fresh) if isinstance(fresh, Service) else fresh
+
+						cls._reload_subscription = subscription
+						callback = current.__dict__.get('__reload_callback__')
+						if callback is not None:
+							cls.__reload_callback__ = callback
+
+						for instance in gc.get_objects():
+							if type(instance) is cls:
+								Reloadable._notify(instance)
 					except Exception:
 						logging.exception('Reloadable source update failed: %s', file.get_path())
 
-			try:
-				record['subscription'] = file.subscribe(changed)
-			except BaseException:
-				del Reloadable._records[key]
-				raise
+			subscription = file.subscribe(changed)
+			cls._reload_subscription = subscription
 
-		return record
-
-	# Replace the class, then report each live instance to its callback.
-	# ----------------------------------------------------------------------
-	@classmethod
-	def _refresh(cls, record):
-		current = record['target']
-		target  = current() if issubclass(current, Service) else current
-		fresh   = target.__reload__()
-		new     = type(fresh) if isinstance(fresh, Service) else fresh
-
-		callback = current.__dict__.get('__reload_callback__')
-		if callback is not None:
-			new.__reload_callback__ = callback
-
-		record['target'] = new
-
-		for instance in gc.get_objects():
-			if type(instance) is new:
-				Reloadable._notify(instance)
-
-	# Use the nearest callback in the class hierarchy.
+	# Report an instance to its nearest inherited callback.
 	# ----------------------------------------------------------------------
 	@classmethod
 	def _notify(cls, instance):
-		for base in type(instance).__mro__:
-			callback = base.__dict__.get('__reload_callback__')
-
-			if callback is not None:
-				try:
-					callback(instance)
-				except Exception:
-					logging.exception('Reloadable callback failed')
-				break
+		callback = getattr(type(instance), '__reload_callback__', None)
+		if callback is not None:
+			try:
+				callback(instance)
+			except Exception:
+				logging.exception('Reloadable callback failed')
 
 	# ==========================================================================
 	# FRAMEWORK METHODS
