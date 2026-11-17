@@ -34,6 +34,44 @@ class TestDirectory(a.Tester):
 			assert workspace.get_path() == os.path.realpath(os.path.join(path, 'lesson', 'workspace'))
 			assert directory.lesson.workspace.scenario == {'title': 'External output'}
 
+	# Import class-free Python definitions with or without the extension.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_import_python(cls):
+		with tempfile.TemporaryDirectory(dir=a.__path__, prefix='__import_') as path:
+			directory = a.Directory(a, path, 'a.import_test')
+			filename  = os.path.join(path, 'definitions.py')
+
+			with open(filename, 'w') as source:
+				source.write('VALUE = 23\n')
+
+			module = directory.import_python('definitions')
+
+			assert module.VALUE == 23
+			assert module.__route__ == 'a.import_test.definitions'
+			assert module.__lib__ is a
+			assert directory.import_python('definitions.py') is module
+
+	# Preserve missing-file errors and class-name resolution semantics.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_import_python_errors(cls):
+		with tempfile.TemporaryDirectory(dir=a.__path__, prefix='__import_') as path:
+			directory = a.Directory(a, path, 'a.import_test')
+
+			with TestCase().assertRaises(FileNotFoundError):
+				directory.import_python('missing')
+
+			with TestCase().assertRaises(ValueError):
+				directory.import_python('../escape.py')
+
+			filename = os.path.join(path, 'definitions.py')
+			with open(filename, 'w') as source:
+				source.write('VALUE = 23\n')
+
+			with TestCase().assertRaises(AttributeError):
+				directory.Definitions
+
 	# Round-trip supported text formats through the native namespace.
 	# ----------------------------------------------------------------------
 	@classmethod
