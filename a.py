@@ -12,6 +12,7 @@ import os, sys
 from lib.imports             import Imports
 from lib.module              import Module, ModuleMeta
 from lib.service             import Service
+from lib.reloadable          import Reloadable, ReloadableModule, ReloadableService
 from lib.subscribable        import Subscribable
 from lib.subscription        import Subscription
 from lib.logger              import Logger
@@ -106,6 +107,9 @@ class A(metaclass=AMeta, plugins=['Py', 'Json', 'Text', 'Bytes']):
 	Directory     = Directory
 	Plugin        = Plugin
 	Service       = Service
+	Reloadable        = Reloadable
+	ReloadableModule  = ReloadableModule
+	ReloadableService = ReloadableService
 	Subscribable  = Subscribable
 	Subscription = Subscription
 	Imports       = Imports

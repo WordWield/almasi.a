@@ -75,3 +75,30 @@ across code replacements.
 A syntax or class-contract failure leaves the published module and namespace
 unchanged. When class reassignment fails, changed instances and direct
 subclass bases are rolled back before the error propagates.
+
+## Opt-in source observation
+
+Declare a source-backed class with `a.ReloadableModule` or
+`a.ReloadableService` to observe its original Python file:
+
+```python
+class Counter(a.ReloadableService):
+	def read(self):
+		return self.value
+```
+
+Both classes derive their shared behavior from the plain `a.Reloadable`
+mixin, which does not inherit from `a.Module`. The Almasi Python plugin
+installs one source subscription upon loading the class. A source change
+marks it pending, without modifying live Python objects on the filesystem
+watcher thread.
+
+Call `a.Reloadable.apply_pending()` only at a **quiescent boundary**, after
+all affected methods and suspended coroutines have completed. It reloads
+pending source classes and returns the resulting classes. Service identity,
+initialized state, and instance fields survive. Errors are propagated and
+leave the change pending for a later attempt.
+
+**Boundary:** This is opt-in change detection and deferred replacement, not
+a request-draining scheduler. Hosts must explicitly arrange the safe boundary;
+Almasi cannot infer one from a filesystem notification.
