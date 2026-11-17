@@ -37,7 +37,7 @@ class TestReloadable(a.Tester):
 				service.initialize()
 				assert service.read() == 6
 				seen   = []
-				handle = type(service).on_reload(seen.append)
+				handle = type(service).__on_reload__(seen.append)
 
 				with open(file_path, 'w', encoding='utf-8') as stream:
 					stream.write(
@@ -69,7 +69,7 @@ class TestReloadable(a.Tester):
 			with patch.object(type(a.services.Filesystem), '_watch', return_value=None):
 				handler = directory.Handler
 				seen     = []
-				handle  = handler.on_reload(seen.append)
+				handle  = handler.__on_reload__(seen.append)
 				first   = handler()
 				second  = handler()
 
