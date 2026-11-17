@@ -78,8 +78,8 @@ subclass bases are rolled back before the error propagates.
 
 ## Opt-in source observation
 
-Declare a source-backed class with `a.ReloadableModule` or
-`a.ReloadableService` to observe its original Python file:
+A source-backed class may derive from `a.ReloadableModule` or
+`a.ReloadableService` to subscribe to changes to its own Python file:
 
 ```python
 class Counter(a.ReloadableService):
@@ -87,43 +87,37 @@ class Counter(a.ReloadableService):
 		return self.value
 ```
 
-Both classes derive their shared behavior from the plain `a.Reloadable`
-mixin, which does not inherit from `a.Module`. The Almasi Python plugin
-installs one source subscription upon loading the class. A source change
-marks it pending, without modifying live Python objects on the filesystem
-watcher thread.
+The shared `a.Reloadable` mixin owns the subscription. When the source
+changes, it invokes the existing `__reload__()` behavior, preserving live
+instances and state. No separate pending queue or public apply method exists.
+If replacement fails, the current published class remains in place and the
+exception is logged.
 
-Call `a.Reloadable.apply_pending()` only at a **quiescent boundary**, after
-all affected methods and suspended coroutines have completed. It reloads
-pending source classes and returns the resulting classes. Service identity,
-initialized state, and instance fields survive. Errors are propagated and
-leave the change pending for a later attempt.
-
-**Boundary:** This is opt-in change detection and deferred replacement, not
-a request-draining scheduler. Hosts must explicitly arrange the safe boundary;
-Almasi cannot infer one from a filesystem notification.
+**Concurrency limitation:** filesystem callbacks run on observer threads.
+Reloading from a callback does not drain in-flight calls or suspended
+coroutines. Applications requiring concurrent safety must arrange for affected
+execution to be quiescent before a source update is applied. This implementation
+does not provide such a barrier.
 
 ## Lifecycle callbacks
 
-`Reloadable.__on_reload__(callback)` is a **class method** inherited by
-`ReloadableModule` and `ReloadableService`. The callback accepts exactly one
-argument: the existing, fully constructed instance. It fires once after the
-first instance construction (after `__init__`), then after each successful
-`apply_pending()` reload for every live instance of the changed class.
-A subscription on a parent class also observes its subclasses. Callbacks
-registered on a replaced source class survive that replacement.
+`Reloadable.__on_reload__(callback)` is a **class method**. Register a callback
+once on a base class to receive all its newly constructed instances, and all
+live instances of a source class after successful reload. Each callback
+receives the instance, including for services with singleton identity.
 
 ```python
-subscription = Controller.__on_reload__(mcp.register_controller)
-# Load classes, then construct controller instances: callbacks fire.
-# At a safe boundary, a.Reloadable.apply_pending() fires callbacks again.
-subscription.cancel()
+Controller.__on_reload__(mcp.register_controller)
+# Construct controllers as files are discovered; registration is automatic.
+# A successful source reload re-registers those same controller instances.
 ```
 
-The returned `a.Subscription` supports `cancel()`. Registration does not
-replay instances already created; attach the listener before constructing them.
-Service callbacks run after construction, **not** after the separately called
-`initialize()`. Callback exceptions are logged without rolling back a code
-replacement that has already succeeded. Calling `__reload__()` directly
-continues to bypass lifecycle notification; use `apply_pending()` for these
-events.
+The callback registry is shared between source revisions, including
+class-specific callbacks. Registering the same callable twice on one class
+has no additional effect. There is no per-callback cancellation method.
+
+For ordinary modules the initial notification occurs after `__init__`.
+For services it happens when the singleton is first created, **before**
+the separately invoked `initialize()`. Callback failures are logged and do
+not undo a successful reload. Explicit calls to `__reload__()` do not emit
+lifecycle notifications; notifications are driven by Reloadable's observation.
