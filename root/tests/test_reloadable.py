@@ -52,6 +52,18 @@ class TestReloadable(a.Tester):
 				assert type(service)._reload_subscription is subscription
 				assert seen == [service]
 
+				with open(file_path, 'w', encoding='utf-8') as stream:
+					stream.write(
+						'import a\nclass Counter(a.ReloadableService):\n'
+						'\tdef read(self):\n\t\treturn self.value + 3\n'
+					)
+
+				a.services.Filesystem._changed_paths(a.__path__, {file_path: 'modified'})
+				assert service.read() == 8
+				assert directory.Counter is service
+				assert type(service)._reload_subscription is subscription
+				assert seen == [service, service]
+
 				type(service)._reload_subscription.cancel()
 				del type(service).__reload_callback__
 
