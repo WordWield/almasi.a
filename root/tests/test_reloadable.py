@@ -48,7 +48,6 @@ class TestReloadable(a.Tester):
 				a.services.Filesystem._changed_paths(a.__path__, {file_path: 'modified'})
 				assert service.read() == 7
 				assert directory.Counter is service
-				assert service.read() == 7
 				assert seen == [service]
 
 				key = (id(a), file_path)
@@ -82,7 +81,7 @@ class TestReloadable(a.Tester):
 				assert seen == [first, second, first, second]
 				assert type(first).version == 2
 				assert directory.Handler is type(first)
-				handle.cancel()
+				a.Reloadable._listeners.pop(type(first), None)
 
 				key = (id(a), file_path)
 				a.Reloadable._records.pop(key)['subscription'].cancel()
