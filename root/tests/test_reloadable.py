@@ -52,7 +52,7 @@ class TestReloadable(a.Tester):
 
 				key = (id(a), file_path)
 				a.Reloadable._records.pop(key)['subscription'].cancel()
-				a.Reloadable._listeners.pop(type(service), None)
+				del type(service).__reload_callback__
 
 	# Report initialized instances and retain class-specific listeners after reload.
 	# ----------------------------------------------------------------------
@@ -81,10 +81,42 @@ class TestReloadable(a.Tester):
 				assert seen == [first, second, first, second]
 				assert type(first).version == 2
 				assert directory.Handler is type(first)
-				a.Reloadable._listeners.pop(type(first), None)
+				del type(first).__reload_callback__
 
 				key = (id(a), file_path)
 				a.Reloadable._records.pop(key)['subscription'].cancel()
+
+	# A subclass inherits one callback, or replaces it with its own.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_inherited_callback(cls):
+		class Parent(a.ReloadableModule):
+			pass
+
+		class Child(Parent):
+			pass
+
+		class Other(Parent):
+			pass
+
+		original = []
+		replaced = []
+
+		Parent.__on_reload__(original.append)
+		Child()
+		assert len(original) == 1
+
+		Parent.__on_reload__(replaced.append)
+		Child()
+		assert len(original) == 1
+		assert len(replaced) == 1
+
+		Child.__on_reload__(original.append)
+		Child()
+		Other()
+		assert len(original) == 2
+		assert len(replaced) == 2
+
 
 
 if __name__ == '__main__':
