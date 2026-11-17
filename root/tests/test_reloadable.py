@@ -36,7 +36,8 @@ class TestReloadable(a.Tester):
 				service = directory.Counter
 				service.initialize()
 				assert service.read() == 6
-				seen   = []
+				seen         = []
+				subscription = type(service)._reload_subscription
 				type(service).__on_reload__(seen.append)
 
 				with open(file_path, 'w', encoding='utf-8') as stream:
@@ -48,10 +49,10 @@ class TestReloadable(a.Tester):
 				a.services.Filesystem._changed_paths(a.__path__, {file_path: 'modified'})
 				assert service.read() == 7
 				assert directory.Counter is service
+				assert type(service)._reload_subscription is subscription
 				assert seen == [service]
 
-				key = (id(a), file_path)
-				a.Reloadable._records.pop(key)['subscription'].cancel()
+				type(service)._reload_subscription.cancel()
 				del type(service).__reload_callback__
 
 	# Report initialized instances and retain class-specific listeners after reload.
@@ -66,7 +67,8 @@ class TestReloadable(a.Tester):
 			directory = a.Directory(a, path, 'a.' + os.path.basename(path))
 			with patch.object(type(a.services.Filesystem), '_watch', return_value=None):
 				handler = directory.Handler
-				seen     = []
+				seen         = []
+				subscription = handler._reload_subscription
 				handler.__on_reload__(seen.append)
 				first   = handler()
 				second  = handler()
@@ -81,10 +83,10 @@ class TestReloadable(a.Tester):
 				assert seen == [first, second, first, second]
 				assert type(first).version == 2
 				assert directory.Handler is type(first)
+				assert type(first)._reload_subscription is subscription
 				del type(first).__reload_callback__
 
-				key = (id(a), file_path)
-				a.Reloadable._records.pop(key)['subscription'].cancel()
+				type(first)._reload_subscription.cancel()
 
 	# A subclass inherits one callback, or replaces it with its own.
 	# ----------------------------------------------------------------------
