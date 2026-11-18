@@ -276,27 +276,44 @@ class Directory(FilesystemResource):
 		path = self._destination(name)
 		self._invalidate_children(path, local=local)
 
-	# Import a Python file from this namespace or its inherited libraries.
-	# Return the Python module without requiring an exported Almasi class.
+	# Import one Python module, or recursively import every visible Python file.
 	# ----------------------------------------------------------------------
-	def import_python(self, name):
-		self._destination(name)
+	def import_python(self, name=None):
+		if name is None:
+			result = []
 
-		if not name.endswith('.py'):
-			name += '.py'
+			for resource in self:
+				if isinstance(resource, Directory):
+					result.extend(resource.import_python())
+				elif isinstance(resource, File) and resource.get_name().endswith('.py'):
+					module     = Imports.load_module(resource.get_lib(), resource.get_path(), resource.get_route())
+					class_name = resource.get_route().rsplit('.', 1)[-1]
+					candidate  = getattr(module, class_name, None)
 
-		file = self.__resolve__(name)
+					# Realize source-backed classes through the native Python carrier.
+					# --------------------------------------------------------------
+					if isinstance(candidate, type) and issubclass(candidate, self.get_lib().Module):
+						resource.load()
 
-		if file is not None:
-			if isinstance(file, File):
-				route  = f'{self.get_route()}.{name[:-3]}'
-				module = Imports.load_module(file.get_lib(), file.get_path(), route)
-			else:
-				raise TypeError(f'Not a file: {name}')
+					result.append(module)
 		else:
-			raise FileNotFoundError(self.join(name))
+			self._destination(name)
 
-		return module
+			if not name.endswith('.py'):
+				name += '.py'
+
+			file = self.__resolve__(name)
+
+			if file is not None:
+				if isinstance(file, File):
+					route  = f'{self.get_route()}.{name[:-3]}'
+					result = Imports.load_module(file.get_lib(), file.get_path(), route)
+				else:
+					raise TypeError(f'Not a file: {name}')
+			else:
+				raise FileNotFoundError(self.join(name))
+
+		return result
 
 	# Read one exact filename through its registered format plugin.
 	# ----------------------------------------------------------------------
