@@ -52,6 +52,32 @@ class TestDirectory(a.Tester):
 			assert module.__lib__ is a
 			assert directory.import_python('definitions.py') is module
 
+	# Import Python files recursively, preserving native class loading.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_import_python_recursive(cls):
+		with tempfile.TemporaryDirectory(dir=a.__path__, prefix='__import_') as path:
+			directory = a.Directory(a, path, 'a.import_test')
+			nested    = os.path.join(path, 'nested')
+			os.mkdir(nested)
+
+			with open(os.path.join(path, 'definitions.py'), 'w') as source:
+				source.write('VALUE = 23\n')
+
+			with open(os.path.join(nested, 'example.py'), 'w') as source:
+				source.write('import a\nclass Example(a.Module):\n\tpass\n')
+
+			modules = directory.import_python(None)
+
+			assert len(modules) == 2
+			assert next(module for module in modules if hasattr(module, 'VALUE')).VALUE == 23
+
+			example = next(module.Example for module in modules if hasattr(module, 'Example'))
+
+			assert example.__has_own_module__
+			assert example.__route__ == 'a.import_test.nested.Example'
+			assert directory.import_python(None) == modules
+
 	# Preserve missing-file errors and class-name resolution semantics.
 	# ----------------------------------------------------------------------
 	@classmethod
