@@ -376,6 +376,19 @@ class Directory(FilesystemResource):
 
 		self._invalidate_children(link_path)
 
+	# Recursively load Almasi modules through their native file carriers.
+	# ----------------------------------------------------------------------
+	def load_modules(self):
+		modules = []
+
+		for resource in self:
+			if isinstance(resource, Directory):
+				modules.extend(resource.load_modules())
+			elif isinstance(resource, File) and resource.get_name().endswith('.py'):
+				modules.append(resource.load())
+
+		return modules
+
 	# Realize a directory as its native namespace face.
 	# ----------------------------------------------------------------------
 	def load(self):
