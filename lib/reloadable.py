@@ -8,6 +8,7 @@ import gc
 import logging
 import os
 import sys
+import types
 
 from .module  import Module, ModuleMeta
 from .service import Service
