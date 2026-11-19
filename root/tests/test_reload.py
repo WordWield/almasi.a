@@ -108,7 +108,7 @@ class SessionStore(a.ReloadableService):
 	@classmethod
 	def test_module_instances_and_removed_methods(cls):
 		with cls._runtime() as directory:
-			cls._write(directory, 'message_handler', '''
+			path = cls._write(directory, 'message_handler', '''
 import a
 
 class MessageHandler(a.ReloadableModule):
@@ -119,6 +119,7 @@ class MessageHandler(a.ReloadableModule):
 		return True
 ''')
 			old_class = directory.MessageHandler
+			assert old_class.__original_module__ == os.path.realpath(path)
 			one       = old_class()
 			two       = old_class()
 			one.queue = ['a']
