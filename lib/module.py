@@ -115,25 +115,6 @@ class Module(metaclass=ModuleMeta):
 
 		return self
 
-	# Find the loaded source module that defines this class, by identity.
-	# Metaclasses may rewrite __module__, so it cannot be trusted for lookup.
-	# ----------------------------------------------------------------------
-	@classmethod
-	def _source_module(cls):
-		result = sys.modules.get(cls.__module__)
-
-		if result is None or vars(result).get(cls.__name__) is not cls:
-			result = None
-
-			for module in tuple(sys.modules.values()):
-				items = getattr(module, '__dict__', {})
-
-				if items.get('__route__') == cls.__route__ and items.get(cls.__name__) is cls:
-					result = module
-					break
-
-		return result
-
 	# Lifecycle hook: adopt the class that replaces this one after reload.
 	# Subclasses with their own registries override it.
 	# ----------------------------------------------------------------------
@@ -149,8 +130,8 @@ class Module(metaclass=ModuleMeta):
 		is_source = cls.__dict__.get('__has_own_module__', False)
 
 		if is_source and isinstance(cls, ModuleMeta):
-			module = cls._source_module()
-			key    = module.__name__ if module is not None else cls.__module__
+			key    = cls.__dict__.get('__original_module__', cls.__module__)
+			module = sys.modules.get(key)
 			path   = os.path.realpath(module.__file__) if module is not None else os.path.realpath(key)
 
 			if module is not None and module.__dict__.get(cls.__name__) is cls:
