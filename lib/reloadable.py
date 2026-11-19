@@ -21,7 +21,7 @@ class Reloadable:
 	# The observed class owns one subscription, inherited by its replacements.
 	# ----------------------------------------------------------------------
 	@classmethod
-	def _observe(cls, file):
+	def _observe_reload(cls, file):
 		if '_reload_subscription' not in cls.__dict__:
 			def changed(changes):
 				nonlocal cls
