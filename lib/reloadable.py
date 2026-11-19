@@ -39,9 +39,7 @@ class Reloadable:
 	# ----------------------------------------------------------------------
 	@classmethod
 	def __reload__(cls, commit=None):
-		is_source = cls.__dict__.get('__has_own_module__', False)
-
-		if is_source and isinstance(cls, ModuleMeta):
+		if cls.__dict__.get('__has_own_module__', False) and isinstance(cls, ModuleMeta):
 			key    = cls.__dict__.get('__original_module__', cls.__module__)
 			module = sys.modules.get(key)
 			path   = os.path.realpath(module.__file__) if module is not None else os.path.realpath(key)
