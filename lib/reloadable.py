@@ -16,14 +16,6 @@ from .service import Service
 
 class ReloadableMeta(ModuleMeta):
 
-	# Capture source identity before specialized metaclasses can rename the class.
-	# ----------------------------------------------------------------------
-	def __new__(mcls, name, bases, namespace, **kwargs):
-		if mcls.has_own_module(namespace):
-			namespace['__original_module__'] = namespace['__module__']
-
-		return super().__new__(mcls, name, bases, namespace, **kwargs)
-
 	# Notify opt-in lifecycle listeners only after instance initialization.
 	# ----------------------------------------------------------------------
 	def __call__(cls, *args, **kwargs):

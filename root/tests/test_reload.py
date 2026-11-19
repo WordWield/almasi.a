@@ -99,6 +99,7 @@ class SessionStore(a.ReloadableService):
 			assert directory.SessionStore is service
 			assert type(service)() is service
 			assert type(service).__module__ == os.path.realpath(path)
+			assert '__original_module__' not in type(service).__dict__
 
 			with TestCase().assertRaisesRegex(RuntimeError, 'already initialized'):
 				service.initialize()
@@ -119,7 +120,8 @@ class MessageHandler(a.ReloadableModule):
 		return True
 ''')
 			old_class = directory.MessageHandler
-			assert old_class.__original_module__ == os.path.realpath(path)
+			assert old_class.__module__ == os.path.realpath(path)
+			assert '__original_module__' not in old_class.__dict__
 			one       = old_class()
 			two       = old_class()
 			one.queue = ['a']
