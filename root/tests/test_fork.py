@@ -83,7 +83,7 @@ class QualifiedImport(almasi_fork_fixture.Module):
 import almasi_fork_fixture
 
 
-class Counter(almasi_fork_fixture.Service):
+class Counter(almasi_fork_fixture.ReloadableService):
 
 	def initialize(self):
 		self.value = 0
@@ -220,7 +220,7 @@ class Counter(almasi_fork_fixture.Service):
 import almasi_fork_fixture
 
 
-class Counter(almasi_fork_fixture.Service):
+class Counter(almasi_fork_fixture.ReloadableService):
 
 	def initialize(self):
 		raise AssertionError('Already initialized')
