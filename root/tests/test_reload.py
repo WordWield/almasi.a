@@ -62,7 +62,7 @@ class TestReload(a.Tester):
 			path = cls._write(directory, 'session_store', '''
 import a
 
-class SessionStore(a.Service):
+class SessionStore(a.ReloadableService):
 	def initialize(self):
 		self.sessions = {}
 		self.requests = 0
@@ -82,7 +82,7 @@ class SessionStore(a.Service):
 			cls._write(directory, 'session_store', '''
 import a
 
-class SessionStore(a.Service):
+class SessionStore(a.ReloadableService):
 	def initialize(self):
 		raise AssertionError('Initialization must not run again')
 
@@ -109,7 +109,7 @@ class SessionStore(a.Service):
 			cls._write(directory, 'message_handler', '''
 import a
 
-class MessageHandler(a.Module):
+class MessageHandler(a.ReloadableModule):
 	def process(self, value):
 		return 'old:' + value
 
@@ -126,7 +126,7 @@ class MessageHandler(a.Module):
 			cls._write(directory, 'message_handler', '''
 import a
 
-class MessageHandler(a.Module):
+class MessageHandler(a.ReloadableModule):
 	def process(self, value):
 		return 'new:' + value.upper()
 ''')
@@ -151,7 +151,7 @@ class MessageHandler(a.Module):
 			cls._write(directory, 'counter_service', '''
 import a
 
-class CounterService(a.Service):
+class CounterService(a.ReloadableService):
 	def increment(self):
 		self.value = getattr(self, 'value', 0) + 1
 		return self.value
@@ -163,7 +163,7 @@ class CounterService(a.Service):
 				cls._write(directory, 'counter_service', f'''
 import a
 
-class CounterService(a.Service):
+class CounterService(a.ReloadableService):
 	def increment(self):
 		self.value = getattr(self, 'value', 0) + {step}
 		return self.value
@@ -183,7 +183,7 @@ class CounterService(a.Service):
 			cls._write(directory, 'base_operation', '''
 import a
 
-class BaseOperation(a.Module):
+class BaseOperation(a.ReloadableModule):
 	def execute(self, value):
 		return value + 1
 ''')
@@ -207,7 +207,7 @@ class BaseOperation(a.Module):
 			cls._write(directory, 'base_operation', '''
 import a
 
-class BaseOperation(a.Module):
+class BaseOperation(a.ReloadableModule):
 	def execute(self, value):
 		return value + 10
 ''')
@@ -227,7 +227,7 @@ class BaseOperation(a.Module):
 			cls._write(directory, 'notification_service', '''
 import a
 
-class NotificationService(a.Service):
+class NotificationService(a.ReloadableService):
 	def announce(self, payload):
 		return payload
 
@@ -246,7 +246,7 @@ class NotificationService(a.Service):
 			cls._write(directory, 'notification_service', '''
 import a
 
-class NotificationService(a.Service):
+class NotificationService(a.ReloadableService):
 	def announce(self, payload):
 		return payload
 
@@ -275,7 +275,7 @@ class NotificationService(a.Service):
 			cls._write(directory, 'job_service', '''
 import a
 
-class JobService(a.Service):
+class JobService(a.ReloadableService):
 	async def run(self, value):
 		return value + 1
 ''')
@@ -286,7 +286,7 @@ class JobService(a.Service):
 			cls._write(directory, 'job_service', '''
 import a
 
-class JobService(a.Service):
+class JobService(a.ReloadableService):
 	async def run(self, value):
 		return value + 2
 ''')
@@ -301,7 +301,7 @@ class JobService(a.Service):
 			path = cls._write(directory, 'same_source', '''
 import a
 
-class SameSource(a.Module):
+class SameSource(a.ReloadableModule):
 	def text(self):
 		return 'one'
 ''')
@@ -311,7 +311,7 @@ class SameSource(a.Module):
 			cls._write(directory, 'same_source', '''
 import a
 
-class SameSource(a.Module):
+class SameSource(a.ReloadableModule):
 	def text(self):
 		return 'two'
 ''')
@@ -328,7 +328,7 @@ class SameSource(a.Module):
 			path = cls._write(directory, 'safe_handler', '''
 import a
 
-class SafeHandler(a.Module):
+class SafeHandler(a.ReloadableModule):
 	def respond(self):
 		return 'working'
 ''')
@@ -336,7 +336,7 @@ class SafeHandler(a.Module):
 			handler   = old_class()
 			old_module = sys.modules[os.path.realpath(path)]
 
-			cls._write(directory, 'safe_handler', 'class SafeHandler(a.Module):\n\tdef respond(\n')
+			cls._write(directory, 'safe_handler', 'class SafeHandler(a.ReloadableModule):\n\tdef respond(\n')
 
 			with TestCase().assertRaises(SyntaxError):
 				handler.__reload__()
@@ -354,7 +354,7 @@ class SafeHandler(a.Module):
 			cls._write(directory, 'task_processor', '''
 import a
 
-class TaskProcessor(a.Module):
+class TaskProcessor(a.ReloadableModule):
 	def execute(self):
 		return 17
 ''')
@@ -362,8 +362,8 @@ class TaskProcessor(a.Module):
 			task      = old_class()
 
 			for source in (
-				'import a\nclass WrongName(a.Module):\n\tpass\n',
-				'import a\nclass TaskProcessor(a.Service):\n\tpass\n',
+				'import a\nclass WrongName(a.ReloadableModule):\n\tpass\n',
+				'import a\nclass TaskProcessor(a.ReloadableService):\n\tpass\n',
 			):
 				cls._write(directory, 'task_processor', source)
 
@@ -382,7 +382,7 @@ class TaskProcessor(a.Module):
 			cls._write(directory, 'buffer_owner', '''
 import a
 
-class BufferOwner(a.Module):
+class BufferOwner(a.ReloadableModule):
 	def read(self):
 		return self.buffer
 ''')
@@ -395,7 +395,7 @@ class BufferOwner(a.Module):
 			cls._write(directory, 'buffer_owner', '''
 import a
 
-class BufferOwner(a.Module):
+class BufferOwner(a.ReloadableModule):
 	__slots__ = ('slot',)
 
 	def read(self):
@@ -414,7 +414,7 @@ class BufferOwner(a.Module):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_runtime_class_rejected(cls):
-		class InMemory(a.Module):
+		class InMemory(a.ReloadableModule):
 			pass
 
 		with TestCase().assertRaisesRegex(TypeError, 'source-backed'):
