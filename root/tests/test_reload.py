@@ -11,6 +11,7 @@ import tempfile
 
 from contextlib import contextmanager
 from unittest import TestCase
+from unittest.mock import patch
 
 import a
 
@@ -33,7 +34,8 @@ class TestReload(a.Tester):
 			directory = a.Directory(a, path, f'a.{os.path.basename(path)}')
 
 			try:
-				yield directory
+				with patch.object(a.Reloadable, '_observe_reload', return_value=None):
+					yield directory
 			finally:
 				for name in tuple(sys.modules):
 					if name.startswith(os.path.realpath(path) + os.sep):
