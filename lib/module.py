@@ -62,8 +62,9 @@ class ModuleMeta(type):
 			namespace['__lib__'] = mcls.module_lib(namespace)
 
 		if namespace['__has_own_module__']:
-			namespace['__route__'] = mcls.module_route(namespace)
-			namespace['__mtime__'] = mcls.module_mtime(namespace)
+			namespace['__route__']           = mcls.module_route(namespace)
+			namespace['__mtime__']           = mcls.module_mtime(namespace)
+			namespace['__original_module__'] = namespace['__module__']
 
 		return super().__new__(mcls, name, bases, namespace)
 
