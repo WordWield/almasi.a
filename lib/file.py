@@ -50,6 +50,9 @@ class File(FilesystemResource):
 	def load(self):
 		if not self._loaded and self._load_method is not None:
 			self._data   = self._load_method()
+			owner        = self._data if isinstance(self._data, type) else type(self._data)
+			if hasattr(owner, '__on_load__'):
+				owner.__on_load__(self)
 			self._loaded = True
 
 		return self._data

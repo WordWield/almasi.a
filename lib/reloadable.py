@@ -100,6 +100,10 @@ class Reloadable:
 		return result
 
 
+	@classmethod
+	def __on_load__(cls, file):
+		cls._observe_reload(file)
+
 	# The observed class owns one subscription, inherited by its replacements.
 	# ----------------------------------------------------------------------
 	@classmethod
