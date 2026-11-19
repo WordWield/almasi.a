@@ -1,11 +1,11 @@
 # Live Python module reload
 
-Almasi can replace a source-backed `a.Module` or `a.Service` without
+Almasi can replace a source-backed `a.ReloadableModule` or `a.ReloadableService` without
 recreating objects already held by consumers.
 
 ## Supported entry points
 
-A source-backed ordinary Module resolves to a class:
+A source-backed ReloadableModule resolves to a class:
 
 ```python
 Handler = library.handlers.Handler
@@ -19,7 +19,7 @@ assert type(handler) is NewHandler
 assert library.handlers.Handler is NewHandler
 ```
 
-A Service resolves to its singleton instance:
+A ReloadableService resolves to its singleton instance:
 
 ```python
 service = library.services.Orders
@@ -36,7 +36,7 @@ the filesystem namespace, and invalidate its cached file carrier. Repeated
 reloads are supported. New code is compiled directly from source rather than
 accepting a potentially stale bytecode cache.
 
-Service reload additionally transfers the singleton to the fresh class and
+ReloadableService reload additionally transfers the singleton to the fresh class and
 refreshes the instance-owned initialization wrapper. An already initialized
 service is **not** initialized again. Existing direct subclasses are rebased
 on the fresh parent class so inherited methods and `super()` continue
@@ -63,7 +63,7 @@ across code replacements.
   or `initialize`.
 - Class-level mutable state is not transferred to the new class. Store state
   that must survive reload on an instance, or in a persistent store.
-- Reload covers source classes using the ordinary Almasi `ModuleMeta`.
+- Reload covers source classes deriving from the Almasi `Reloadable` mixin.
   Ontology classes with their own metaclass, runtime-only classes and
   arbitrary Python modules have different lifecycle requirements.
 - Fresh class bodies execute during staging. Their import-time side

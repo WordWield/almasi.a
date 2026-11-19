@@ -66,6 +66,7 @@ class TestModule(a.Tester):
 			assert module.__route__ == 'a.tests_runtime.SourceCarrier'
 			assert SourceCarrier.__route__ == 'a.tests_runtime.SourceCarrier'
 			assert SourceCarrier.__has_own_module__ == True
+			assert '__original_module__' not in SourceCarrier.__dict__
 			assert SourceCarrier.value == 7
 			assert repr(SourceCarrier) == '<class \'a.tests_runtime.SourceCarrier\'>'
 		finally:

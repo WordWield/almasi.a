@@ -1,5 +1,3 @@
-import gc
-import os
 import sys
 
 from .function import Function
@@ -69,19 +67,6 @@ class ModuleMeta(type):
 
 		return super().__new__(mcls, name, bases, namespace)
 
-	# Notify opt-in lifecycle listeners only after instance initialization.
-	# ----------------------------------------------------------------------
-	def __call__(cls, *args, **kwargs):
-		from .reloadable import Reloadable
-
-		instance = super().__call__(*args, **kwargs)
-
-		if isinstance(instance, Reloadable) and not instance.__dict__.get('_reloadable_loaded', False):
-			instance.__dict__['_reloadable_loaded'] = True
-			Reloadable._notify(instance)
-
-		return instance
-
 	# String representation
 	# ----------------------------------------------------------------------
 	def __repr__(cls):
@@ -114,68 +99,6 @@ class Module(metaclass=ModuleMeta):
 		self.__instance_id__ = Module._instance_counter
 
 		return self
-
-	# Replace source-backed behavior while keeping live object identity and state.
-	# Invoke at a quiescent execution boundary; in-flight methods are not tracked.
-	# ----------------------------------------------------------------------
-	@classmethod
-	def __reload__(cls):
-		is_source = cls.__dict__.get('__has_own_module__', False)
-
-		if is_source and type(cls) is ModuleMeta:
-			key    = cls.__module__
-			module = sys.modules.get(key)
-			path   = os.path.realpath(module.__file__) if module is not None else os.path.realpath(key)
-
-			if module is not None and module.__dict__.get(cls.__name__) is cls:
-				fresh = cls.__lib__.Imports.prepare_module(cls.__lib__, path, cls.__route__)
-				new   = fresh.__dict__.get(cls.__name__)
-
-				if type(new) is ModuleMeta and new.__bases__ == cls.__bases__:
-					instances   = [item for item in gc.get_objects() if type(item) is cls]
-					descendants = [child for child in cls.__subclasses__() if type(child) is ModuleMeta]
-					switched    = []
-					rebased     = []
-
-					try:
-						for instance in instances:
-							instance.__class__ = new
-							switched.append(instance)
-
-						# Existing children retain their class identity and super() chain.
-						# --------------------------------------------------------------
-						for child in descendants:
-							bases = child.__bases__
-							child.__bases__ = tuple(new if base is cls else base for base in bases)
-							rebased.append((child, bases))
-					except Exception:
-						for child, bases in reversed(rebased):
-							child.__bases__ = bases
-
-						for instance in switched:
-							instance.__class__ = cls
-
-						raise
-
-					sys.modules[key] = fresh
-					directory = cls.__lib__.Directory(
-						cls.__lib__,
-						os.path.dirname(path),
-						cls.__route__.rsplit('.', 1)[0]
-					)
-					directory.invalidate(
-						os.path.basename(path),
-						local = cls.__lib__.__dict__.get('__fork_source__') is not None
-					)
-					result = new
-				else:
-					raise TypeError(f'Incompatible replacement class: {cls.__route__}')
-			else:
-				raise RuntimeError(f'Source module is not current: {cls.__route__}')
-		else:
-			raise TypeError(f'Hot reload requires a source-backed a.Module: {cls.__name__}')
-
-		return result
 
 	# Intercept method access to inject event hooks
 	# ----------------------------------------------------------------------

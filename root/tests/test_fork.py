@@ -11,6 +11,7 @@ import sys
 import tempfile
 
 from contextlib import contextmanager
+from unittest.mock import patch
 
 import a
 
@@ -83,7 +84,7 @@ class QualifiedImport(almasi_fork_fixture.Module):
 import almasi_fork_fixture
 
 
-class Counter(almasi_fork_fixture.Service):
+class Counter(almasi_fork_fixture.ReloadableService):
 
 	def initialize(self):
 		self.value = 0
@@ -100,7 +101,8 @@ class Counter(almasi_fork_fixture.Service):
 
 			try:
 				spec.loader.exec_module(module)
-				yield sys.modules[name], root
+				with patch.object(a.ReloadableService, '_observe_reload', return_value=None):
+					yield sys.modules[name], root
 			finally:
 				a.Undefined.__lib__, a.Imports.__lib__, a.Tester.__lib__ = previous_lib
 
@@ -220,7 +222,7 @@ class Counter(almasi_fork_fixture.Service):
 import almasi_fork_fixture
 
 
-class Counter(almasi_fork_fixture.Service):
+class Counter(almasi_fork_fixture.ReloadableService):
 
 	def initialize(self):
 		raise AssertionError('Already initialized')
