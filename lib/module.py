@@ -115,6 +115,32 @@ class Module(metaclass=ModuleMeta):
 
 		return self
 
+	# Find the loaded source module that defines this class, by identity.
+	# Metaclasses may rewrite __module__, so it cannot be trusted for lookup.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def _source_module(cls):
+		result = sys.modules.get(cls.__module__)
+
+		if result is None or vars(result).get(cls.__name__) is not cls:
+			result = None
+
+			for module in tuple(sys.modules.values()):
+				items = getattr(module, '__dict__', {})
+
+				if items.get('__route__') == cls.__route__ and items.get(cls.__name__) is cls:
+					result = module
+					break
+
+		return result
+
+	# Lifecycle hook: adopt the class that replaces this one after reload.
+	# Subclasses with their own registries override it.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def __swap__(cls, new):
+		pass
+
 	# Replace source-backed behavior while keeping live object identity and state.
 	# Invoke at a quiescent execution boundary; in-flight methods are not tracked.
 	# ----------------------------------------------------------------------
@@ -122,38 +148,40 @@ class Module(metaclass=ModuleMeta):
 	def __reload__(cls):
 		is_source = cls.__dict__.get('__has_own_module__', False)
 
-		if is_source and type(cls) is ModuleMeta:
-			key    = cls.__module__
-			module = sys.modules.get(key)
+		if is_source and isinstance(cls, ModuleMeta):
+			module = cls._source_module()
+			key    = module.__name__ if module is not None else cls.__module__
 			path   = os.path.realpath(module.__file__) if module is not None else os.path.realpath(key)
 
 			if module is not None and module.__dict__.get(cls.__name__) is cls:
 				fresh = cls.__lib__.Imports.prepare_module(cls.__lib__, path, cls.__route__)
 				new   = fresh.__dict__.get(cls.__name__)
 
-				if type(new) is ModuleMeta and new.__bases__ == cls.__bases__:
+				if isinstance(new, ModuleMeta) and new.__bases__ == cls.__bases__:
 					instances   = [item for item in gc.get_objects() if type(item) is cls]
-					descendants = [child for child in cls.__subclasses__() if type(child) is ModuleMeta]
+					descendants = [child for child in type.__subclasses__(cls) if isinstance(child, ModuleMeta)]
 					switched    = []
 					rebased     = []
 
 					try:
 						for instance in instances:
-							instance.__class__ = new
+							object.__setattr__(instance, '__class__', new)
 							switched.append(instance)
 
 						# Existing children retain their class identity and super() chain.
 						# --------------------------------------------------------------
 						for child in descendants:
 							bases = child.__bases__
-							child.__bases__ = tuple(new if base is cls else base for base in bases)
+							type.__setattr__(child, '__bases__', tuple(new if base is cls else base for base in bases))
 							rebased.append((child, bases))
+
+						cls.__swap__(new)
 					except Exception:
 						for child, bases in reversed(rebased):
-							child.__bases__ = bases
+							type.__setattr__(child, '__bases__', bases)
 
 						for instance in switched:
-							instance.__class__ = cls
+							object.__setattr__(instance, '__class__', cls)
 
 						raise
 
