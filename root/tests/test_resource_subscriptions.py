@@ -124,11 +124,6 @@ class TestResourceSubscriptions(a.Tester):
 					stream.write('after')
 
 				service._changed_paths(root, {path: 'modified'})
-				print('got_file:', got_file)
-				print('resources:', service._resources)
-				print('subscriptions:', service._snapshot)
-				print('effective:', service._effective(file))
-				print('path:', path)
 				assert len(got_file) == 1
 				assert next(iter(got_file[0].values())) == 'modified'
 				assert file.load() == 'after'
@@ -139,6 +134,32 @@ class TestResourceSubscriptions(a.Tester):
 
 				file_handle.cancel()
 				dir_handle.cancel()
+
+	# Resolve symlinked event roots to the same identity as watched roots.
+	# --------------------------------------------------------------------------
+	@classmethod
+	def test_symlinked_root_notifications(cls):
+		with tempfile.TemporaryDirectory() as parent:
+			root  = os.path.join(parent, 'actual')
+			alias = os.path.join(parent, 'alias')
+			os.mkdir(root)
+			os.symlink(root, alias)
+
+			path = os.path.join(root, 'notes.txt')
+
+			with open(path, 'w', encoding='utf-8') as stream:
+				stream.write('before')
+
+			file    = a.File(a, path, 'a.symlinked')
+			service = a.services.Filesystem
+			events  = []
+
+			with patch.object(type(service), '_watch', return_value=None):
+				handle = file.subscribe(events.append)
+				cls._threads(service)
+				service._changed_paths(alias, {path: 'modified'})
+				assert events == [{'notes.txt': 'modified'}]
+				handle.cancel()
 
 	# Keep a directory subscribed across removal and subsequent recreation.
 	# --------------------------------------------------------------------------
