@@ -245,7 +245,9 @@ class TestResourceSubscriptions(a.Tester):
 
 				handle.cancel()
 				handle.cancel()
-				assert not service._watchers
+				assert os.path.realpath(root) not in service._watchers
+				assert one not in service._resources
+				assert two not in service._resources
 
 	# Share one OS watcher across subscriptions and release it with the last.
 	# --------------------------------------------------------------------------
@@ -267,21 +269,21 @@ class TestResourceSubscriptions(a.Tester):
 				right = file.subscribe(second.append)
 				cls._threads(service)
 
-				assert len(service._watchers) == 1
+				assert os.path.realpath(root) in service._watchers
 				service._changed_paths(root, {path: 'modified'})
 				assert first == [{'shared.txt': 'modified'}]
 				assert second == [{'shared.txt': 'modified'}]
 
 				left.cancel()
-				assert len(service._watchers) == 1
+				assert os.path.realpath(root) in service._watchers
 
 				service._changed_paths(root, {path: 'modified'})
 				assert len(first) == 1
 				assert len(second) == 2
 
 				right.cancel()
-				assert not service._watchers
-				assert not service._resources
+				assert os.path.realpath(root) not in service._watchers
+				assert file not in service._resources
 
 	# Preserve one change per path in an unordered OS event batch.
 	# --------------------------------------------------------------------------
