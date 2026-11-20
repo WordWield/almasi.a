@@ -140,7 +140,7 @@ class TestResourceSubscriptions(a.Tester):
 	@classmethod
 	def test_symlinked_root_notifications(cls):
 		with tempfile.TemporaryDirectory() as parent:
-			root  = os.path.join(parent, 'actual')
+			root  = os.path.realpath(os.path.join(parent, 'actual'))
 			alias = os.path.join(parent, 'alias')
 			os.mkdir(root)
 			os.symlink(root, alias)
