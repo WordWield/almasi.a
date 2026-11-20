@@ -124,6 +124,11 @@ class TestResourceSubscriptions(a.Tester):
 					stream.write('after')
 
 				service._changed_paths(root, {path: 'modified'})
+				print('got_file:', got_file)
+				print('resources:', service._resources)
+				print('subscriptions:', service._snapshot)
+				print('effective:', service._effective(file))
+				print('path:', path)
 				assert len(got_file) == 1
 				assert next(iter(got_file[0].values())) == 'modified'
 				assert file.load() == 'after'
