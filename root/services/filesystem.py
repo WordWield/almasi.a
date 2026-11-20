@@ -203,7 +203,8 @@ class Filesystem(a.Subscribable):
 	# Map physical changes to subscribed resources and invalidate before dispatch.
 	# --------------------------------------------------------------------------
 	def _changed_paths(self, root, paths):
-		root = os.path.realpath(root)
+		root  = os.path.realpath(root)
+		paths = {os.path.realpath(path): status for path, status in paths.items()}
 
 		with self._subscription_lock:
 			observed = tuple(
@@ -227,7 +228,7 @@ class Filesystem(a.Subscribable):
 
 		for resource, old in observed:
 			namespace   = resource._namespace_lib
-			base        = resource.get_path()
+			base        = os.path.realpath(resource.get_path())
 			_, relative = self._source(namespace, base)
 			is_file     = isinstance(resource, a.File)
 			current     = self._effective(resource) if is_file else None
