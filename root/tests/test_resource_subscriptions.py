@@ -157,7 +157,7 @@ class TestResourceSubscriptions(a.Tester):
 			with patch.object(type(service), '_watch', return_value=None):
 				handle = file.subscribe(events.append)
 				cls._threads(service)
-				service._changed_paths(alias, {path: 'modified'})
+				service._changed_paths(alias, {os.path.join(alias, 'notes.txt'): 'modified'})
 				assert events == [{'notes.txt': 'modified'}]
 				handle.cancel()
 
