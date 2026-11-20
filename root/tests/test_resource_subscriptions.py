@@ -21,17 +21,6 @@ import a
 class TestResourceSubscriptions(a.Tester):
 
 	# ==========================================================================
-	# PRIVATE METHODS
-	# ==========================================================================
-
-	# Quiesce actual OS watchers while testing deterministic source events.
-	# --------------------------------------------------------------------------
-	@classmethod
-	def _threads(cls, service):
-		for watcher in tuple(service._watchers.values()):
-			watcher['thread'].join(timeout=2)
-
-	# ==========================================================================
 	# PUBLIC METHODS
 	# ==========================================================================
 
@@ -118,7 +107,6 @@ class TestResourceSubscriptions(a.Tester):
 			with patch.object(type(service), '_watch', return_value=None):
 				file_handle = file.subscribe(got_file.append)
 				dir_handle  = directory.subscribe(got_dir.append)
-				cls._threads(service)
 
 				with open(path, 'w', encoding='utf-8') as stream:
 					stream.write('after')
@@ -156,7 +144,6 @@ class TestResourceSubscriptions(a.Tester):
 
 			with patch.object(type(service), '_watch', return_value=None):
 				handle = file.subscribe(events.append)
-				cls._threads(service)
 				service._changed_paths(alias, {os.path.join(alias, 'notes.txt'): 'modified'})
 				assert events == [{'notes.txt': 'modified'}]
 				handle.cancel()
@@ -174,7 +161,6 @@ class TestResourceSubscriptions(a.Tester):
 
 			with patch.object(type(service), '_watch', return_value=None):
 				handle = directory.subscribe(events.append)
-				cls._threads(service)
 
 				shutil.rmtree(root)
 				service._changed_paths(parent, {root: 'deleted'})
@@ -201,7 +187,6 @@ class TestResourceSubscriptions(a.Tester):
 
 			with patch.object(type(service), '_watch', return_value=None):
 				handle = directory.subscribe(events.append)
-				cls._threads(service)
 
 				changes = {
 					os.path.join(root, 'nested', f'item_{index}.js'): 'modified'
@@ -233,7 +218,6 @@ class TestResourceSubscriptions(a.Tester):
 
 			with patch.object(type(service), '_watch', return_value=None):
 				handle = service.subscribe({one}, events.append)
-				cls._threads(service)
 				handle.update({two})
 				assert one not in service._resources
 				assert two in service._resources
@@ -267,7 +251,6 @@ class TestResourceSubscriptions(a.Tester):
 			with patch.object(type(service), '_watch', return_value=None):
 				left  = file.subscribe(first.append)
 				right = file.subscribe(second.append)
-				cls._threads(service)
 
 				assert os.path.realpath(root) in service._watchers
 				service._changed_paths(root, {path: 'modified'})
@@ -326,7 +309,6 @@ class TestResourceSubscriptions(a.Tester):
 
 			with patch.object(type(source), '_watch', return_value=None):
 				handle = file.subscribe(events.append)
-				cls._threads(source)
 
 				parent.shared.write('note.md', 'changed')
 				source._changed_paths(parent_root, {p_path: 'modified'})
@@ -371,7 +353,6 @@ class TestResourceSubscriptions(a.Tester):
 
 			with patch.object(type(source), '_watch', return_value=None):
 				handle = file.subscribe(events.append)
-				cls._threads(source)
 				assert source._effective(file) == parent_path
 
 				with open(child_path, 'wb') as stream:
@@ -409,7 +390,6 @@ class TestResourceSubscriptions(a.Tester):
 			with patch.object(type(one), '_watch', return_value=None):
 				file   = a.File(first, os.path.join(root, 'item.txt'), 'a.item')
 				handle = file.subscribe(lambda changed: None)
-				cls._threads(one)
 				assert handle in one._subscriptions
 				assert not two._subscriptions
 				handle.cancel()
@@ -432,7 +412,6 @@ class TestResourceSubscriptions(a.Tester):
 
 			with patch.object(type(service), '_watch', return_value=None):
 				handle = file.subscribe(callback)
-				cls._threads(service)
 				service._dispatch({file: {'nested.txt': 'created'}})
 
 				assert events == [
@@ -457,7 +436,6 @@ class TestResourceSubscriptions(a.Tester):
 
 			with patch.object(type(service), '_watch', return_value=None):
 				handle  = file.subscribe(callback)
-				cls._threads(service)
 				threads = [
 					threading.Thread(
 						target = service._dispatch,
