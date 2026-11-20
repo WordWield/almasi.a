@@ -10,8 +10,8 @@ import os
 import sys
 import types
 
-from .module  import Module, ModuleMeta
-from .service import Service
+from .module    import Module, ModuleMeta
+from .singleton import Singleton
 
 
 class ReloadableMeta(ModuleMeta):
@@ -113,9 +113,9 @@ class Reloadable:
 				if os.path.isfile(file.get_path()):
 					try:
 						current = cls
-						target  = current() if issubclass(current, Service) else current
+						target  = current() if issubclass(current, Singleton) else current
 						fresh   = target.__reload__()
-						cls     = type(fresh) if isinstance(fresh, Service) else fresh
+						cls     = type(fresh) if isinstance(fresh, Singleton) else fresh
 
 						cls._reload_subscription = subscription
 						callback = current.__dict__.get('__reload_callback__')
@@ -160,7 +160,7 @@ class ReloadableModule(Reloadable, Module, metaclass=ReloadableMeta):
 	pass
 
 
-class ReloadableService(Reloadable, Service, metaclass=ReloadableMeta):
+class ReloadableSingleton(Reloadable, Singleton, metaclass=ReloadableMeta):
 	# Keep the initialized singleton and its instance-owned initializer.
 	# ----------------------------------------------------------------------
 	def __reload__(self):

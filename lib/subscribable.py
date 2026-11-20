@@ -8,11 +8,11 @@
 import logging
 import threading
 
-from .service      import Service
+from .singleton    import Singleton
 from .subscription import Subscription
 
 
-class Subscribable(Service):
+class Subscribable(Singleton):
 
 	# ==========================================================================
 	# FRAMEWORK METHODS

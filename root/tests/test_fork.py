@@ -84,7 +84,7 @@ class QualifiedImport(almasi_fork_fixture.Module):
 import almasi_fork_fixture
 
 
-class Counter(almasi_fork_fixture.ReloadableService):
+class Counter(almasi_fork_fixture.ReloadableSingleton):
 
 	def initialize(self):
 		self.value = 0
@@ -101,7 +101,7 @@ class Counter(almasi_fork_fixture.ReloadableService):
 
 			try:
 				spec.loader.exec_module(module)
-				with patch.object(a.ReloadableService, '_observe_reload', return_value=None):
+				with patch.object(a.ReloadableSingleton, '_observe_reload', return_value=None):
 					yield sys.modules[name], root
 			finally:
 				a.Undefined.__lib__, a.Imports.__lib__, a.Tester.__lib__ = previous_lib
@@ -222,7 +222,7 @@ class Counter(almasi_fork_fixture.ReloadableService):
 import almasi_fork_fixture
 
 
-class Counter(almasi_fork_fixture.ReloadableService):
+class Counter(almasi_fork_fixture.ReloadableSingleton):
 
 	def initialize(self):
 		raise AssertionError('Already initialized')

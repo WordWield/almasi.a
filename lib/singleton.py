@@ -1,13 +1,20 @@
-# ======================================================================
-# CLASS Service
-# ======================================================================
+# ==============================================================================
+# SINGLETON
+# ==============================================================================
+# PURPOSE:
+# Maintain one instance and one successful initialization per concrete class.
+#
+# RESPONSIBILITY BOUNDARIES:
+# Owns: Singleton identity and the initialization guard.
+# Delegates: Namespace lookup to Module and initialization to subclasses.
+# ==============================================================================
 
 import types
 
 from .module import Module
 
 
-class Service(Module):
+class Singleton(Module):
 
 	__instance__ = None
 
@@ -44,7 +51,7 @@ class Service(Module):
 		if self.__dict__.get('_is_initialized', True) or self.__dict__.get('_is_initializing', False):
 			result = super().__getattr__(name)
 		else:
-			raise RuntimeError(f'Service `{self.__class__.__name__}` is not initialized. Call `initialize()` before use.')
+			raise RuntimeError(f'Singleton `{self.__class__.__name__}` is not initialized. Call `initialize()` before use.')
 
 		return result
 
@@ -67,4 +74,4 @@ class Service(Module):
 				finally:
 					self.__dict__['_is_initializing'] = False
 		else:
-			raise RuntimeError(f'Service `{self.__class__.__name__}` is already initialized')
+			raise RuntimeError(f'Singleton `{self.__class__.__name__}` is already initialized')

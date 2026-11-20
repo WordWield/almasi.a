@@ -98,7 +98,7 @@ class TestOwnership(a.Tester):
 			with cls._runtime() as root:
 				parent = cls._library('ownership_parent', root, a.A)
 				cls._source(parent, 'Probe')
-				cls._source(parent, 'Shared', 'Service')
+				cls._source(parent, 'Shared', 'Singleton')
 				cls._source(parent, 'Local')
 				if parent_first:
 					parent.api.Probe

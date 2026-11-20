@@ -5,7 +5,7 @@ import sys
 import a
 
 
-class TestService(a.Tester):
+class TestSingleton(a.Tester):
 
 	# ======================================================================
 	# PRIVATE METHODS
@@ -62,7 +62,7 @@ class TestService(a.Tester):
 				'counting_service.py',
 				(
 					'import a\n\n'
-					'class CountingService(a.Service):\n'
+					'class CountingService(a.Singleton):\n'
 					'\tcount = 0\n\n'
 					'\tdef initialize(self):\n'
 					'\t\ttype(self).count += 1\n'
@@ -108,7 +108,7 @@ class TestService(a.Tester):
 				'initializing_service.py',
 				(
 					'import a\n\n'
-					'class InitializingService(a.Service):\n\n'
+					'class InitializingService(a.Singleton):\n\n'
 					'\tdef initialize(self):\n'
 					'\t\tself.value = getattr(self, ' + repr('missing') + ', 17)\n'
 				)
@@ -126,7 +126,7 @@ class TestService(a.Tester):
 	@classmethod
 	def test_service_singletons_follow_concrete_classes(cls):
 		for child_first in (False, True):
-			class Parent(a.Service):
+			class Parent(a.Singleton):
 				pass
 
 			class Child(Parent):
@@ -164,7 +164,7 @@ class TestService(a.Tester):
 				cls._write_source(
 					'base_service.py',
 					'import a\n\n\n'
-					'class BaseService(a.Service):\n'
+					'class BaseService(a.Singleton):\n'
 					'\tdef initialize(self, value):\n'
 					'\t\tself.value = value\n\n'
 					'\tdef describe(self):\n'
@@ -234,7 +234,7 @@ class TestService(a.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_inherited_initializer_can_retry_after_failure(cls):
-		class Parent(a.Service):
+		class Parent(a.Singleton):
 
 			# ======================================================================
 			# PUBLIC METHODS
@@ -284,7 +284,7 @@ class TestService(a.Tester):
 			cls._write_source(
 				'ready_service.py',
 				'import a\n\n\n'
-				'class ReadyService(a.Service):\n'
+				'class ReadyService(a.Singleton):\n'
 				'\tdef read(self):\n'
 				'\t\treturn 31\n'
 			)
@@ -355,4 +355,4 @@ class TestService(a.Tester):
 
 
 if __name__ == '__main__':
-	TestService.run()
+	TestSingleton.run()

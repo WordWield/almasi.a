@@ -89,7 +89,7 @@ The loader assigns fork-specific module identities in `sys.modules` and reuses c
 
 Filesystem lookup and inherited library resolution still use the existing library source tree. The fork owns its own resolved component cache.
 
-## 6. Service identity and lifecycle
+## 6. Singleton identity and lifecycle
 
 Services are singletons per loaded service class. Fork-specific class loading therefore gives each fork its own service instance.
 
@@ -134,7 +134,7 @@ This matters for web applications and agents: a fork is a namespace/state-isolat
 
 - `a.py` — `A.fork()`, `A.__getitem__()`, fork metadata, configuration copying, and import redirection.
 - `lib/imports.py` — fork-specific module keys, separate globals, shared compiled code cache.
-- `lib/service.py` — singleton lifetime per service class.
+- `lib/singleton.py` — singleton lifetime per service class.
 - `docs/almasi_invariants8.md` — filesystem identity, ownership, caching, and mutation invariants.
 
 This document describes the current runtime contract, not a proposal for process isolation or automatic storage replication.

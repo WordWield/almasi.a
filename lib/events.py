@@ -2,11 +2,11 @@
 
 from collections import defaultdict
 
-from .function import Function
-from .service  import Service
+from .function   import Function
+from .singleton  import Singleton
 
 
-class Events(Service):
+class Events(Singleton):
 
 	# Initialize event registry (trigger -> list of callbacks)
 	# ----------------------------------------------------------------------

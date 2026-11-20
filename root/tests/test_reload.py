@@ -64,7 +64,7 @@ class TestReload(a.Tester):
 			path = cls._write(directory, 'session_store', '''
 import a
 
-class SessionStore(a.ReloadableService):
+class SessionStore(a.ReloadableSingleton):
 	def initialize(self):
 		self.sessions = {}
 		self.requests = 0
@@ -84,7 +84,7 @@ class SessionStore(a.ReloadableService):
 			cls._write(directory, 'session_store', '''
 import a
 
-class SessionStore(a.ReloadableService):
+class SessionStore(a.ReloadableSingleton):
 	def initialize(self):
 		raise AssertionError('Initialization must not run again')
 
@@ -156,7 +156,7 @@ class MessageHandler(a.ReloadableModule):
 			cls._write(directory, 'counter_service', '''
 import a
 
-class CounterService(a.ReloadableService):
+class CounterService(a.ReloadableSingleton):
 	def increment(self):
 		self.value = getattr(self, 'value', 0) + 1
 		return self.value
@@ -168,7 +168,7 @@ class CounterService(a.ReloadableService):
 				cls._write(directory, 'counter_service', f'''
 import a
 
-class CounterService(a.ReloadableService):
+class CounterService(a.ReloadableSingleton):
 	def increment(self):
 		self.value = getattr(self, 'value', 0) + {step}
 		return self.value
@@ -232,7 +232,7 @@ class BaseOperation(a.ReloadableModule):
 			cls._write(directory, 'notification_service', '''
 import a
 
-class NotificationService(a.ReloadableService):
+class NotificationService(a.ReloadableSingleton):
 	def announce(self, payload):
 		return payload
 
@@ -251,7 +251,7 @@ class NotificationService(a.ReloadableService):
 			cls._write(directory, 'notification_service', '''
 import a
 
-class NotificationService(a.ReloadableService):
+class NotificationService(a.ReloadableSingleton):
 	def announce(self, payload):
 		return payload
 
@@ -280,7 +280,7 @@ class NotificationService(a.ReloadableService):
 			cls._write(directory, 'job_service', '''
 import a
 
-class JobService(a.ReloadableService):
+class JobService(a.ReloadableSingleton):
 	async def run(self, value):
 		return value + 1
 ''')
@@ -291,7 +291,7 @@ class JobService(a.ReloadableService):
 			cls._write(directory, 'job_service', '''
 import a
 
-class JobService(a.ReloadableService):
+class JobService(a.ReloadableSingleton):
 	async def run(self, value):
 		return value + 2
 ''')
@@ -368,7 +368,7 @@ class TaskProcessor(a.ReloadableModule):
 
 			for source in (
 				'import a\nclass WrongName(a.ReloadableModule):\n\tpass\n',
-				'import a\nclass TaskProcessor(a.ReloadableService):\n\tpass\n',
+				'import a\nclass TaskProcessor(a.ReloadableSingleton):\n\tpass\n',
 			):
 				cls._write(directory, 'task_processor', source)
 

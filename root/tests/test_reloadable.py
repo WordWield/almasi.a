@@ -26,7 +26,7 @@ class TestReloadable(a.Tester):
 			file_path = os.path.join(path, 'counter.py')
 			with open(file_path, 'w', encoding='utf-8') as stream:
 				stream.write(
-					'import a\nclass Counter(a.ReloadableService):\n'
+					'import a\nclass Counter(a.ReloadableSingleton):\n'
 					'\tdef initialize(self):\n\t\tself.value = 5\n'
 					'\tdef read(self):\n\t\treturn self.value + 1\n'
 				)
@@ -42,7 +42,7 @@ class TestReloadable(a.Tester):
 
 				with open(file_path, 'w', encoding='utf-8') as stream:
 					stream.write(
-						'import a\nclass Counter(a.ReloadableService):\n'
+						'import a\nclass Counter(a.ReloadableSingleton):\n'
 						'\tdef initialize(self):\n\t\traise AssertionError()\n'
 						'\tdef read(self):\n\t\treturn self.value + 2\n'
 					)
@@ -54,7 +54,7 @@ class TestReloadable(a.Tester):
 
 				with open(file_path, 'w', encoding='utf-8') as stream:
 					stream.write(
-						'import a\nclass Counter(a.ReloadableService):\n'
+						'import a\nclass Counter(a.ReloadableSingleton):\n'
 						'\tdef read(self):\n\t\treturn self.value + 3\n'
 					)
 

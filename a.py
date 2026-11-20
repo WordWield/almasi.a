@@ -11,8 +11,8 @@ import os, sys
 
 from lib.imports             import Imports
 from lib.module              import Module, ModuleMeta
-from lib.service             import Service
-from lib.reloadable          import Reloadable, ReloadableModule, ReloadableService
+from lib.singleton           import Singleton
+from lib.reloadable          import Reloadable, ReloadableModule, ReloadableSingleton
 from lib.subscribable        import Subscribable
 from lib.subscription        import Subscription
 from lib.logger              import Logger
@@ -106,10 +106,10 @@ class A(metaclass=AMeta, plugins=['Py', 'Json', 'Text', 'Bytes']):
 	File          = File
 	Directory     = Directory
 	Plugin        = Plugin
-	Service       = Service
-	Reloadable        = Reloadable
-	ReloadableModule  = ReloadableModule
-	ReloadableService = ReloadableService
+	Singleton     = Singleton
+	Reloadable          = Reloadable
+	ReloadableModule    = ReloadableModule
+	ReloadableSingleton = ReloadableSingleton
 	Subscribable  = Subscribable
 	Subscription = Subscription
 	Imports       = Imports

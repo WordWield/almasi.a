@@ -83,9 +83,9 @@ Therefore:
 
 ---
 
-## Service singleton law
+## Singleton ownership
 
-- Service singleton ownership belongs to the service class itself.
+- Singleton identity belongs to the concrete class.
 - Singleton identity should live on `cls.__instance__`.
 - A should not keep a separate service-instance registry.
 

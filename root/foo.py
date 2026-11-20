@@ -1,7 +1,7 @@
 import a
 
 
-class Foo(a.Service):
+class Foo(a.Singleton):
 	
 	def initialize(self):
 		print('Foo initilized')

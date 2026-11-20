@@ -33,7 +33,7 @@ When `extend()` is called directly from Python's `__main__` module, the resultin
 web_app = web.extend('web_app')
 ```
 
-The selected application is stored as `a.__app__`. Every Almasi `Module` instance — including `Service` and event-controller instances — inherits `self.__app__` from the `Module` base class. This property resolves the current application at access time, so objects created before application selection also see it. `self.__lib__` identifies the library that defined the class, independently of `self.__app__`. The loader does not inject an application global into Python modules.
+The selected application is stored as `a.__app__`. Every Almasi `Module` instance — including `Singleton` and event-controller instances — inherits `self.__app__` from the `Module` base class. This property resolves the current application at access time, so objects created before application selection also see it. `self.__lib__` identifies the library that defined the class, independently of `self.__app__`. The loader does not inject an application global into Python modules.
 
 ```python
 class Example(web.Module):

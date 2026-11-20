@@ -69,7 +69,7 @@ extend_child = extend_parent.extend('extend_child')
 			os.makedirs(os.path.join(parent_dir, 'root', 'api'))
 
 			with open(os.path.join(parent_dir, 'root', 'api', 'shared.py'), 'w') as file:
-				file.write('import a\n\nclass Shared(a.Service):\n\tpass\n')
+				file.write('import a\n\nclass Shared(a.Singleton):\n\tpass\n')
 
 			sys.path[:0] = [child_dir, parent_dir]
 			child  = importlib.import_module('extend_child')

@@ -18,7 +18,7 @@ semantics.
 ## Classes and ownership
 
 ```text
-a.Service
+a.Singleton
     └── a.Subscribable
             └── a.services.Filesystem
 
@@ -29,7 +29,7 @@ a.Resource
     └── a.Directory
 ```
 
-- `Subscribable` extends `a.Service`, retaining Almasi's existing service
+- `Subscribable` extends `a.Singleton`, retaining Almasi's existing service
   singleton ownership within the relevant library/fork scope.
 - Each concrete `Subscribable` service holds its own active subscriptions and
   receives changes from its own producer.

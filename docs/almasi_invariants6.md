@@ -140,7 +140,7 @@ If `load_method` is absent, `File.load()` returns cached `self.data` as-is.
 
 ---
 
-## Class / Service Coverage
+## Class / Singleton Coverage
 
 The Python plugin load path already covers two semantic outputs:
 

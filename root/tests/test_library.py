@@ -36,7 +36,7 @@ class TestLibrary(a.Tester):
 		assert a.File is a.A.File
 		assert a.Directory is a.A.Directory
 		assert a.Plugin is a.A.Plugin
-		assert a.Service is a.A.Service
+		assert a.Singleton is a.A.Singleton
 		assert a.Imports is a.A.Imports
 		assert a.Undefined is a.A.Undefined
 		assert a.String is a.A.String

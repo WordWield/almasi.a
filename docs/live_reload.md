@@ -1,6 +1,6 @@
 # Live Python module reload
 
-Almasi can replace a source-backed `a.ReloadableModule` or `a.ReloadableService` without
+Almasi can replace a source-backed `a.ReloadableModule` or `a.ReloadableSingleton` without
 recreating objects already held by consumers.
 
 ## Supported entry points
@@ -19,7 +19,7 @@ assert type(handler) is NewHandler
 assert library.handlers.Handler is NewHandler
 ```
 
-A ReloadableService resolves to its singleton instance:
+A ReloadableSingleton resolves to its singleton instance:
 
 ```python
 service = library.services.Orders
@@ -36,7 +36,7 @@ the filesystem namespace, and invalidate its cached file carrier. Repeated
 reloads are supported. New code is compiled directly from source rather than
 accepting a potentially stale bytecode cache.
 
-ReloadableService reload additionally transfers the singleton to the fresh class and
+ReloadableSingleton reload additionally transfers the singleton to the fresh class and
 refreshes the instance-owned initialization wrapper. An already initialized
 service is **not** initialized again. Existing direct subclasses are rebased
 on the fresh parent class so inherited methods and `super()` continue
@@ -79,10 +79,10 @@ subclass bases are rolled back before the error propagates.
 ## Opt-in source observation
 
 A source-backed class may derive from `a.ReloadableModule` or
-`a.ReloadableService` to subscribe to changes to its own Python file:
+`a.ReloadableSingleton` to subscribe to changes to its own Python file:
 
 ```python
-class Counter(a.ReloadableService):
+class Counter(a.ReloadableSingleton):
 	def read(self):
 		return self.value
 ```
