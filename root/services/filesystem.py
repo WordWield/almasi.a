@@ -203,6 +203,8 @@ class Filesystem(a.Subscribable):
 	# Map physical changes to subscribed resources and invalidate before dispatch.
 	# --------------------------------------------------------------------------
 	def _changed_paths(self, root, paths):
+		root = os.path.realpath(root)
+
 		with self._subscription_lock:
 			observed = tuple(
 				(resource, entry['path'])
