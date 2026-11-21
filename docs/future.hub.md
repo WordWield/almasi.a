@@ -285,6 +285,18 @@ No new agent-specific log subscription mechanism is required.
 
 ### MCP resources and operations
 
+**The Source API has no Tool/Resource distinction.** Every callable Source
+capability is declared with `@api.base.Controller.method`; persistent
+state and subscriptions belong to O. Hub uses this same API to implement
+its management operations, not a separate set of MCP-typed controllers.
+
+The MCP interface is an **adapter at Hub's external boundary**. It maps
+operations to MCP Tools and O-backed readable or subscribable values (such
+as process logs) to MCP Resources only where those protocol semantics are
+appropriate. These are not new Source-side capability kinds or decorators.
+The boundary must preserve real differences between invocation and state,
+without duplicating implementation or the capability catalog.
+
 The Python dotted interface and the MCP surface are **two presentations of the same underlying Hub capabilities**. The dotted names `hub.start`, `hub.status`, `hub.logs`, and `hub.stop` are conceptual examples only, not committed APIs.
 
 Logs are naturally **MCP Resources** (and can use the protocol's resource subscription mechanisms). The start/stop/discovery operations should use the MCP semantics appropriate to their actions; not every operation is itself a Resource.
