@@ -8,6 +8,27 @@ Start an entire personal Almasi environment with one command, without manually s
 
 This document captures an architectural direction, **not an implemented Run service or an approved detailed specification**.
 
+## Why this architecture exists
+
+Traditional software is usually built once for many users who must adapt to its fixed feature set. Almasi reverses that relationship: **the App belongs to the person and may evolve with that person**.
+
+An App need not become a centralized, conventional multi-user SaaS product. Its owner can extend its behavior, data model, interface, and integrations independently, including with AI assistance. A change to one person's App does not require changing every other person's App.
+
+This does **not** forbid collaboration or shared state. It separates two concerns:
+- **Ownership and evolution:** a personal App and its ontology are independently governed.
+- **Reuse and interaction:** implementations (Source, Agent, other libraries) can be shared, and distinct Apps can exchange permitted information when that is actually needed.
+
+Multiple users may reside on one physical host, each with a logically separate environment. A person need not own dedicated hardware. No application-wide distributed state or mandatory global multi-tenant runtime is required merely because there are many users.
+
+The wider ecosystem is effectively **a repository of repositories**: independently developed capabilities can be discovered, started, maintained, and reused without imposing a single monolithic application structure.
+
+### Guiding proposition
+
+> One user, an App that grows with them, shared reusable capabilities, and an execution environment that does not demand a DevOps department.
+
+**"Grow your app"** is the working product expression, not a finalized trademark or market claim.
+
+
 ## Fundamental contract
 
 **Run makes required capabilities available and keeps their processes running.**
@@ -43,6 +64,24 @@ The App's runnable contract must be usable by Run without Run knowing its intern
 
 Discovery should use an explicit, inspectable capability contract. A GitHub repository name alone does not prove it is trusted, compatible, runnable, or suitable.
 
+## Source, App, and Run are not competing entry points
+
+An App remains a runnable unit with its own execution contract, while **Run is the sole user-facing entry point for starting the entire environment**. These are compatible requirements: Run invokes the ordinary App entry point instead of creating a second way for App code to initialize.
+
+Source and Agent are likewise runnable capabilities; Run treats their lifecycles uniformly. A Source should be thin: the reusable capability is separate from the mechanics that find, launch, and supervise it.
+
+### Warm and cold resolution
+
+- **Already running:** reuse an appropriate healthy instance with no unnecessary launch.
+- **Installed but stopped:** start the existing implementation.
+- **Available in a configured repository:** acquire and prepare a compatible version, then start.
+- **Absent:** request generation by a suitable capability, followed by validation before execution.
+
+MCP is for discovery and control, **not a compulsory hop in each ordinary Source call**. Once a process is running, consumers should use its existing interface and O without recurring discovery overhead.
+
+Performance is an explicit ambition, not a measured result: warm resolution should be fast, cold acquisition and launch should be measured, and the design should avoid redundant workers and dependency starts.
+
+
 ## Execution and lifecycle
 
 Run is the entry point for the environment, not a central server through which every request passes.
@@ -56,6 +95,41 @@ Run is the entry point for the environment, not a central server through which e
 - Treat infrastructure providers, including cloud vendors, as replaceable resources rather than architectural foundations.
 
 A single machine may host several personal environments. Each has its own data and authority boundary; multiple applications may share capabilities only where explicitly permitted. A dedicated physical server per person is not required.
+
+### The launch experience
+
+For a local interactive environment, the intended experience is one command — conceptually `almasi.run` — followed by a working application in the browser. The exact CLI and deployment mode remain open.
+
+Run brings up only what is required. The user does not manually start O, several Source processes, Web, workers, and the browser in sequence.
+
+Conceptual flow:
+
+```text
+User intent / launch
+        |
+     Almasi Run
+        |
+  Discover / reuse / acquire capabilities
+        |
+  Prepare environments and shared O location
+        |
+  Launch required App / Source / Agent processes
+        |
+  Supervise health, logs, and lifecycle
+        |
+  Expose Web and open browser (interactive mode)
+```
+
+This ordering does **not** imply a central O daemon. Individual processes initialize their O access as part of their startup. Run owns their orchestration, not their object model.
+
+### Desired state, observed state
+
+Run's minimal supervision model compares **what should be running** against **what is actually running**, and reconciles meaningful differences. Starting, observing, and restarting are aspects of one lifecycle model, not separate infrastructures.
+
+When moving from one host to several is eventually justified, avoid duplicating this lifecycle model. Placement and recovery may become more complex, but the public concept of a required runnable capability should remain the same.
+
+Run does not promise magical fault tolerance: transient failures, persistent misconfiguration, crash loops, and unsafe updates require explicit policies and evidence before automatic actions are enabled.
+
 
 ## Shared O: reuse the existing multiprocess implementation
 
@@ -71,6 +145,15 @@ Run selects or provisions the ontology location and grants appropriate processes
 For containers, the actual LMDB location and transport socket directory must be available with consistent filesystem paths and permissions. **Shared LMDB access is a broad data permission**; untrusted capabilities must not receive unrestricted storage access. Isolation and authorization require a deliberate trust design.
 
 O's current transport is host-local; cross-host shared state is **not** solved by Run's process scheduler. Do not claim network-distributed O consistency without a separately verified need and design.
+
+### What existing O implementation already gives us
+
+The current `almasi.o` implementation contains host-local multiprocess coordination and has source-level tests. A concrete shared-path start signature exists in `root/services/ontology.py`. The original idea therefore needs **integration into Run**, not a new O transport.
+
+The current O transport is an invalidation relay, not a remote object API, transactional event log, authenticated network service, or cross-machine state replication. Claims about those features must be supported by separate implementation and tests.
+
+An important risk remains: mounting an entire LMDB environment into an untrusted container grants broad storage access. Container isolation alone does not provide field-level authorization; sharing O must respect a clearly defined trust and permission boundary.
+
 
 ## Management and MCP
 
@@ -94,6 +177,17 @@ Each supervised process has a log resource discoverable through Run. Authorized 
 
 No new agent-specific log subscription mechanism is required.
 
+### MCP resources and operations
+
+The Python dotted interface and the MCP surface are **two presentations of the same underlying Run capabilities**. The dotted names `run.start`, `run.status`, `run.logs`, and `run.stop` are conceptual examples only, not committed APIs.
+
+Logs are naturally **MCP Resources** (and can use the protocol's resource subscription mechanisms). The start/stop/discovery operations should use the MCP semantics appropriate to their actions; not every operation is itself a Resource.
+
+A Source does not need to implement a separate MCP server merely to be discoverable through Run. Run's catalog can expose installed and remote repository capabilities, while a Source's own application interface remains independent.
+
+A subscription belongs to an MCP client. It does not guarantee that a language model is continuously running or automatically consuming each log line. No special Run-to-LLM log streaming mechanism should be added unless a real requirement demands it.
+
+
 ## Necessary symmetry
 
 - **One user-facing entry point:** Run starts the environment; no terminal choreography.
@@ -104,6 +198,21 @@ No new agent-specific log subscription mechanism is required.
 - **Isolation by default, collaboration by necessity:** personal applications can evolve separately and interact when authorized.
 
 Run should never be forced into application-specific orchestration merely because a capability was added.
+
+## Proposed commercial model and ecosystem effects
+
+The working economic hypothesis is:
+
+- **Capabilities and core software can be free/open**, including sharing reusable Sources and Agents.
+- **Hosting and physical resources cost money.** Run can eventually offer managed personal hosting while remaining independent of any particular vendor.
+- **AI generation may cost money** where inference/verification uses paid compute; local generation may avoid a separate generation fee but still consumes resources.
+
+The platform should make money from **providing real resources**, not from artificially restricting a person's capacity to extend their App.
+
+One Source implementation may be reused many times without regenerating it for every owner. As the catalog grows, newly created Apps may gain useful abilities more cheaply. That is a plausible **network effect**, not yet a validated business result.
+
+Open architecture, portable App data, and cloud independence preserve user autonomy. Hosting is optional: a standard Linux machine must be a viable starting point. The ambition is to eliminate **unnecessary manual DevOps work**, not to pretend security, operations, deployment, and incident recovery stop existing.
+
 
 ## First vertical experiment
 
@@ -116,6 +225,20 @@ Run should never be forced into application-specific orchestration merely becaus
 
 This validates the architecture before automatic code generation, cross-host placement, or sophisticated resource scheduling.
 
+### Success criteria
+
+The first vertical experiment succeeds only when:
+- a single user action launches the working environment and opens the intended App;
+- Run introduces no duplicate process or redundant O service;
+- a Source is discovered and started without an App-specific modification to Run;
+- two independent O processes exchange committed changes via the existing transport;
+- logs are available through the agreed management interface and MCP, with a working client subscription;
+- stopping, failing, and restarting a process are visible and follow the defined lifecycle;
+- the same mechanisms work without AWS, Kubernetes, or Terraform as prerequisites.
+
+These are **acceptance goals**, not claims of completed tests.
+
+
 ## Open questions
 
 - What is the minimal runnable capability descriptor and stable identity?
@@ -126,6 +249,19 @@ This validates the architecture before automatic code generation, cross-host pla
 - How are log read/subscription permissions, retention, and cursor semantics defined?
 - How should one host handle several independent user environments?
 - Which verified requirements, if any, justify placement across different hosts?
+
+## Non-goals and traps
+
+- No mandatory AWS-specific orchestration, managed cloud dependency, or Kubernetes compatibility layer.
+- No new inter-process O bus or server if the existing shared LMDB and O Transport satisfy the required topology.
+- No duplicated business API inside Run; ordinary calls do not pass through its supervisor.
+- No distinct agent logging pipeline when MCP Resources already support the use case.
+- No generation of a repository whose required capability is already available.
+- No full multi-user application architecture unless a concrete collaboration or trust requirement demands it.
+- No global distributed database as an assumed prerequisite for onboarding a second user.
+
+The goal is **necessary symmetry**: unite genuine commonality, retain essential distinctions, remove mechanisms whose sole job is compensating for an artificial separation.
+
 
 ## Status
 
