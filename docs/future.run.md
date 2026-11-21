@@ -29,6 +29,31 @@ The wider ecosystem is effectively **a repository of repositories**: independent
 **"Grow your app"** is the working product expression, not a finalized trademark or market claim.
 
 
+## Personal ownership and first contact with WordWield
+
+The intended end-user experience begins with a person, not an infrastructure diagram:
+
+1. A person comes to **WordWield** to grow a personal App.
+2. WordWield asks what their GitHub organization should be called and guides them through connecting their GitHub account.
+3. The person creates or selects an organization they control. Where GitHub does not expose organization creation to the authorized integration, WordWield guides them through GitHub's own creation flow instead of inventing credential workarounds.
+4. The person authorizes a WordWield GitHub App installation with only the repository permissions required for the requested work. **WordWield does not collect or copy the person's SSH keys, personal access tokens, or unrelated secrets.** The installation is revocable.
+5. That organization becomes the home for their own Almasi repositories: their App, and Source or Agent code that they create or intentionally customize.
+6. WordWield invokes Run to resolve and launch the required capabilities. The user can then interact with a living App and ask it to develop further.
+7. New capabilities are reused when available; genuinely new or personalized implementations are committed to repositories belonging to the person.
+
+The organization is a **configured location**, not an identity or code-level constant hardwired into Run. It is a namespace and ownership boundary for source repositories, not the runtime owner of O data.
+
+### What lives where
+
+- **User's GitHub organization:** original or modified source code belonging to that person, plus its release artifacts.
+- **WordWield's GitHub organization:** shared Almasi infrastructure libraries, common Source/Agent implementations, and other reusable code. Names and exact organization membership are deployment choices, not Run dependencies.
+- **Run on the selected host:** live processes, execution environments, supervision, and discovery/management interfaces.
+- **O on the selected host:** persistent object state, types, identities, and transactional changes for the environment. O is **not** the repository catalog and does not move to GitHub merely because the code is stored there.
+
+A user does not need to fork every shared Source. Run should reuse an existing compatible implementation directly, and a new repository is warranted only when the user needs an independently evolving implementation.
+
+This is the ownership promise: **the user owns the source of their growing App, not merely an account on someone else's centralized application.**
+
 ## Fundamental contract
 
 **Run makes required capabilities available and keeps their processes running.**
@@ -63,6 +88,53 @@ The App's runnable contract must be usable by Run without Run knowing its intern
 **Do not generate a second `weather` merely because the first one has not yet been discovered.**
 
 Discovery should use an explicit, inspectable capability contract. A GitHub repository name alone does not prove it is trusted, compatible, runnable, or suitable.
+
+## GitHub organization as the capability catalog
+
+A configured **GitHub organization** is the natural entry point for finding repository-based capabilities. No separate custom registry database is required by the basic design.
+
+Run can resolve a requested capability through:
+
+```text
+Configured GitHub organization(s)
+              |
+       Repository names
+              |
+       Versioned releases
+              |
+     almasi.json release asset
+              |
+       Capability metadata
+              |
+  Resolve and launch implementation
+```
+
+Repository names and Almasi naming conventions provide **candidate discovery**, not proof that a capability exists. The release index supplies the structured evidence of which methods, inputs, outputs, and meanings that version exposes.
+
+The organization is configurable, so independent developers or users can publish Almasi-compatible Sources without joining WordWield's organization. WordWield's organization can be a convenient initial/default catalog, but is not part of Run's implementation.
+
+### The code is the only source of truth
+
+Descriptions must not become a second manually maintained model of an App or Source.
+
+- Existing controller declarations, `@api.base.Controller.method`, method names, signatures, type information, and docstrings are the authoritative basis for describing Python capabilities.
+- A **deterministic generator** derives a machine-readable `almasi.json` index from those sources during publication. The schema and extraction rules remain to be designed.
+- **GitHub Actions** should own automatic generation and publication on a release event. The index is published **as a release artifact beside the exact version** of the code, not treated as a manually edited project manifest.
+- The index records enough immutable version/commit identity for Run to obtain the matching code and reject incompatible or stale metadata.
+- Run reads this small release artifact to discover capabilities **without downloading or executing the full repository and without asking an LLM to interpret it at search time**.
+- Run fetches the full repository only after a suitable candidate has been selected and execution is actually required.
+
+The generator should not need an LLM to extract ordinary static declarations. If a capability is defined dynamically and cannot be described by the agreed extraction contract, the release pipeline must either resolve it safely in an isolated build context or fail explicitly; it must not silently fabricate metadata.
+
+**Generation happens during publication, not on each user's discovery request.** Automatic consistency comes from deriving the release index from the same commit, rather than trying to keep two independently edited descriptions synchronized.
+
+A release asset is an **index/projection of source code**, not another source of truth. No general-purpose inference service is needed just to list existing methods.
+
+### Repository resolution is not a trust grant
+
+Finding a matching `almasi.json` does not authorize arbitrary code execution. Before running an implementation, the system must verify the selected version and apply the appropriate provenance, permission, compatibility, and isolation policy. Those policies are real requirements, not an excuse to insert an unnecessary registry layer.
+
+GitHub Actions and release artifacts are the current publication convention; Run should keep its capability contract distinct from the identity of the hosting provider.
 
 ## Source, App, and Run are not competing entry points
 
@@ -220,7 +292,7 @@ Open architecture, portable App data, and cloud independence preserve user auton
 2. Run starts required processes, attaches them to a designated O, and opens the App in the browser.
 3. Confirm that two participating processes observe committed O changes using the existing multiprocess implementation.
 4. Read a process's logs through a Run MCP resource and subscribe to updates.
-5. Add a second Source capability; verify that Run discovers and starts it **without changing Run's implementation**.
+5. Publish a second Source with an automatically generated `almasi.json` release asset; verify that Run discovers and starts it from a configured GitHub organization **without changing Run's implementation**.
 6. Stop or crash a supervised process; verify status and recovery behavior.
 
 This validates the architecture before automatic code generation, cross-host placement, or sophisticated resource scheduling.
@@ -228,6 +300,8 @@ This validates the architecture before automatic code generation, cross-host pla
 ### Success criteria
 
 The first vertical experiment succeeds only when:
+- a repository release produces an index derived from code, without an LLM at discovery time;
+- Run can use an organization name plus a release artifact to identify a capability before downloading the full repository;
 - a single user action launches the working environment and opens the intended App;
 - Run introduces no duplicate process or redundant O service;
 - a Source is discovered and started without an App-specific modification to Run;
@@ -241,9 +315,9 @@ These are **acceptance goals**, not claims of completed tests.
 
 ## Open questions
 
-- What is the minimal runnable capability descriptor and stable identity?
-- How are trusted repositories, versions, startup dependencies, and conflicts resolved?
-- What is the exact boundary between Run and application selection or onboarding?
+- What is the minimal runnable capability descriptor, and the schema of the generated `almasi.json` release asset?
+- How are organizations configured and prioritized; how are trusted repositories, release identities, dependencies, and version conflicts resolved?
+- What is the exact boundary between WordWield onboarding/GitHub App authorization and Run discovery/execution?
 - How are O paths, filesystem permissions, credentials, and container isolation provisioned safely?
 - Which conditions should trigger automatic generation, and who approves generated code?
 - How are log read/subscription permissions, retention, and cursor semantics defined?
