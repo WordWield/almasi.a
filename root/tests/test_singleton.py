@@ -153,6 +153,35 @@ class TestSingleton(a.Tester):
 			assert parent is not sibling
 			assert child is not sibling
 
+	# Accept service instances as type-check targets with Python inheritance semantics.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_singleton_instance_supports_type_checks(cls):
+		class Parent(a.Singleton):
+			pass
+
+		class Child(Parent):
+			pass
+
+		class Unrelated(a.Singleton):
+			pass
+
+		parent    = Parent()
+		child     = Child()
+		unrelated = Unrelated()
+
+		assert isinstance(parent, parent)
+		assert isinstance(child, parent)
+		assert isinstance(child, child)
+		assert not isinstance(unrelated, parent)
+		assert not isinstance(42, parent)
+
+		assert issubclass(Parent, parent)
+		assert issubclass(Child, parent)
+		assert issubclass(Child, child)
+		assert not issubclass(Unrelated, parent)
+		assert not issubclass(int, parent)
+
 	# Resolve three levels through service instances and retain normal super().
 	# ----------------------------------------------------------------------
 	@classmethod
