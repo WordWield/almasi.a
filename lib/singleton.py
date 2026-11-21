@@ -45,6 +45,16 @@ class Singleton(Module):
 	def __mro_entries__(self, bases):
 		return (type(self),)
 
+	# Treat the service instance as its class in isinstance() checks.
+	# ----------------------------------------------------------------------
+	def __instancecheck__(self, instance):
+		return isinstance(instance, type(self))
+
+	# Treat the service instance as its class in issubclass() checks.
+	# ----------------------------------------------------------------------
+	def __subclasscheck__(self, subclass):
+		return issubclass(subclass, type(self))
+
 	# Get service attribute.
 	# ----------------------------------------------------------------------
 	def __getattr__(self, name):
