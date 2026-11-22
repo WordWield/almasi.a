@@ -130,17 +130,17 @@ class TestLibraries(a.Tester):
 			a.Imports.__lib__, a.Tester.__lib__, a.Undefined.__lib__ = ownership
 			almasi.__dict__.pop('mcp', None)
 
-	# Combine cached and remote names without persisting another registry.
+	# Discover the GitHub catalogue without coupling it to local cache state.
 	# ----------------------------------------------------------------------
 	@classmethod
-	def test_list_merges_local_and_discoverable(cls):
+	def test_list_uses_remote_discovery(cls):
 		with tempfile.TemporaryDirectory() as home:
 			cls._library(home, 'local_lib')
 
 			with patch.dict(os.environ, {'ALMASI_LIBRARY_DIR': home}):
-				with patch.object(type(a.services.Libraries), '_remote_repositories',
+				with patch.object(type(a.services.Libraries), '_repositories',
 								  return_value={'web': 'https://github.com/example/almasi.web.git'}):
-					assert a.services.Libraries.list() == ['local_lib', 'web']
+					assert a.services.Libraries.list() == ['web']
 
 	# Clone once and reuse a validated checkout.
 	# ----------------------------------------------------------------------
@@ -151,7 +151,7 @@ class TestLibraries(a.Tester):
 			cache  = os.path.join(home, 'cache')
 
 			with patch.dict(os.environ, {'ALMASI_LIBRARY_DIR': cache}):
-				with patch.object(type(a.services.Libraries), '_remote_repositories',
+				with patch.object(type(a.services.Libraries), '_repositories',
 								  return_value={'cloned_lib': origin}):
 					path = a.services.Libraries.clone('cloned_lib')
 
@@ -168,7 +168,7 @@ class TestLibraries(a.Tester):
 			cache  = os.path.join(home, 'cache')
 
 			with patch.dict(os.environ, {'ALMASI_LIBRARY_DIR': cache}):
-				with patch.object(type(a.services.Libraries), '_remote_repositories',
+				with patch.object(type(a.services.Libraries), '_repositories',
 								  return_value={'parallel_lib': origin}):
 					with ThreadPoolExecutor(max_workers=2) as executor:
 						paths = list(executor.map(a.services.Libraries.clone, ['parallel_lib'] * 2))
