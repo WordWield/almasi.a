@@ -15,6 +15,8 @@ import sys
 import tempfile
 import types
 
+from contextlib        import redirect_stdout
+from io                import StringIO
 from unittest          import TestCase
 from unittest.mock     import patch
 
@@ -200,6 +202,134 @@ class Item(fork_sample.Module):
 				assert os.path.isfile(os.path.join(path, 'cloned_lib.py'))
 				assert path == almasi.services.Libraries.clone('cloned_lib')
 				assert sorted(os.listdir(cache)) == ['almasi.cloned_lib']
+
+	# Load the newest committed source only before its first use in a process.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_import_pulls_updated_source_once(cls):
+		ownership = cls._ownership()
+
+		try:
+			with tempfile.TemporaryDirectory() as home:
+				origin = cls._git_origin(home, 'pull_lib')
+				cache  = os.path.join(home, 'cache')
+
+				with patch.dict(os.environ, {
+					'ALMASI_PATH'     : cache,
+					'ALMASI_GIT_BASE' : home,
+				}):
+					with patch.dict(sys.modules):
+						almasi.services.Libraries.imp('pull_lib')
+
+					with open(os.path.join(origin, 'pull_lib.py'), 'a') as source:
+						source.write("\npull_lib.revision = 'updated'\n")
+
+					subprocess.run(['git', '-C', origin, 'add', '.'], check=True)
+					subprocess.run([
+						'git', '-C', origin, '-c', 'user.email=almasi@example.test',
+						'-c', 'user.name=Almasi Test', 'commit', '-q', '-m', 'Update'
+					], check=True)
+
+					log = StringIO()
+
+					with redirect_stdout(log):
+						with patch.dict(sys.modules):
+							library = almasi.services.Libraries.imp('pull_lib')
+							assert library.revision == 'updated'
+							assert almasi.services.Libraries.imp('pull_lib') is library
+
+					assert log.getvalue().count('pulling new version ... done') == 1
+		finally:
+			almasi.Imports.__lib__, almasi.Tester.__lib__, almasi.Undefined.__lib__ = ownership
+			almasi.__dict__.pop('pull_lib', None)
+
+	# Continue with committed local source when a remote Git update fails.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_import_uses_local_source_when_pull_fails(cls):
+		ownership = cls._ownership()
+
+		try:
+			with tempfile.TemporaryDirectory() as home:
+				cls._git_origin(home, 'offline_lib')
+				cache = os.path.join(home, 'cache')
+
+				with patch.dict(os.environ, {
+					'ALMASI_PATH'     : cache,
+					'ALMASI_GIT_BASE' : home,
+				}):
+					checkout = almasi.services.Libraries.clone('offline_lib')
+					subprocess.run([
+						'git', '-C', checkout, 'remote', 'set-url', 'origin',
+						os.path.join(home, 'not-found')
+					], check=True)
+
+					log = StringIO()
+
+					with redirect_stdout(log):
+						with patch.dict(sys.modules):
+							library = almasi.services.Libraries.imp('offline_lib')
+							assert library.__name__ == 'almasi.offline_lib'
+
+					assert 'almasi.offline_lib: pulling new version ... failed, using local version' in log.getvalue()
+		finally:
+			almasi.Imports.__lib__, almasi.Tester.__lib__, almasi.Undefined.__lib__ = ownership
+			almasi.__dict__.pop('offline_lib', None)
+
+	# Recheck requirements for each new process, but not each repeated import.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_requirements_run_once_per_loaded_library(cls):
+		ownership = cls._ownership()
+
+		try:
+			with tempfile.TemporaryDirectory() as home:
+				source = cls._library(home, 'deps_lib')
+				requirements = os.path.join(source, 'requirements.txt')
+
+				with open(requirements, 'w') as stream:
+					stream.write('test-package>=1\n')
+
+				with patch.dict(os.environ, {'ALMASI_PATH': home}):
+					with patch('subprocess.run', return_value=subprocess.CompletedProcess([], 0)) as runner:
+						log = StringIO()
+
+						with redirect_stdout(log):
+							with patch.dict(sys.modules):
+								library = almasi.services.Libraries.imp('deps_lib')
+								assert almasi.services.Libraries.imp('deps_lib') is library
+
+							with patch.dict(sys.modules):
+								almasi.services.Libraries.imp('deps_lib')
+
+						assert runner.call_count == 2
+						assert runner.call_args.args[0] == [
+							sys.executable, '-m', 'pip', 'install', '-r', requirements
+						]
+						assert log.getvalue().count('almasi.deps_lib: installing requirements ... done') == 2
+		finally:
+			almasi.Imports.__lib__, almasi.Tester.__lib__, almasi.Undefined.__lib__ = ownership
+			almasi.__dict__.pop('deps_lib', None)
+
+	# Do not publish a library whose dependencies could not be prepared.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_failed_requirements_prevent_import(cls):
+		with tempfile.TemporaryDirectory() as home:
+			source = cls._library(home, 'missing_deps')
+
+			with open(os.path.join(source, 'requirements.txt'), 'w') as stream:
+				stream.write('unavailable-package\n')
+
+			failure = subprocess.CompletedProcess([], 1, stderr='dependency unavailable')
+
+			with patch.dict(os.environ, {'ALMASI_PATH': home}):
+				with patch('subprocess.run', return_value=failure):
+					with patch.dict(sys.modules):
+						with TestCase().assertRaisesRegex(RuntimeError, 'dependency unavailable'):
+							almasi.services.Libraries.imp('missing_deps')
+
+						assert 'almasi.missing_deps' not in sys.modules
 
 	# Reject invalid names before constructing a Git command or a module.
 	# ----------------------------------------------------------------------
