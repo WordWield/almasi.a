@@ -189,66 +189,78 @@ See [the current filesystem invariants](docs/almasi_invariants8.md) for identity
 
 ## Qualified Almasi library imports
 
-The existing `a` distribution also installs the `almasi` import namespace:
+The core installs both the canonical \`a\` library and the \`almasi\` namespace:
 
-```python
+\`\`\`python
+from almasi import web, o, mcp
+\`\`\`
+
+The package-level \`almasi.__getattr__\` delegates to the native
+\`a.services.Libraries\` Singleton. A library is loaded under its qualified
+identity, such as \`almasi.mcp\`, and \`a.extend('mcp')\` publishes the canonical
+instance in \`sys.modules\`. The official MCP SDK retains the unrelated top-level
+\`import mcp\` identity.
+
+\`\`\`text
 from almasi import web
-```
+    -> Libraries.imp('web')
+    -> reuse sys.modules['almasi.web'], if already loaded
+    -> reuse an existing local checkout, if available
+    -> otherwise clone WordWield/almasi.web into the library directory
+    -> load the entry file as almasi.web
+    -> reuse the same canonical instance on subsequent imports
+\`\`\`
 
-The namespace's `__getattr__` delegates to the canonical
-`a.services.Libraries` Singleton. It uses Python's standard `importlib`
-to execute the library entry point as `almasi.web`; existing `a.extend()`
-publishes its canonical instance in `sys.modules`. The existing Almasi
-`Imports` component remains unchanged. No global Python import hook,
-second loaded-library registry or separate Almasi installation is needed.
+No manual \`Libraries.initialize()\` call or separate installation of each
+Almasi library is necessary. The default source directory is
+\`~/.cache/almasi/libraries\`, with optional settings:
 
-```python
-import a
+| Environment variable | Purpose |
+| --- | --- |
+| \`ALMASI_PATH\` | Override the directory containing acquired libraries |
+| \`ALMASI_GIT_BASE\` | Override the Git source base; default \`https://github.com/WordWield\` |
 
-a.services.Libraries.initialize(
-	path  = '/path/to/almasi',
-	owner = 'apodgorny'
-)
+For example, \`ALMASI_GIT_BASE=git@github.com:WordWield\` uses SSH
+authentication. Private repositories require suitable Git credentials.
 
-checkout = a.services.Libraries.clone('web')
-web      = a.services.Libraries.imp('web')
-```
+The supported library layouts are \`<checkout>/<name>.py\` and
+\`<checkout>/almasi/<name>.py\`, both with a \`root/\` directory.
+The nested entry point preserves independent top-level Python packages,
+particularly the official MCP SDK. Checkout acquisition uses a temporary
+sibling directory; only a complete source tree is published. A successful
+import never updates an existing checkout.
 
 | Method | Contract |
 | --- | --- |
-| `initialize(path, owner, prefix, ssh)` | Configure source naming and create the checkout directory once |
-| `get_path(name)` | Local checkout path `<path>/almasi.<name>` |
-| `get_url(name)` | Derived Git SSH remote address |
-| `is_cloned(name)` | Whether a complete local source layout exists |
-| `clone(name)` | Clone by Git when absent and return the checkout path |
-| `imp(name)` | Reuse or import the canonical Almasi library instance |
+| \`get_path(name)\` | Resolve the local checkout path |
+| \`get_url(name)\` | Derive the configured Git source |
+| \`is_cloned(name)\` | Check for a usable local checkout |
+| \`clone(name)\` | Acquire the checkout when absent |
+| \`imp(name)\` | Reuse or load the canonical Almasi library |
 
-Repository names follow `almasi.<name>` under the configured Git remote owner.
-No GitHub API, `gh` CLI, remote discovery, or repository enumeration is required.
-Git credentials and SSH configuration remain the responsibility of Git.
+Git handles authentication. Libraries does not currently install third-party
+Python dependencies, pin or verify Git revisions, or guarantee that private
+repositories are accessible. Install any required external packages in the
+active Python environment before using dependent components. Importing a
+library executes its Python source; only trusted repositories should be used.
 
-Call `a.services.Libraries.initialize(...)` before other service methods.
-Automatic initialization has not been wired into the `almasi` namespace yet.
-Libraries does not update checkouts, install third-party Python dependencies,
-or verify Git revisions and publisher trust. Importing a library executes its
-Python code, so use only trusted sources.
-
-Only `from almasi import <name>` is supported by this namespace entry
-point; direct `import almasi.<name>` is a distinct import mechanism.
-
-The PyPI distribution is still named `a` because existing Almasi
-libraries depend on it. Renaming the distribution to `almasi` must be
-coordinated separately.
+This namespace supports \`from almasi import <name>\`. Direct
+\`import almasi.<name>\` uses Python's distinct submodule import mechanism
+and is not part of this contract.
 
 ## Installation
 
-Clone the repository and run the included installer:
+For development, install the core directly from its Git repository:
 
-```bash
-git clone https://github.com/apodgorny/almasi
+\`\`\`bash
+git clone https://github.com/WordWield/almasi.git
 cd almasi
-./install.sh
-```
+python -m pip install -e .
+\`\`\`
+
+The current distribution metadata still uses the name \`a\`.
+PyPI publication and production-wheel packaging are separate release steps;
+the source-acquisition behavior is identical once the core is installed.
 
 ## Author
 
