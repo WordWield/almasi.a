@@ -9,7 +9,6 @@
 # Delegates: Git operations to Git and namespace publication to a.extend().
 # ==============================================================================
 
-import importlib.util
 import os
 import subprocess
 import sys
@@ -78,17 +77,12 @@ class Libraries(a.Singleton):
 		library   = sys.modules.get(qualified)
 
 		if library is None:
-			path   = self.clone(name)
-			spec   = importlib.util.spec_from_file_location(qualified, os.path.join(path, name + '.py'))
-			module = importlib.util.module_from_spec(spec)
-			sys.modules[qualified] = module
-
-			try:
-				spec.loader.exec_module(module)
-			except Exception:
-				sys.modules.pop(qualified, None)
-				raise
-
+			path = self.clone(name)
+			a.Imports.load_module(
+				a,
+				os.path.join(path, name + '.py'),
+				module_name = qualified
+			)
 			library = sys.modules.get(qualified)
 
 		if isinstance(library, a.A):
