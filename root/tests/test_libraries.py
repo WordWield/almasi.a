@@ -238,7 +238,7 @@ class Item(fork_sample.Module):
 							assert library.revision == 'updated'
 							assert almasi.services.Libraries.imp('pull_lib') is library
 
-					assert log.getvalue().count('pulling new version ... done') == 1
+					assert log.getvalue().count('almasi.pull_lib: Checking for updates') == 1
 		finally:
 			almasi.Imports.__lib__, almasi.Tester.__lib__, almasi.Undefined.__lib__ = ownership
 			almasi.__dict__.pop('pull_lib', None)
@@ -271,7 +271,7 @@ class Item(fork_sample.Module):
 							library = almasi.services.Libraries.imp('offline_lib')
 							assert library.__name__ == 'almasi.offline_lib'
 
-					assert 'almasi.offline_lib: pulling new version ... failed, using local version' in log.getvalue()
+					assert '⚠️ almasi.offline_lib: using local version' in log.getvalue()
 		finally:
 			almasi.Imports.__lib__, almasi.Tester.__lib__, almasi.Undefined.__lib__ = ownership
 			almasi.__dict__.pop('offline_lib', None)
@@ -306,7 +306,8 @@ class Item(fork_sample.Module):
 						assert runner.call_args.args[0] == [
 							sys.executable, '-m', 'pip', 'install', '-r', requirements
 						]
-						assert log.getvalue().count('almasi.deps_lib: installing requirements ... done') == 2
+						assert runner.call_args.kwargs['cwd'] == source
+						assert log.getvalue().count('almasi.deps_lib: Installing dependencies') == 2
 		finally:
 			almasi.Imports.__lib__, almasi.Tester.__lib__, almasi.Undefined.__lib__ = ownership
 			almasi.__dict__.pop('deps_lib', None)
@@ -321,10 +322,10 @@ class Item(fork_sample.Module):
 			with open(os.path.join(source, 'requirements.txt'), 'w') as stream:
 				stream.write('unavailable-package\n')
 
-			failure = subprocess.CompletedProcess([], 1, stderr='dependency unavailable')
+			failure = subprocess.CalledProcessError(1, ['pip'], stderr='dependency unavailable')
 
 			with patch.dict(os.environ, {'ALMASI_PATH': home}):
-				with patch('subprocess.run', return_value=failure):
+				with patch('subprocess.run', side_effect=failure):
 					with patch.dict(sys.modules):
 						with TestCase().assertRaisesRegex(RuntimeError, 'dependency unavailable'):
 							almasi.services.Libraries.imp('missing_deps')
