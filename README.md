@@ -224,7 +224,7 @@ code. Both source owner and local checkout directory may be overridden:
 | Environment variable | Default | Purpose |
 | --- | --- | --- |
 | `ALMASI_LIBRARY_OWNER` | `apodgorny` | GitHub user or organization |
-| `ALMASI_PATH` | `~/.almasi/libraries` | Local source checkouts |
+| `ALMASI_PATH` | Required (absolute path) | Shared directory for library checkouts |
 
 Public repositories are discoverable anonymously through GitHub.
 If the `gh` CLI is already authenticated, private repositories may be
