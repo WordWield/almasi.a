@@ -87,8 +87,7 @@ class Module(metaclass=ModuleMeta):
 	# ----------------------------------------------------------------------
 	@property
 	def __app__(self):
-		import a
-		return a.__app__
+		return sys.modules['almasi'].__app__
 
 	# Using new to avoid having to call super().__init__() everywhere
 	# ----------------------------------------------------------------------

@@ -49,8 +49,8 @@ class AMeta(type):
 
 		# Only the bootstrap A class may be declared directly.
 		# ----------------------------------------------------------------------
-		if not is_created_using_extend and (name, module_name) != ('A', 'a'):
-			raise TypeError('Declare libraries with a.extend(), not a class declaration')
+		if not is_created_using_extend and (name, module_name) != ('A', 'almasi'):
+			raise TypeError('Declare libraries with almasi.extend(), not a class declaration')
 
 		if not os.path.exists(path):
 			raise ValueError(f'Could not define class `{name}`. Path `{path}` does not exist')
@@ -147,10 +147,12 @@ class A(metaclass=AMeta, plugins=['Py', 'Json', 'Text', 'Bytes']):
 			if value is not None:
 				break
 
-		if value is None:
+		if value is not None:
+			result = value.load()
+		elif self is A.__instance__ and self._is_valid_library_name(name):
+			result = self.services.Libraries.imp(name)
+		else:
 			raise AttributeError(f'Library `{self.__name__}` has no attribute `{name}`')
-
-		result = value.load()
 		self.__dict__[name] = result
 		self.__cached_names__.add(name)
 		return result

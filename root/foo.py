@@ -1,7 +1,7 @@
-import a
+import almasi
 
 
-class Foo(a.Singleton):
+class Foo(almasi.Singleton):
 	
 	def initialize(self):
 		print('Foo initilized')

@@ -8,10 +8,10 @@ import os
 import subprocess
 import sys
 
-import a
+import almasi
 
 
-class Libraries(a.Singleton):
+class Libraries(almasi.Singleton):
 
 	# ======================================================================
 	# PUBLIC METHODS
@@ -20,7 +20,7 @@ class Libraries(a.Singleton):
 	# Resolve a shared source directory, with an optional environment override.
 	# ----------------------------------------------------------------------
 	def get_path(self, name):
-		if not a._is_valid_library_name(name):
+		if not almasi._is_valid_library_name(name):
 			raise ValueError(f'Invalid library name: {name!r}')
 
 		directory = os.environ.get('ALMASI_PATH') or os.path.join(
@@ -68,14 +68,14 @@ class Libraries(a.Singleton):
 			if not os.path.isfile(entry):
 				entry = os.path.join(path, 'almasi', name + '.py')
 
-			a.Imports.load_module(
+			almasi.Imports.load_module(
 				a,
 				entry,
 				module_name = qualified
 			)
 			library = sys.modules.get(qualified)
 
-		if not isinstance(library, a.A):
+		if not isinstance(library, almasi.A):
 			raise ImportError(f'Not an Almasi library: {qualified}')
 
 		return library
