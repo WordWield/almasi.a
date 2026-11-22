@@ -11,16 +11,17 @@ class Spinner:
 	# ----------------------------------------------------------------------
 	def __init__(self, *args, done_label=None, failure_label=None, **kwargs):
 		from yaspin import yaspin
-		self._spinner   = yaspin(*args, **kwargs)
-		self.done_label = done_label
+		self._spinner    = yaspin(*args, **kwargs)
+		self.stream      = kwargs.get('stream', sys.stdout)
+		self.done_label  = done_label
 		self.failure_label = failure_label
 
 	# Keep the cursor hidden while the operation is active.
 	# ----------------------------------------------------------------------
 	def __enter__(self):
 		self._spinner.__enter__()
-		if sys.stdout.isatty():
-			print('\033[?25l', end='', flush=True)
+		if self.stream.isatty():
+			print('\033[?25l', end='', flush=True, file=self.stream)
 		return self._spinner
 
 	# Restore terminal state on every exit and report success only.
@@ -28,9 +29,9 @@ class Spinner:
 	def __exit__(self, exc_type, exc_value, traceback):
 		self._spinner.__exit__(exc_type, exc_value, traceback)
 		if exc_type is None:
-			print('\033[1;32m✔\033[0m ' + self._spinner.text if self.done_label is None else self.done_label)
+			print('\033[1;32m✔\033[0m ' + self._spinner.text if self.done_label is None else self.done_label, file=self.stream)
 		elif self.failure_label is not None:
-			print(self.failure_label)
+			print(self.failure_label, file=self.stream)
 
 	# Share the same entry lifecycle with asynchronous operations.
 	# ----------------------------------------------------------------------

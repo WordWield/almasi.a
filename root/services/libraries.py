@@ -35,7 +35,7 @@ class Libraries(almasi.Singleton):
 		label = f'almasi.{name}: {operation}'
 
 		try:
-			with almasi.Spinner(text=label, failure_label=f'❌ {label}'):
+			with almasi.Spinner(text=label, stream=sys.stderr, failure_label=f'❌ {label}'):
 				subprocess.run(
 					command,
 					cwd            = cwd,
@@ -59,7 +59,7 @@ class Libraries(almasi.Singleton):
 				timeout = 15
 			)
 		except RuntimeError as error:
-			print(f'⚠️ almasi.{name}: using local version ({error.__cause__})')
+			print(f'⚠️ almasi.{name}: using local version ({error.__cause__})', file=sys.stderr)
 
 	# Install requirements using the library's working directory.
 	# ----------------------------------------------------------------------
