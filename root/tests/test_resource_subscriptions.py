@@ -11,7 +11,7 @@ import threading
 import time
 import uuid
 
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from watchfiles import Change
 
@@ -19,6 +19,16 @@ import almasi
 
 
 class TestResourceSubscriptions(almasi.Tester):
+
+	# ==========================================================================
+	# PRIVATE METHODS
+	# ==========================================================================
+
+	# Simulate an invalidation delivered as a freshly loaded file is observed.
+	# --------------------------------------------------------------------------
+	@staticmethod
+	def _invalidate_on_load(file):
+		file._invalidate()
 
 	# ==========================================================================
 	# PUBLIC METHODS
@@ -72,6 +82,23 @@ class TestResourceSubscriptions(almasi.Tester):
 			assert file.read() == 'text'
 			assert directory.read() is directory
 			assert directory.read('notes.txt') == 'text'
+
+	# Preserve the loaded value when its observation hook invalidates the cache.
+	# --------------------------------------------------------------------------
+	@classmethod
+	def test_file_load_survives_invalidation_during_on_load(cls):
+		loaded_class = type('ObservedClass', (), {
+			'__on_load__': staticmethod(cls._invalidate_on_load)
+		})
+		loader = Mock(return_value=loaded_class)
+		file   = almasi.File(almasi, __file__, 'almasi.observed', load_method=loader)
+
+		assert file.load() is loaded_class
+		assert not file._loaded
+		assert file._data is None
+
+		assert file.load() is loaded_class
+		assert loader.call_count == 2
 
 	# Reject computed or unrelated resources at the filesystem boundary.
 	# --------------------------------------------------------------------------
