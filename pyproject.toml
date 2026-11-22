@@ -5,8 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "almasi"
 version = "0.1.0"
+description = "A filesystem-native Python runtime for composing libraries."
+readme = "README.md"
+license = "Apache-2.0"
 requires-python = ">=3.11"
 dependencies = ['yaspin', 'watchfiles>=1,<2']
+
+[project.urls]
+Source = "https://github.com/WordWield/almasi"
 
 [tool.setuptools]
 py-modules = ["almasi"]
