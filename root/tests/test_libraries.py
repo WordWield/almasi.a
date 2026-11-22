@@ -1,7 +1,12 @@
 # ==============================================================================
 # TEST LIBRARIES
 # ==============================================================================
-# Verify on-demand library imports and isolated local Git acquisition.
+# PURPOSE:
+# Verify canonical library imports and Git acquisition without authentication.
+#
+# RESPONSIBILITY BOUNDARIES:
+# Owns: Loader behavior checks and isolated Git fixtures.
+# Delegates: Module publication to Almasi and Git cloning to the Git CLI.
 # ==============================================================================
 
 import os
@@ -10,8 +15,9 @@ import sys
 import tempfile
 import types
 
-from unittest      import TestCase
-from unittest.mock import patch
+from concurrent.futures import ThreadPoolExecutor
+from unittest          import TestCase
+from unittest.mock     import patch
 
 import a
 import almasi
@@ -23,39 +29,62 @@ class TestLibraries(a.Tester):
 	# PRIVATE METHODS
 	# ======================================================================
 
-	# Create a source library with the ordinary Almasi entry-point contract.
+	# Build a valid source repository with the normal Almasi entry point.
 	# ----------------------------------------------------------------------
 	@staticmethod
 	def _library(directory, name, source=None):
 		path = os.path.join(directory, name)
 		os.makedirs(os.path.join(path, 'root'), exist_ok=True)
 
+		if source is None:
+			source = f'''import a
+
+{name} = a.extend('{name}')
+'''
+
 		with open(os.path.join(path, name + '.py'), 'w') as file:
-			file.write(source or f"import a\n\n{name} = a.extend('{name}')\n")
+			file.write(source)
 
 		with open(os.path.join(path, 'root', '.gitkeep'), 'w') as file:
 			file.write('')
 
 		return path
 
-	# Restore the shared core ownership changed by library publication.
+	# Preserve shared core owners changed by library publication in tests.
 	# ----------------------------------------------------------------------
 	@staticmethod
 	def _ownership():
 		return a.Imports.__lib__, a.Tester.__lib__, a.Undefined.__lib__
 
+	# Create a committed local Git repository for clone tests.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def _git_origin(cls, directory, name):
+		origin = cls._library(directory, name)
+
+		subprocess.run(['git', 'init', '-q', origin], check=True)
+		subprocess.run(['git', '-C', origin, 'add', '.'], check=True)
+		subprocess.run([
+			'git', '-C', origin, '-c', 'user.email=almasi@example.test',
+			'-c', 'user.name=Almasi Test', 'commit', '-q', '-m', 'Fixture'
+		], check=True)
+
+		return origin
+
 	# ======================================================================
 	# PUBLIC METHODS
 	# ======================================================================
 
-	# Expose the same Singleton from both the core and the import namespace.
+	# Resolve the Singleton as a native Almasi service, not as an alias.
 	# ----------------------------------------------------------------------
 	@classmethod
-	def test_namespace_shares_service(cls):
-		assert almasi.Libraries is a.Libraries
-		assert a.Libraries is a.Libraries
+	def test_native_service(cls):
+		service = a.services.Libraries
 
-	# Import locally once and reuse the canonical published library instance.
+		assert isinstance(service, a.Singleton)
+		assert service is a.services.Libraries
+
+	# Import through the Python from-list protocol and reuse one library.
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_qualified_import_reuses_instance(cls):
@@ -67,18 +96,18 @@ class TestLibraries(a.Tester):
 
 				with patch.dict(os.environ, {'ALMASI_LIBRARY_DIR': home}):
 					with patch.dict(sys.modules):
-						from almasi import sample_lib
-						from almasi import sample_lib as again
+						package = __import__('almasi', fromlist=['sample_lib'])
+						library = getattr(package, 'sample_lib')
 
-						assert sample_lib is again
-						assert sys.modules['almasi.sample_lib'] is sample_lib
-						assert sample_lib.__name__ == 'almasi.sample_lib'
-						assert a.Libraries.imp('sample_lib') is sample_lib
+						assert library is getattr(package, 'sample_lib')
+						assert sys.modules['almasi.sample_lib'] is library
+						assert library.__name__ == 'almasi.sample_lib'
+						assert a.services.Libraries.imp('sample_lib') is library
 		finally:
 			a.Imports.__lib__, a.Tester.__lib__, a.Undefined.__lib__ = ownership
 			almasi.__dict__.pop('sample_lib', None)
 
-	# Let a qualified Almasi MCP library coexist with a top-level MCP SDK.
+	# Preserve the official MCP SDK's independent Python module identity.
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_almasi_mcp_does_not_replace_sdk(cls):
@@ -91,17 +120,17 @@ class TestLibraries(a.Tester):
 
 				with patch.dict(os.environ, {'ALMASI_LIBRARY_DIR': home}):
 					with patch.dict(sys.modules, {'mcp': sdk}):
-						from almasi import mcp
-						import mcp as imported_sdk
+						package = __import__('almasi', fromlist=['mcp'])
+						library = getattr(package, 'mcp')
 
-						assert imported_sdk is sdk
-						assert mcp is not sdk
-						assert sys.modules['almasi.mcp'] is mcp
+						assert __import__('mcp') is sdk
+						assert library is not sdk
+						assert sys.modules['almasi.mcp'] is library
 		finally:
 			a.Imports.__lib__, a.Tester.__lib__, a.Undefined.__lib__ = ownership
 			almasi.__dict__.pop('mcp', None)
 
-	# Combine local and remote names without maintaining a second registry.
+	# Combine cached and remote names without persisting another registry.
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_list_merges_local_and_discoverable(cls):
@@ -109,43 +138,55 @@ class TestLibraries(a.Tester):
 			cls._library(home, 'local_lib')
 
 			with patch.dict(os.environ, {'ALMASI_LIBRARY_DIR': home}):
-				with patch.object(type(a.Libraries), '_remote_repositories', return_value={'web': 'https://github.com/example/almasi.web.git'}):
-					assert a.Libraries.list() == ['local_lib', 'web']
+				with patch.object(type(a.services.Libraries), '_remote_repositories',
+								  return_value={'web': 'https://github.com/example/almasi.web.git'}):
+					assert a.services.Libraries.list() == ['local_lib', 'web']
 
-	# Git clone must finish and validate before publishing its destination.
+	# Clone once and reuse a validated checkout.
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_clone_uses_local_git_and_is_idempotent(cls):
 		with tempfile.TemporaryDirectory() as home:
-			origin = cls._library(home, 'cloned_lib')
+			origin = cls._git_origin(home, 'cloned_lib')
 			cache  = os.path.join(home, 'cache')
 
-			subprocess.run(['git', 'init', '-q', origin], check=True)
-			subprocess.run(['git', '-C', origin, 'add', '.'], check=True)
-			subprocess.run([
-				'git', '-C', origin, '-c', 'user.email=almasi@example.test',
-				'-c', 'user.name=Almasi Test', 'commit', '-q', '-m', 'Fixture'
-			], check=True)
-
 			with patch.dict(os.environ, {'ALMASI_LIBRARY_DIR': cache}):
-				with patch.object(type(a.Libraries), '_remote_repositories', return_value={'cloned_lib': origin}):
-					path = a.Libraries.clone('cloned_lib')
+				with patch.object(type(a.services.Libraries), '_remote_repositories',
+								  return_value={'cloned_lib': origin}):
+					path = a.services.Libraries.clone('cloned_lib')
 
 					assert os.path.isfile(os.path.join(path, 'cloned_lib.py'))
-					assert path == a.Libraries.clone('cloned_lib')
+					assert path == a.services.Libraries.clone('cloned_lib')
 					assert sorted(os.listdir(cache)) == ['cloned_lib']
 
-	# Reject unexpected names before constructing a Git URL or importing.
+	# Concurrent Git clones cannot publish a partially downloaded source.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_simultaneous_clones_share_checkout(cls):
+		with tempfile.TemporaryDirectory() as home:
+			origin = cls._git_origin(home, 'parallel_lib')
+			cache  = os.path.join(home, 'cache')
+
+			with patch.dict(os.environ, {'ALMASI_LIBRARY_DIR': cache}):
+				with patch.object(type(a.services.Libraries), '_remote_repositories',
+								  return_value={'parallel_lib': origin}):
+					with ThreadPoolExecutor(max_workers=2) as executor:
+						paths = list(executor.map(a.services.Libraries.clone, ['parallel_lib'] * 2))
+
+					assert paths[0] == paths[1]
+					assert sorted(os.listdir(cache)) == ['parallel_lib']
+
+	# Reject invalid names before constructing a Git command or a module.
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_invalid_names_do_not_resolve(cls):
 		with TestCase().assertRaises(ValueError):
-			a.Libraries.imp('../outside')
+			a.services.Libraries.imp('../outside')
 
 		with TestCase().assertRaises(ValueError):
-			a.Libraries.clone('NotSnakeCase')
+			a.services.Libraries.clone('NotSnakeCase')
 
-	# Keep failed entry-point execution out of canonical Python modules.
+	# Failed source execution leaves no falsely published library module.
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_failed_import_cleans_publication(cls):
@@ -155,7 +196,7 @@ class TestLibraries(a.Tester):
 			with patch.dict(os.environ, {'ALMASI_LIBRARY_DIR': home}):
 				with patch.dict(sys.modules):
 					with TestCase().assertRaisesRegex(RuntimeError, 'broken source'):
-						a.Libraries.imp('broken_lib')
+						a.services.Libraries.imp('broken_lib')
 
 					assert 'almasi.broken_lib' not in sys.modules
 
