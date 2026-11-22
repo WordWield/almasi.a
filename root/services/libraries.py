@@ -61,8 +61,8 @@ class Libraries(a.Singleton):
 	# ----------------------------------------------------------------------
 	def get_url(self, name):
 		self._validate_name(name)
-		base   = os.environ.get('ALMASI_GIT_BASE', 'https://github.com/WordWield')
-		result = f'{base.rstrip("/")}/almasi.{name}.git'
+		base   = os.environ.get('ALMASI_GIT_BASE', 'https://github.com/WordWield').rstrip('/')
+		result = f'{base}/almasi.{name}.git'
 		return result
 
 	# Recognize a locally available library without contacting Git.
