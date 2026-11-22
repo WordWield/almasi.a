@@ -187,6 +187,66 @@ Atomic writes and copies publish completed hidden temporary files with `os.repla
 
 See [the current filesystem invariants](docs/almasi_invariants8.md) for identity, reserved names, inheritance and cache scope.
 
+## Qualified Almasi library imports
+
+The base distribution also ships the `almasi` Python import namespace.
+No second Almasi distribution or global import hook is needed:
+
+```python
+from almasi import web
+
+# A canonical Almasi library instance, once its source is available.
+assert web.__name__ == 'almasi.web'
+```
+
+The `Libraries` Singleton is owned by the Almasi core. The public
+operations are available as `a.Libraries` or `almasi.Libraries`:
+
+| Method | Return | Behavior |
+| --- | --- | --- |
+| `list()` | `list[str]` | Names of locally acquired, already loaded, and discoverable remote libraries |
+| `clone(name)` | `str` | Path to a complete checkout, cloned once when missing |
+| `imp(name)` | Almasi library instance | Reuse the published `almasi.<name>`, load local source, or acquire and load missing source |
+
+`from almasi import web` uses package-level `__getattr__`, which delegates
+to `Libraries.imp('web')`. Existing `a.extend()` publishes the canonical
+instance in `sys.modules`; there is no parallel loaded-library registry.
+Direct `import almasi.web` is **not** an API guaranteed by this entry point.
+
+By default, `Libraries` searches repositories named `almasi.<name>`
+owned by GitHub account `apodgorny`. Its source and checkout location can
+be configured without changing library code:
+
+| Environment variable | Default | Purpose |
+| --- | --- | --- |
+| `ALMASI_LIBRARY_OWNER` | `apodgorny` | GitHub account or organization containing libraries |
+| `ALMASI_LIBRARY_DIR` | `~/.almasi/libraries` | Shared local checkout directory |
+
+Remote discovery uses GitHub's public REST API without a login. If an
+already-authenticated `gh` CLI is available, `list()` can also discover
+private repositories visible to that login. **SSH keys alone cannot list
+private GitHub repositories via the API**: a known private
+`almasi.<name>` can still be acquired by `clone(name)` or `imp(name)`
+using the local Git/SSH credentials. No OAuth flow or Almasi Auth service
+is invoked by Libraries.
+
+A locally acquired library loads offline. Failed or incomplete clones
+never become available as a valid local source. Import does not update
+existing checkouts. If a Python dependency required by an acquired
+library is missing, install it into the current Python environment
+separately; this initial loader is not a pip dependency manager.
+
+**Security:** importing a cloned Python library executes its code.
+Only configure owners you trust. Repository name and entry-point checks
+do not verify source integrity or pin a revision. A production hub needs
+an explicit trust, revision, and dependency policy before accepting
+untrusted publishers.
+
+The current pip distribution name remains `a` while downstream Almasi
+packages still declare that dependency. This change adds the `almasi`
+*import namespace* to the same installation; migration of the published
+distribution name to `almasi` must be coordinated with those packages.
+
 ## Installation
 
 Clone the repository and run the included installer:
