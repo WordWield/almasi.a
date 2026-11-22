@@ -24,7 +24,6 @@ import a
 class Libraries(a.Singleton):
 
 	OWNER     = 'apodgorny'
-	DIRECTORY = '~/.almasi/libraries'
 	PREFIX    = 'almasi.'
 	API       = 'https://api.github.com'
 	SSH       = 'git@github.com'
@@ -36,10 +35,7 @@ class Libraries(a.Singleton):
 	# Derive a library's checkout from its name and shared library path.
 	# ----------------------------------------------------------------------
 	def _get_path(self, name):
-		directory = os.path.realpath(os.path.expanduser(
-			os.environ.get('ALMASI_PATH', self.DIRECTORY)
-		))
-		return os.path.join(directory, name)
+		return os.path.join(os.environ['ALMASI_PATH'], name)
 
 	# Check whether a complete checkout already exists.
 	# ----------------------------------------------------------------------
