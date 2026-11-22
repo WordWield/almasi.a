@@ -64,17 +64,6 @@ class Libraries(a.Singleton):
 
 		return repos
 
-	# Select only Almasi libraries from the repository catalogue.
-	# ----------------------------------------------------------------------
-	def _repositories(self):
-		repos = self._list_all_repos()
-		return {
-			name.removeprefix(self.PREFIX): url
-			for name, url in repos.items()
-			if name.startswith(self.PREFIX)
-			and a._is_valid_library_name(name.removeprefix(self.PREFIX))
-		}
-
 	# ======================================================================
 	# PUBLIC METHODS
 	# ======================================================================
@@ -95,14 +84,20 @@ class Libraries(a.Singleton):
 	# ----------------------------------------------------------------------
 	def get_url(self, name):
 		owner = os.environ.get('ALMASI_LIBRARY_OWNER', self.OWNER)
-		return self._repositories().get(
-			name, f'{self.SSH}:{owner}/{self.PREFIX}{name}.git'
+		return self._list_all_repos().get(
+			self.PREFIX + name, f'{self.SSH}:{owner}/{self.PREFIX}{name}.git'
 		)
 
-	# Discover currently published libraries on GitHub.
+	# Discover Almasi library names from the repository catalogue.
 	# ----------------------------------------------------------------------
 	def list(self):
-		return sorted(self._repositories())
+		repos = self._list_all_repos()
+		return sorted(
+			name.removeprefix(self.PREFIX)
+			for name in repos
+			if name.startswith(self.PREFIX)
+			and a._is_valid_library_name(name.removeprefix(self.PREFIX))
+		)
 
 	# Get source with Git; publish only a complete checkout.
 	# ----------------------------------------------------------------------
