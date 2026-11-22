@@ -1,7 +1,12 @@
 # ==============================================================================
 # LIBRARIES
 # ==============================================================================
-# Acquire Almasi source libraries and publish their canonical Python identities.
+# PURPOSE:
+# Acquire and prepare Almasi libraries before publishing their Python identities.
+#
+# RESPONSIBILITY BOUNDARIES:
+# Owns: Git source acquisition, dependency preparation and loading readiness.
+# Delegates: Python module publication to Imports and dependencies to pip.
 # ==============================================================================
 
 import os
@@ -12,6 +17,59 @@ import almasi
 
 
 class Libraries(almasi.Singleton):
+
+	# ======================================================================
+	# PRIVATE METHODS
+	# ======================================================================
+
+	# Report an acquisition step while keeping command output out of the console.
+	# ----------------------------------------------------------------------
+	def _run(
+		self,
+		name,
+		operation,
+		command,
+		allow_failure = False,
+		timeout       = None
+	):
+		print(f'almasi.{name}: {operation} ... ', end='', flush=True)
+
+		try:
+			result = subprocess.run(command, capture_output=True, text=True, timeout=timeout)
+		except (OSError, subprocess.TimeoutExpired) as error:
+			result = subprocess.CompletedProcess(command, 1, stderr=str(error))
+
+		if result.returncode == 0:
+			print('done')
+		elif allow_failure:
+			print('failed, using local version')
+		else:
+			print('failed')
+			details = (result.stderr or result.stdout or 'Unknown error').strip()
+			raise RuntimeError(f'almasi.{name}: {operation} failed: {details}')
+
+	# Refresh only Git-managed source; a failed update retains the local checkout.
+	# ----------------------------------------------------------------------
+	def _pull(self, name):
+		self._run(
+			name,
+			'pulling new version',
+			['git', '-C', self.get_path(name), 'pull', '--ff-only', '--quiet'],
+			allow_failure = True,
+			timeout       = 15
+		)
+
+	# Let pip determine whether current interpreter dependencies are satisfied.
+	# ----------------------------------------------------------------------
+	def _install_requirements(self, name):
+		requirements = os.path.join(self.get_path(name), 'requirements.txt')
+
+		if os.path.isfile(requirements):
+			self._run(
+				name,
+				'installing requirements',
+				[sys.executable, '-m', 'pip', 'install', '-r', requirements]
+			)
 
 	# ======================================================================
 	# PUBLIC METHODS
@@ -48,21 +106,31 @@ class Libraries(almasi.Singleton):
 
 		if not self.is_cloned(name):
 			os.makedirs(os.path.dirname(destination), exist_ok=True)
-			subprocess.run(
-				['git', 'clone', '--quiet', '--', self.get_url(name), destination],
-				check = True
+			self._run(
+				name,
+				'cloning',
+				['git', 'clone', '--quiet', '--', self.get_url(name), destination]
 			)
 
 		return destination
 
-	# Reuse the published library or execute its source under its qualified name.
+	# Reuse a loaded library; otherwise prepare source and its dependencies.
 	# ----------------------------------------------------------------------
 	def imp(self, name):
 		qualified = f'almasi.{name}'
 		library   = sys.modules.get(qualified)
 
 		if library is None:
-			path  = self.clone(name)
+			path = self.get_path(name)
+
+			if self.is_cloned(name):
+				if os.path.exists(os.path.join(path, '.git')):
+					self._pull(name)
+			else:
+				path = self.clone(name)
+
+			self._install_requirements(name)
+
 			entry = os.path.join(path, name + '.py')
 
 			if not os.path.isfile(entry):
@@ -75,7 +143,9 @@ class Libraries(almasi.Singleton):
 			)
 			library = sys.modules.get(qualified)
 
-		if not isinstance(library, almasi.A):
+		if isinstance(library, almasi.A):
+			result = library
+		else:
 			raise ImportError(f'Not an Almasi library: {qualified}')
 
-		return library
+		return result
