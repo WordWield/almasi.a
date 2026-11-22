@@ -205,8 +205,9 @@ instance in `sys.modules`. The official MCP SDK retains the unrelated top-level
 from almasi import web
     -> Libraries.imp('web')
     -> reuse sys.modules['almasi.web'], if already loaded
-    -> reuse an existing local checkout, if available
+    -> reuse and try to fast-forward an existing local Git checkout
     -> otherwise clone WordWield/almasi.web into the library directory
+    -> install requirements.txt dependencies, if declared
     -> load the entry file as almasi.web
     -> reuse the same canonical instance on subsequent imports
 ```
@@ -227,7 +228,7 @@ The supported library layouts are `<checkout>/<name>.py` and
 `<checkout>/almasi/<name>.py`, both with a `root/` directory.
 The nested entry point preserves independent top-level Python packages,
 particularly the official MCP SDK. Git clones directly into the target directory;
-existing checkout directories are reused without updates. An interrupted clone
+existing Git checkouts are updated with `git pull --ff-only` before first import in a process; if updating fails, the local version is used. An interrupted clone
 may require removing its incomplete directory before retrying.
 
 | Method | Contract |
@@ -238,9 +239,11 @@ may require removing its incomplete directory before retrying.
 | `clone(name)` | Acquire the checkout when absent |
 | `imp(name)` | Reuse or load the canonical Almasi library |
 
-Git handles authentication. Libraries acquires and loads Almasi source but
-does not install third-party Python dependencies; these must already be available
-in the active environment. Library checkouts are not pip-installed distributions.
+Git handles authentication. Libraries acquires Almasi source and installs declared
+`requirements.txt` dependencies using the active Python environment before loading
+the library. Dependencies are prepared once per library import in each process,
+not on repeated accesses to an already loaded library. Library checkouts are not
+pip-installed distributions.
 Git revisions are not pinned or verified, and private repositories still require
 suitable Git credentials. Importing a library executes its Python source; only
 trusted repositories should be used.
