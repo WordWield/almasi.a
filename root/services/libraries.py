@@ -47,7 +47,7 @@ class Libraries(almasi.Singleton):
 		except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
 			details = getattr(error, 'stderr', None) or str(error)
 			print(f'-> ❌ failed: {str(details).strip()}')
-			raise RuntimeError(f'almasi.{name}: {operation} failed') from error
+			raise RuntimeError(f'almasi.{name}: {operation} failed: {str(details).strip()}') from error
 		else:
 			print(f'-> ✅ {completed}')
 
