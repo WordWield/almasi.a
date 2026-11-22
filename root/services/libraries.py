@@ -4,12 +4,9 @@
 # Acquire Almasi source libraries and publish their canonical Python identities.
 # ==============================================================================
 
-import errno
 import os
-import shutil
 import subprocess
 import sys
-import tempfile
 
 import a
 
@@ -72,47 +69,21 @@ class Libraries(a.Singleton):
 		result = self._is_checkout(self.get_path(name), name)
 		return result
 
-	# Acquire into a sibling directory and publish only a complete checkout.
-	# A concurrent publisher can win without losing its usable checkout.
+	# Clone missing source into its local library directory.
 	# ----------------------------------------------------------------------
 	def clone(self, name):
 		destination = self.get_path(name)
 
 		if not self.is_cloned(name):
-			if os.path.lexists(destination) and not self.is_cloned(name):
-				raise FileExistsError(f'Incomplete library checkout: {destination}')
-
 			os.makedirs(os.path.dirname(destination), exist_ok=True)
-			staging = tempfile.mkdtemp(
-				prefix = f'.almasi.{name}-',
-				dir    = os.path.dirname(destination)
+			subprocess.run(
+				['git', 'clone', '--quiet', '--', self.get_url(name), destination],
+				check = True
 			)
-
-			try:
-				subprocess.run(
-					['git', 'clone', '--quiet', '--', self.get_url(name), staging],
-					check = True
-				)
-
-				if not self._is_checkout(staging, name):
-					raise ImportError(f'Invalid Almasi library source: {name}')
-
-				try:
-					os.rename(staging, destination)
-				except OSError as error:
-					is_competing_checkout = (
-						error.errno in (errno.EEXIST, errno.ENOTEMPTY)
-						and self.is_cloned(name)
-					)
-					if not is_competing_checkout:
-						raise
-			finally:
-				if os.path.exists(staging):
-					shutil.rmtree(staging)
 
 		return destination
 
-	# Reuse the published library or execute its source under its qualified name.
+		# Reuse the published library or execute its source under its qualified name.
 	# ----------------------------------------------------------------------
 	def imp(self, name):
 		self._validate_name(name)
