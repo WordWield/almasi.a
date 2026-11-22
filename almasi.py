@@ -240,7 +240,7 @@ class A(metaclass=AMeta, plugins=['Py', 'Json', 'Text', 'Bytes']):
 			# Resolve canonical Almasi from-list imports against this fork.
 			# ----------------------------------------------------------------------
 			fork_names = {
-				part for part in fromlist
+				part for part in fromlist or ()
 				if name == 'almasi' and level == 0
 				and f'almasi.{part}' in self.__fork_import_names__
 			}
