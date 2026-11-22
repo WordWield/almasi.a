@@ -205,42 +205,33 @@ second loaded-library registry or separate Almasi installation is needed.
 ```python
 import a
 
-available = a.services.Libraries.list()
-checkout  = a.services.Libraries.clone('web')
-web       = a.services.Libraries.imp('web')
+a.services.Libraries.initialize(
+	path  = '/path/to/almasi',
+	owner = 'apodgorny'
+)
+
+checkout = a.services.Libraries.clone('web')
+web      = a.services.Libraries.imp('web')
 ```
 
 | Method | Contract |
 | --- | --- |
-| `list()` | Sorted names of discoverable GitHub libraries |
-| `clone(name)` | Path of a complete local Git checkout, acquiring it only if absent |
-| `imp(name)` | Canonical Almasi library instance; reuse loaded, load local or clone then import |
+| `initialize(path, owner, prefix, ssh)` | Configure source naming and create the checkout directory once |
+| `get_path(name)` | Local checkout path `<path>/almasi.<name>` |
+| `get_url(name)` | Derived Git SSH remote address |
+| `is_cloned(name)` | Whether a complete local source layout exists |
+| `clone(name)` | Clone by Git when absent and return the checkout path |
+| `imp(name)` | Reuse or import the canonical Almasi library instance |
 
-The repository naming convention is `almasi.<name>`, initially under
-GitHub account `apodgorny`. Its default is the replaceable
-`Libraries.OWNER` constant, not a value embedded in operational
-code. Both source owner and local checkout directory may be overridden:
+Repository names follow `almasi.<name>` under the configured Git remote owner.
+No GitHub API, `gh` CLI, remote discovery, or repository enumeration is required.
+Git credentials and SSH configuration remain the responsibility of Git.
 
-| Environment variable | Default | Purpose |
-| --- | --- | --- |
-| `ALMASI_LIBRARY_OWNER` | `apodgorny` | GitHub user or organization |
-| `ALMASI_PATH` | Required (absolute path) | Shared directory for library checkouts |
-
-Public repositories are discoverable anonymously through GitHub.
-If the `gh` CLI is already authenticated, private repositories may be
-listed as well. Local SSH keys allow cloning known private repositories
-without Almasi Auth. No credentials are stored by Libraries.
-
-Git handles its own repository operations; clones are staged in unique
-temporary paths and published after checking the source layout. A
-simultaneous clone can use a completed checkout already published by
-another caller. Git does not serialize concurrent Python imports.
-
+Call `a.services.Libraries.initialize(...)` before other service methods.
+Automatic initialization has not been wired into the `almasi` namespace yet.
 Libraries does not update checkouts, install third-party Python dependencies,
-or verify Git revisions and publisher trust. Imports execute the repository's
-Python code: use only trusted sources. A future Hub can add source-trust
-and version-selection policies without moving project or authentication
-responsibilities into Libraries.
+or verify Git revisions and publisher trust. Importing a library executes its
+Python code, so use only trusted sources.
 
 Only `from almasi import <name>` is supported by this namespace entry
 point; direct `import almasi.<name>` is a distinct import mechanism.
