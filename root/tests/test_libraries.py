@@ -15,7 +15,7 @@ import sys
 import tempfile
 import types
 
-from contextlib        import redirect_stdout
+from contextlib        import redirect_stderr, redirect_stdout
 from io                import StringIO
 from unittest          import TestCase
 from unittest.mock     import patch
@@ -246,14 +246,16 @@ class Item(fork_sample.Module):
 					)
 					cls._git_commit(origin, 'Update')
 
-					log = StringIO()
+					log    = StringIO()
+					stdout = StringIO()
 
-					with redirect_stdout(log):
+					with redirect_stdout(stdout), redirect_stderr(log):
 						with patch.dict(sys.modules):
 							library = almasi.services.Libraries.imp('pull_lib')
 							assert library.revision == 'updated'
 							assert almasi.services.Libraries.imp('pull_lib') is library
 
+					assert not stdout.getvalue(), repr(stdout.getvalue())
 					assert log.getvalue().count('✔\033[0m almasi.pull_lib: Checking for updates') == 1, repr(log.getvalue())
 		finally:
 			almasi.Imports.__lib__, almasi.Tester.__lib__, almasi.Undefined.__lib__ = ownership
@@ -282,7 +284,7 @@ class Item(fork_sample.Module):
 
 					log = StringIO()
 
-					with redirect_stdout(log):
+					with redirect_stderr(log):
 						with patch.dict(sys.modules):
 							library = almasi.services.Libraries.imp('offline_lib')
 							assert library.__name__ == 'almasi.offline_lib'
@@ -310,7 +312,7 @@ class Item(fork_sample.Module):
 					with patch('subprocess.run', return_value=subprocess.CompletedProcess([], 0)) as runner:
 						log = StringIO()
 
-						with redirect_stdout(log):
+						with redirect_stderr(log):
 							with patch.dict(sys.modules):
 								library = almasi.services.Libraries.imp('deps_lib')
 								assert almasi.services.Libraries.imp('deps_lib') is library
@@ -341,7 +343,7 @@ class Item(fork_sample.Module):
 			failure = subprocess.CalledProcessError(1, ['pip'], stderr='dependency unavailable')
 			log     = StringIO()
 
-			with redirect_stdout(log):
+			with redirect_stderr(log):
 				with patch.dict(os.environ, {'ALMASI_PATH': home}):
 					with patch('subprocess.run', side_effect=failure):
 						with patch.dict(sys.modules):
