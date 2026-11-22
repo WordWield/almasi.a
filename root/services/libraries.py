@@ -235,9 +235,11 @@ class Libraries(a.Singleton):
 						)
 
 						if is_valid:
+							# Another successful clone may have published first.
+							# ------------------------------------------------------
 							try:
 								os.rename(checkout, destination)
-							except FileExistsError:
+							except OSError:
 								if not self._is_local(name):
 									raise
 						else:
