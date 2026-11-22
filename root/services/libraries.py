@@ -22,11 +22,6 @@ import a
 
 class Libraries(a.Singleton):
 
-	OWNER     = 'apodgorny'
-	PREFIX    = 'almasi.'
-	API       = 'https://api.github.com'
-	SSH       = 'git@github.com'
-
 	# ======================================================================
 	# PRIVATE METHODS
 	# ======================================================================
@@ -34,7 +29,7 @@ class Libraries(a.Singleton):
 	# List all repositories visible through GitHub or the authenticated CLI.
 	# ----------------------------------------------------------------------
 	def _list_all_repos(self):
-		owner   = os.environ.get('ALMASI_LIBRARY_OWNER', self.OWNER)
+		owner   = self.owner
 		command = ['gh', 'repo', 'list', owner, '--limit', '1000',
 				   '--json', 'name,isPrivate,sshUrl,url']
 		cli     = subprocess.run(command, capture_output=True, text=True, timeout=20) if shutil.which('gh') else None
@@ -46,14 +41,14 @@ class Libraries(a.Singleton):
 				for repo in json.loads(cli.stdout)
 			}
 		else:
-			with urllib.request.urlopen(f'{self.API}/users/{owner}', timeout=15) as response:
+			with urllib.request.urlopen(f'{self.api}/users/{owner}', timeout=15) as response:
 				scope = 'orgs' if json.load(response)['type'] == 'Organization' else 'users'
 
 			repos = {}
 			page  = 1
 
 			while True:
-				url = f'{self.API}/{scope}/{owner}/repos?per_page=100&page={page}'
+				url = f'{self.api}/{scope}/{owner}/repos?per_page=100&page={page}'
 				with urllib.request.urlopen(url, timeout=15) as response:
 					entries = json.load(response)
 
@@ -68,10 +63,28 @@ class Libraries(a.Singleton):
 	# PUBLIC METHODS
 	# ======================================================================
 
+	# Configure the GitHub source and prepare the shared checkout directory.
+	# ----------------------------------------------------------------------
+	def initialize(
+		self,
+		path,
+		owner  = 'apodgorny',
+		prefix = 'almasi.',
+		api    = 'https://api.github.com',
+		ssh    = 'git@github.com'
+	):
+		self.path   = path
+		self.owner  = owner
+		self.prefix = prefix
+		self.api    = api
+		self.ssh    = ssh
+
+		os.makedirs(self.path, exist_ok=True)
+
 	# Derive a library's checkout from its name and shared library path.
 	# ----------------------------------------------------------------------
 	def get_path(self, name):
-		return os.path.join(os.environ['ALMASI_PATH'], self.PREFIX + name)
+		return os.path.join(self.path, self.prefix + name)
 
 	# Check whether a complete checkout already exists.
 	# ----------------------------------------------------------------------
@@ -83,9 +96,9 @@ class Libraries(a.Singleton):
 	# Resolve the known repository URL, using SSH for undiscoverable names.
 	# ----------------------------------------------------------------------
 	def get_url(self, name):
-		owner = os.environ.get('ALMASI_LIBRARY_OWNER', self.OWNER)
+		owner = self.owner
 		return self._list_all_repos().get(
-			self.PREFIX + name, f'{self.SSH}:{owner}/{self.PREFIX}{name}.git'
+			self.prefix + name, f'{self.ssh}:{owner}/{self.prefix}{name}.git'
 		)
 
 	# Discover Almasi library names from the repository catalogue.
@@ -93,10 +106,10 @@ class Libraries(a.Singleton):
 	def list(self):
 		repos = self._list_all_repos()
 		return sorted(
-			name.removeprefix(self.PREFIX)
+			name.removeprefix(self.prefix)
 			for name in repos
-			if name.startswith(self.PREFIX)
-			and a._is_valid_library_name(name.removeprefix(self.PREFIX))
+			if name.startswith(self.prefix)
+			and a._is_valid_library_name(name.removeprefix(self.prefix))
 		)
 
 	# Get source with Git; publish only a complete checkout.
@@ -104,12 +117,9 @@ class Libraries(a.Singleton):
 	def clone(self, name):
 		if a._is_valid_library_name(name):
 			destination = self.get_path(name)
-			directory   = os.path.dirname(destination)
 
 			if not self.is_cloned(name):
 				source = self.get_url(name)
-
-				os.makedirs(directory, exist_ok=True)
 				subprocess.run(['git', 'clone', '--quiet', '--', source, destination], check=True)
 
 		else:
