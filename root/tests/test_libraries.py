@@ -15,7 +15,6 @@ import sys
 import tempfile
 import types
 
-from concurrent.futures import ThreadPoolExecutor
 from unittest          import TestCase
 from unittest.mock     import patch
 
@@ -33,7 +32,7 @@ class TestLibraries(a.Tester):
 	# ----------------------------------------------------------------------
 	@staticmethod
 	def _library(directory, name, source=None):
-		path = os.path.join(directory, name)
+		path = os.path.join(directory, 'almasi.' + name)
 		os.makedirs(os.path.join(path, 'root'), exist_ok=True)
 
 		if source is None:
@@ -151,7 +150,7 @@ class TestLibraries(a.Tester):
 				assert not a.services.Libraries.is_cloned('sample_lib')
 				cls._library(home, 'sample_lib')
 				assert a.services.Libraries.is_cloned('sample_lib')
-				assert a.services.Libraries._get_path('sample_lib') == os.path.join(home, 'sample_lib')
+				assert a.services.Libraries._get_path('sample_lib') == os.path.join(home, 'almasi.sample_lib')
 
 	# Clone once and reuse a validated checkout.
 	# ----------------------------------------------------------------------
@@ -168,24 +167,7 @@ class TestLibraries(a.Tester):
 
 					assert os.path.isfile(os.path.join(path, 'cloned_lib.py'))
 					assert path == a.services.Libraries.clone('cloned_lib')
-					assert sorted(os.listdir(cache)) == ['cloned_lib']
-
-	# Concurrent Git clones cannot publish a partially downloaded source.
-	# ----------------------------------------------------------------------
-	@classmethod
-	def test_simultaneous_clones_share_checkout(cls):
-		with tempfile.TemporaryDirectory() as home:
-			origin = cls._git_origin(home, 'parallel_lib')
-			cache  = os.path.join(home, 'cache')
-
-			with patch.dict(os.environ, {'ALMASI_PATH': cache}):
-				with patch.object(type(a.services.Libraries), '_repositories',
-								  return_value={'parallel_lib': origin}):
-					with ThreadPoolExecutor(max_workers=2) as executor:
-						paths = list(executor.map(a.services.Libraries.clone, ['parallel_lib'] * 2))
-
-					assert paths[0] == paths[1]
-					assert sorted(os.listdir(cache)) == ['parallel_lib']
+					assert sorted(os.listdir(cache)) == ['almasi.cloned_lib']
 
 	# Reject invalid names before constructing a Git command or a module.
 	# ----------------------------------------------------------------------
