@@ -22,44 +22,50 @@ class Libraries(almasi.Singleton):
 	# PRIVATE METHODS
 	# ======================================================================
 
-	# Report an acquisition step while keeping command output out of the console.
+	# Run a command with concise progress and actionable failure details.
 	# ----------------------------------------------------------------------
 	def _run(
 		self,
 		name,
 		operation,
+		completed,
 		command,
-		allow_failure = False,
-		timeout       = None
+		cwd     = None,
+		timeout = None
 	):
 		print(f'almasi.{name}: {operation} ... ', end='', flush=True)
 
 		try:
-			result = subprocess.run(command, capture_output=True, text=True, timeout=timeout)
-		except (OSError, subprocess.TimeoutExpired) as error:
-			result = subprocess.CompletedProcess(command, 1, stderr=str(error))
-
-		if result.returncode == 0:
-			print('done')
-		elif allow_failure:
-			print('failed, using local version')
+			subprocess.run(
+				command,
+				cwd            = cwd,
+				capture_output = True,
+				text           = True,
+				timeout        = timeout,
+				check          = True
+			)
+		except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+			details = getattr(error, 'stderr', None) or str(error)
+			print(f'-> ❌ failed: {str(details).strip()}')
+			raise RuntimeError(f'almasi.{name}: {operation} failed') from error
 		else:
-			print('failed')
-			details = (result.stderr or result.stdout or 'Unknown error').strip()
-			raise RuntimeError(f'almasi.{name}: {operation} failed: {details}')
+			print(f'-> ✅ {completed}')
 
-	# Refresh only Git-managed source; a failed update retains the local checkout.
+	# Keep the local checkout if Git cannot fetch or fast-forward.
 	# ----------------------------------------------------------------------
 	def _pull(self, name):
-		self._run(
-			name,
-			'pulling new version',
-			['git', '-C', self.get_path(name), 'pull', '--ff-only', '--quiet'],
-			allow_failure = True,
-			timeout       = 15
-		)
+		try:
+			self._run(
+				name,
+				'pulling new version',
+				'synced',
+				['git', '-C', self.get_path(name), 'pull', '--ff-only', '--quiet'],
+				timeout = 15
+			)
+		except RuntimeError:
+			print(f'almasi.{name}: fallback ... -> ⚠️ using local version')
 
-	# Let pip determine whether current interpreter dependencies are satisfied.
+	# Install requirements using the library's working directory.
 	# ----------------------------------------------------------------------
 	def _install_requirements(self, name):
 		requirements = os.path.join(self.get_path(name), 'requirements.txt')
@@ -68,7 +74,9 @@ class Libraries(almasi.Singleton):
 			self._run(
 				name,
 				'installing requirements',
-				[sys.executable, '-m', 'pip', 'install', '-r', requirements]
+				'ready',
+				[sys.executable, '-m', 'pip', 'install', '-r', requirements],
+				cwd = self.get_path(name)
 			)
 
 	# ======================================================================
@@ -109,6 +117,7 @@ class Libraries(almasi.Singleton):
 			self._run(
 				name,
 				'cloning',
+				'cloned',
 				['git', 'clone', '--quiet', '--', self.get_url(name), destination]
 			)
 
