@@ -222,7 +222,7 @@ class Item(fork_sample.Module):
 						almasi.services.Libraries.imp('pull_lib')
 
 					with open(os.path.join(origin, 'pull_lib.py'), 'a') as source:
-						source.write("\npull_lib.revision = 'updated'\n")
+						source.write('''\npull_lib.revision = 'updated'\n''')
 
 					subprocess.run(['git', '-C', origin, 'add', '.'], check=True)
 					subprocess.run([
