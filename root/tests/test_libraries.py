@@ -107,6 +107,40 @@ class TestLibraries(almasi.Tester):
 			almasi.Imports.__lib__, almasi.Tester.__lib__, almasi.Undefined.__lib__ = ownership
 			almasi.__dict__.pop('sample_lib', None)
 
+	# Bind qualified Almasi imports to a fork without changing the published library.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_qualified_fromlist_import_uses_fork(cls):
+		ownership = cls._ownership()
+
+		try:
+			with tempfile.TemporaryDirectory() as home:
+				origin = cls._library(home, 'fork_sample')
+
+				with open(os.path.join(origin, 'root', 'item.py'), 'w') as stream:
+					stream.write('''from almasi import fork_sample
+
+
+class Item(fork_sample.Module):
+
+	def owner(self):
+		return fork_sample
+''')
+
+				with patch.dict(os.environ, {'ALMASI_PATH': home}):
+					with patch.dict(sys.modules):
+						library = getattr(__import__('almasi', fromlist=['fork_sample']), 'fork_sample')
+						alice   = library.fork('alice')
+						bob     = library.fork('bob')
+
+						assert library.Item().owner() is library
+						assert alice.Item().owner() is alice
+						assert bob.Item().owner() is bob
+						assert sys.modules['almasi.fork_sample'] is library
+		finally:
+			almasi.Imports.__lib__, almasi.Tester.__lib__, almasi.Undefined.__lib__ = ownership
+			almasi.__dict__.pop('fork_sample', None)
+
 	# Preserve the official MCP SDK's independent Python module identity.
 	# ----------------------------------------------------------------------
 	@classmethod

@@ -9,6 +9,8 @@ import copy
 import keyword
 import os, sys
 
+from types import SimpleNamespace
+
 from lib.imports             import Imports
 from lib.module              import Module, ModuleMeta
 from lib.singleton           import Singleton
@@ -234,6 +236,20 @@ class A(metaclass=AMeta, plugins=['Py', 'Json', 'Text', 'Bytes']):
 				result = self
 		else:
 			result = builtins.__import__(name, globals, locals, fromlist, level)
+
+			# Resolve canonical Almasi from-list imports against this fork.
+			# ----------------------------------------------------------------------
+			fork_names = {
+				part for part in fromlist
+				if name == 'almasi' and level == 0
+				and f'almasi.{part}' in self.__fork_import_names__
+			}
+
+			if fork_names:
+				result = SimpleNamespace(**{
+					part: self if part in fork_names else getattr(result, part)
+					for part in fromlist
+				})
 
 		return result
 
