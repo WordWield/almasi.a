@@ -56,6 +56,19 @@ class TestLibraries(almasi.Tester):
 	def _ownership():
 		return almasi.Imports.__lib__, almasi.Tester.__lib__, almasi.Undefined.__lib__
 
+	# Commit test fixtures without invoking user Git hooks or signing.
+	# ----------------------------------------------------------------------
+	@staticmethod
+	def _git_commit(directory, message):
+		subprocess.run([
+			'git', '-C', directory,
+			'-c', f'core.hooksPath={os.devnull}',
+			'-c', 'commit.gpgSign=false',
+			'-c', 'user.email=almasi@example.test',
+			'-c', 'user.name=Almasi Test',
+			'commit', '-q', '-m', message
+		], check=True, capture_output=True, text=True)
+
 	# Create a committed local Git repository for clone tests.
 	# ----------------------------------------------------------------------
 	@classmethod
@@ -64,12 +77,15 @@ class TestLibraries(almasi.Tester):
 		git_dir = origin + '.git'
 		os.rename(origin, git_dir)
 
-		subprocess.run(['git', 'init', '-q', git_dir], check=True)
-		subprocess.run(['git', '-C', git_dir, 'add', '.'], check=True)
-		subprocess.run([
-			'git', '-C', git_dir, '-c', 'user.email=almasi@example.test',
-			'-c', 'user.name=Almasi Test', 'commit', '-q', '-m', 'Fixture'
-		], check=True)
+		subprocess.run(
+			['git', 'init', '-q', git_dir],
+			check=True, capture_output=True, text=True
+		)
+		subprocess.run(
+			['git', '-C', git_dir, 'add', '.'],
+			check=True, capture_output=True, text=True
+		)
+		cls._git_commit(git_dir, 'Fixture')
 
 		return git_dir
 
@@ -224,11 +240,11 @@ class Item(fork_sample.Module):
 					with open(os.path.join(origin, 'pull_lib.py'), 'a') as source:
 						source.write('''\npull_lib.revision = 'updated'\n''')
 
-					subprocess.run(['git', '-C', origin, 'add', '.'], check=True)
-					subprocess.run([
-						'git', '-C', origin, '-c', 'user.email=almasi@example.test',
-						'-c', 'user.name=Almasi Test', 'commit', '-q', '-m', 'Update'
-					], check=True)
+					subprocess.run(
+						['git', '-C', origin, 'add', '.'],
+						check=True, capture_output=True, text=True
+					)
+					cls._git_commit(origin, 'Update')
 
 					log = StringIO()
 
@@ -323,14 +339,18 @@ class Item(fork_sample.Module):
 				stream.write('unavailable-package\n')
 
 			failure = subprocess.CalledProcessError(1, ['pip'], stderr='dependency unavailable')
+			log     = StringIO()
 
-			with patch.dict(os.environ, {'ALMASI_PATH': home}):
-				with patch('subprocess.run', side_effect=failure):
-					with patch.dict(sys.modules):
-						with TestCase().assertRaisesRegex(RuntimeError, 'dependency unavailable'):
-							almasi.services.Libraries.imp('missing_deps')
+			with redirect_stdout(log):
+				with patch.dict(os.environ, {'ALMASI_PATH': home}):
+					with patch('subprocess.run', side_effect=failure):
+						with patch.dict(sys.modules):
+							with TestCase().assertRaisesRegex(RuntimeError, 'dependency unavailable'):
+								almasi.services.Libraries.imp('missing_deps')
 
-						assert 'almasi.missing_deps' not in sys.modules
+							assert 'almasi.missing_deps' not in sys.modules
+
+			assert '❌ almasi.missing_deps: Installing dependencies' in log.getvalue()
 
 	# Reject invalid names before constructing a Git command or a module.
 	# ----------------------------------------------------------------------
