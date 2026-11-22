@@ -45,14 +45,22 @@ class File(FilesystemResource):
 	def is_directory(self):
 		return False
 
-	# Memoize legitimate null values as well as other plugin results.
+	# Preserve the current result when an on-load observer invalidates the cache.
 	# ----------------------------------------------------------------------
 	def load(self):
 		if not self._loaded and self._load_method is not None:
-			self._data   = self._load_method()
-			owner        = self._data if isinstance(self._data, type) else type(self._data)
-			if hasattr(owner, '__on_load__'):
-				owner.__on_load__(self)
+			result       = self._load_method()
+			self._data   = result
 			self._loaded = True
+			owner        = result if isinstance(result, type) else type(result)
 
-		return self._data
+			if hasattr(owner, '__on_load__'):
+				try:
+					owner.__on_load__(self)
+				except BaseException:
+					self._invalidate()
+					raise
+		else:
+			result = self._data
+
+		return result
