@@ -196,10 +196,11 @@ from almasi import web
 ```
 
 The namespace's `__getattr__` delegates to the canonical
-`a.services.Libraries` Singleton. It uses Almasi's existing `Imports`
-and `a.extend()` mechanism to publish `almasi.web` in `sys.modules`.
-No global Python import hook, second loaded-library registry or separate
-Almasi installation is needed.
+`a.services.Libraries` Singleton. It uses Python's standard `importlib`
+to execute the library entry point as `almasi.web`; existing `a.extend()`
+publishes its canonical instance in `sys.modules`. The existing Almasi
+`Imports` component remains unchanged. No global Python import hook,
+second loaded-library registry or separate Almasi installation is needed.
 
 ```python
 import a
