@@ -1,17 +1,14 @@
 # ==============================================================================
 # LIBRARIES
 # ==============================================================================
-# PURPOSE:
-# Acquire Almasi libraries and resolve their Python identities.
-#
-# RESPONSIBILITY BOUNDARIES:
-# Owns: Library source availability and canonical import identity.
-# Delegates: Git operations to Git and namespace publication to a.extend().
+# Acquire Almasi source libraries and publish their canonical Python identities.
 # ==============================================================================
 
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 
 import a
 
@@ -19,60 +16,101 @@ import a
 class Libraries(a.Singleton):
 
 	# ======================================================================
+	# PRIVATE METHODS
+	# ======================================================================
+
+	# Reject names that cannot identify a single Almasi repository.
+	# ----------------------------------------------------------------------
+	def _validate_name(self, name):
+		if not a._is_valid_library_name(name):
+			raise ValueError(f'Invalid library name: {name!r}')
+
+	# Find an entry point without exposing a top-level module that might
+	# shadow an unrelated Python package, such as the official MCP SDK.
+	# ----------------------------------------------------------------------
+	def _get_entry_path(self, path, name):
+		nested = os.path.join(path, 'almasi', name + '.py')
+		direct = os.path.join(path, name + '.py')
+		result = nested if os.path.isfile(nested) else direct
+		return result
+
+	# A checkout is usable only when both its entry point and root exist.
+	# ----------------------------------------------------------------------
+	def _is_checkout(self, path, name):
+		result = (
+			os.path.isfile(self._get_entry_path(path, name))
+			and os.path.isdir(os.path.join(path, 'root'))
+		)
+		return result
+
+	# ======================================================================
 	# PUBLIC METHODS
 	# ======================================================================
 
-	# Configure the Git remote and prepare the shared checkout directory.
-	# ----------------------------------------------------------------------
-	def initialize(
-		self,
-		path,
-		owner  = 'apodgorny',
-		prefix = 'almasi.',
-		ssh    = 'git@github.com'
-	):
-		self.path   = path
-		self.owner  = owner
-		self.prefix = prefix
-		self.ssh    = ssh
-
-		os.makedirs(self.path, exist_ok=True)
-
-	# Derive a library's checkout from its name and shared library path.
+	# Resolve a shared source directory, with an optional environment override.
 	# ----------------------------------------------------------------------
 	def get_path(self, name):
-		return os.path.join(self.path, self.prefix + name)
+		self._validate_name(name)
+		directory = os.environ.get('ALMASI_PATH') or os.path.join(
+			os.path.expanduser('~'), '.cache', 'almasi', 'libraries'
+		)
+		result = os.path.join(os.path.abspath(directory), 'almasi.' + name)
+		return result
 
-	# Check whether a complete checkout already exists.
-	# ----------------------------------------------------------------------
-	def is_cloned(self, name):
-		path = self.get_path(name)
-		return (os.path.isfile(os.path.join(path, name + '.py'))
-				and os.path.isdir(os.path.join(path, 'root')))
-
-	# Derive the Git remote address directly from the library name.
+	# Resolve the trusted organization source; Git handles authentication.
 	# ----------------------------------------------------------------------
 	def get_url(self, name):
-		return f'{self.ssh}:{self.owner}/{self.prefix}{name}.git'
+		self._validate_name(name)
+		base   = os.environ.get('ALMASI_GIT_BASE', 'https://github.com/WordWield')
+		result = f'{base.rstrip("/")}/almasi.{name}.git'
+		return result
 
-	# Get source with Git; publish only a complete checkout.
+	# Recognize a locally available library without contacting Git.
+	# ----------------------------------------------------------------------
+	def is_cloned(self, name):
+		result = self._is_checkout(self.get_path(name), name)
+		return result
+
+	# Acquire into a sibling directory and publish only a complete checkout.
+	# A concurrent publisher can win without losing its usable checkout.
 	# ----------------------------------------------------------------------
 	def clone(self, name):
-		if a._is_valid_library_name(name):
-			destination = self.get_path(name)
+		destination = self.get_path(name)
 
-			if not self.is_cloned(name):
-				source = self.get_url(name)
-				subprocess.run(['git', 'clone', '--quiet', '--', source, destination], check=True)
+		if not self.is_cloned(name):
+			if os.path.lexists(destination):
+				raise FileExistsError(f'Incomplete library checkout: {destination}')
 
-		else:
-			raise ValueError(f'Invalid library name: {name!r}')
+			os.makedirs(os.path.dirname(destination), exist_ok=True)
+			staging = tempfile.mkdtemp(
+				prefix = f'.almasi.{name}-',
+				dir    = os.path.dirname(destination)
+			)
+
+			try:
+				subprocess.run(
+					['git', 'clone', '--quiet', '--', self.get_url(name), staging],
+					check = True
+				)
+
+				if not self._is_checkout(staging, name):
+					raise ImportError(f'Invalid Almasi library source: {name}')
+
+				try:
+					os.rename(staging, destination)
+				except FileExistsError:
+					if not self.is_cloned(name):
+						raise
+			finally:
+				if os.path.exists(staging):
+					shutil.rmtree(staging)
 
 		return destination
 
-	# Publish the source under its canonical Almasi Python module name.
+	# Reuse the published library or execute its source under its qualified name.
 	# ----------------------------------------------------------------------
 	def imp(self, name):
+		self._validate_name(name)
 		qualified = f'almasi.{name}'
 		library   = sys.modules.get(qualified)
 
@@ -80,15 +118,12 @@ class Libraries(a.Singleton):
 			path = self.clone(name)
 			a.Imports.load_module(
 				a,
-				os.path.join(path, name + '.py'),
+				self._get_entry_path(path, name),
 				module_name = qualified
 			)
 			library = sys.modules.get(qualified)
 
-		if isinstance(library, a.A):
-			result = library
-		else:
-			sys.modules.pop(qualified, None)
+		if not isinstance(library, a.A):
 			raise ImportError(f'Not an Almasi library: {qualified}')
 
-		return result
+		return library
