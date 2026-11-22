@@ -31,9 +31,9 @@ class Libraries(a.Singleton):
 	# PRIVATE METHODS
 	# ======================================================================
 
-	# Discover public libraries or those visible to an existing gh login.
+	# List all repositories visible through GitHub or the authenticated CLI.
 	# ----------------------------------------------------------------------
-	def _repositories(self):
+	def _list_all_repos(self):
 		owner   = os.environ.get('ALMASI_LIBRARY_OWNER', self.OWNER)
 		command = ['gh', 'repo', 'list', owner, '--limit', '1000',
 				   '--json', 'name,isPrivate,sshUrl,url']
@@ -62,6 +62,12 @@ class Libraries(a.Singleton):
 					break
 				page += 1
 
+		return repos
+
+	# Select only Almasi libraries from the repository catalogue.
+	# ----------------------------------------------------------------------
+	def _repositories(self):
+		repos = self._list_all_repos()
 		return {
 			name.removeprefix(self.PREFIX): url
 			for name, url in repos.items()
