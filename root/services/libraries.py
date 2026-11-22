@@ -31,18 +31,6 @@ class Libraries(a.Singleton):
 	# PRIVATE METHODS
 	# ======================================================================
 
-	# Derive a library's checkout from its name and shared library path.
-	# ----------------------------------------------------------------------
-	def _get_path(self, name):
-		return os.path.join(os.environ['ALMASI_PATH'], self.PREFIX + name)
-
-	# Check whether a complete checkout already exists.
-	# ----------------------------------------------------------------------
-	def is_cloned(self, name):
-		path = self._get_path(name)
-		return (os.path.isfile(os.path.join(path, name + '.py'))
-				and os.path.isdir(os.path.join(path, 'root')))
-
 	# Discover public libraries or those visible to an existing gh login.
 	# ----------------------------------------------------------------------
 	def _repositories(self):
@@ -85,6 +73,26 @@ class Libraries(a.Singleton):
 	# PUBLIC METHODS
 	# ======================================================================
 
+	# Derive a library's checkout from its name and shared library path.
+	# ----------------------------------------------------------------------
+	def get_path(self, name):
+		return os.path.join(os.environ['ALMASI_PATH'], self.PREFIX + name)
+
+	# Check whether a complete checkout already exists.
+	# ----------------------------------------------------------------------
+	def is_cloned(self, name):
+		path = self.get_path(name)
+		return (os.path.isfile(os.path.join(path, name + '.py'))
+				and os.path.isdir(os.path.join(path, 'root')))
+
+	# Resolve the known repository URL, using SSH for undiscoverable names.
+	# ----------------------------------------------------------------------
+	def get_url(self, name):
+		owner = os.environ.get('ALMASI_LIBRARY_OWNER', self.OWNER)
+		return self._repositories().get(
+			name, f'{self.SSH}:{owner}/{self.PREFIX}{name}.git'
+		)
+
 	# Discover currently published libraries on GitHub.
 	# ----------------------------------------------------------------------
 	def list(self):
@@ -94,14 +102,11 @@ class Libraries(a.Singleton):
 	# ----------------------------------------------------------------------
 	def clone(self, name):
 		if a._is_valid_library_name(name):
-			destination = self._get_path(name)
+			destination = self.get_path(name)
 			directory   = os.path.dirname(destination)
 
 			if not self.is_cloned(name):
-				owner  = os.environ.get('ALMASI_LIBRARY_OWNER', self.OWNER)
-				source = self._repositories().get(
-					name, f'{self.SSH}:{owner}/{self.PREFIX}{name}.git'
-				)
+				source = self.get_url(name)
 
 				os.makedirs(directory, exist_ok=True)
 				subprocess.run(['git', 'clone', '--quiet', '--', source, destination], check=True)
