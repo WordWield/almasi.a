@@ -42,7 +42,8 @@ class AMeta(type):
 		module       = sys.modules[module_name]
 		lib_file     = os.path.realpath(module.__file__)
 		lib_path     = os.path.dirname(lib_file)
-		repo_path    = os.path.dirname(lib_path) if os.path.basename(lib_path) == 'almasi' else lib_path
+		nested_entry = module_name.startswith('almasi.') and os.path.basename(lib_path) == 'almasi'
+		repo_path    = os.path.dirname(lib_path) if nested_entry else lib_path
 		path         = os.path.join(repo_path, 'root')
 		plugins_path = os.path.join(repo_path, 'plugins')
 
