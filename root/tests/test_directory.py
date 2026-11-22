@@ -12,10 +12,10 @@ import uuid
 from unittest import TestCase
 from unittest.mock import patch
 
-import a
+import almasi
 
 
-class TestDirectory(a.Tester):
+class TestDirectory(almasi.Tester):
 
 	# ======================================================================
 	# PUBLIC METHODS
@@ -26,7 +26,7 @@ class TestDirectory(a.Tester):
 	@classmethod
 	def test_external_directory(cls):
 		with tempfile.TemporaryDirectory() as path:
-			directory = a.Directory(a, path, 'a.output')
+			directory = almasi.Directory(almasi, path, 'almasi.output')
 			workspace = directory.mkdir('lesson', 'workspace')
 
 			workspace.write('scenario.json', {'title': 'External output'})
@@ -38,8 +38,8 @@ class TestDirectory(a.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_import_python(cls):
-		with tempfile.TemporaryDirectory(dir=a.__path__, prefix='__import_') as path:
-			directory = a.Directory(a, path, 'a.import_test')
+		with tempfile.TemporaryDirectory(dir=almasi.__path__, prefix='__import_') as path:
+			directory = almasi.Directory(almasi, path, 'almasi.import_test')
 			filename  = os.path.join(path, 'definitions.py')
 
 			with open(filename, 'w') as source:
@@ -48,16 +48,16 @@ class TestDirectory(a.Tester):
 			module = directory.import_python('definitions')
 
 			assert module.VALUE == 23
-			assert module.__route__ == 'a.import_test.definitions'
-			assert module.__lib__ is a
+			assert module.__route__ == 'almasi.import_test.definitions'
+			assert module.__lib__ is almasi
 			assert directory.import_python('definitions.py') is module
 
 	# Import Python files recursively, preserving native class loading.
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_import_python_recursive(cls):
-		with tempfile.TemporaryDirectory(dir=a.__path__, prefix='__import_') as path:
-			directory = a.Directory(a, path, 'a.import_test')
+		with tempfile.TemporaryDirectory(dir=almasi.__path__, prefix='__import_') as path:
+			directory = almasi.Directory(almasi, path, 'almasi.import_test')
 			nested    = os.path.join(path, 'nested')
 			os.mkdir(nested)
 
@@ -65,7 +65,7 @@ class TestDirectory(a.Tester):
 				source.write('VALUE = 23\n')
 
 			with open(os.path.join(nested, 'example.py'), 'w') as source:
-				source.write('import a\nclass Example(a.Module):\n\tpass\n')
+				source.write('import almasi\nclass Example(almasi.Module):\n\tpass\n')
 
 			modules = directory.import_python(None)
 
@@ -75,15 +75,15 @@ class TestDirectory(a.Tester):
 			example = next(module.Example for module in modules if hasattr(module, 'Example'))
 
 			assert example.__has_own_module__
-			assert example.__route__ == 'a.import_test.nested.Example'
+			assert example.__route__ == 'almasi.import_test.nested.Example'
 			assert directory.import_python(None) == modules
 
 	# Preserve missing-file errors and class-name resolution semantics.
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_import_python_errors(cls):
-		with tempfile.TemporaryDirectory(dir=a.__path__, prefix='__import_') as path:
-			directory = a.Directory(a, path, 'a.import_test')
+		with tempfile.TemporaryDirectory(dir=almasi.__path__, prefix='__import_') as path:
+			directory = almasi.Directory(almasi, path, 'almasi.import_test')
 
 			with TestCase().assertRaises(FileNotFoundError):
 				directory.import_python('missing')
@@ -102,8 +102,8 @@ class TestDirectory(a.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_write_text(cls):
-		with tempfile.TemporaryDirectory(dir=a.__path__, prefix='__write_') as path:
-			directory = a.Directory(a, path, 'a.write_test')
+		with tempfile.TemporaryDirectory(dir=almasi.__path__, prefix='__write_') as path:
+			directory = almasi.Directory(almasi, path, 'almasi.write_test')
 
 			for name, value in (('intro.md', '# Привет 🐍\n'), ('notes.txt', 'Hello, world!')):
 				directory.write(name, value)
@@ -116,8 +116,8 @@ class TestDirectory(a.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_write_json(cls):
-		with tempfile.TemporaryDirectory(dir=a.__path__, prefix='__write_') as path:
-			directory = a.Directory(a, path, 'a.write_test')
+		with tempfile.TemporaryDirectory(dir=almasi.__path__, prefix='__write_') as path:
+			directory = almasi.Directory(almasi, path, 'almasi.write_test')
 			value     = {'title': 'Урок 🐍', 'scenes': [], 'active': True}
 
 			directory.write('scenario.json', value)
@@ -130,8 +130,8 @@ class TestDirectory(a.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_write_refreshes_own_children(cls):
-		with tempfile.TemporaryDirectory(dir=a.__path__, prefix='__write_') as path:
-			directory = a.Directory(a, path, 'a.write_test')
+		with tempfile.TemporaryDirectory(dir=almasi.__path__, prefix='__write_') as path:
+			directory = almasi.Directory(almasi, path, 'almasi.write_test')
 
 			for name, before, after in (
 				('notes.txt', 'before', 'after'),
@@ -149,8 +149,8 @@ class TestDirectory(a.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_write_preserves_extension_priority(cls):
-		with tempfile.TemporaryDirectory(dir=a.__path__, prefix='__write_') as path:
-			directory = a.Directory(a, path, 'a.write_test')
+		with tempfile.TemporaryDirectory(dir=almasi.__path__, prefix='__write_') as path:
+			directory = almasi.Directory(almasi, path, 'almasi.write_test')
 
 			directory.write('notes.md', 'markdown')
 			assert directory.notes == 'markdown'
@@ -167,8 +167,8 @@ class TestDirectory(a.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_write_rejects_invalid_names(cls):
-		with tempfile.TemporaryDirectory(dir=a.__path__, prefix='__write_') as path:
-			directory = a.Directory(a, path, 'a.write_test')
+		with tempfile.TemporaryDirectory(dir=almasi.__path__, prefix='__write_') as path:
+			directory = almasi.Directory(almasi, path, 'almasi.write_test')
 
 			for name in ('', '.', '..', '../escape.txt', '/absolute.txt', 'nested/file.txt', None, 42):
 				with TestCase().assertRaises(ValueError):
@@ -184,8 +184,8 @@ class TestDirectory(a.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_write_rejects_non_text(cls):
-		with tempfile.TemporaryDirectory(dir=a.__path__, prefix='__write_') as path:
-			directory = a.Directory(a, path, 'a.write_test')
+		with tempfile.TemporaryDirectory(dir=almasi.__path__, prefix='__write_') as path:
+			directory = almasi.Directory(almasi, path, 'almasi.write_test')
 
 			directory.write('notes.txt', 'original')
 
@@ -200,8 +200,8 @@ class TestDirectory(a.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_write_rejects_symbolic_links(cls):
-		with tempfile.TemporaryDirectory(dir=a.__path__, prefix='__write_') as path:
-			directory = a.Directory(a, path, 'a.write_test')
+		with tempfile.TemporaryDirectory(dir=almasi.__path__, prefix='__write_') as path:
+			directory = almasi.Directory(almasi, path, 'almasi.write_test')
 			target    = os.path.join(path, 'target.txt')
 
 			directory.write('target.txt', 'original')
@@ -220,9 +220,9 @@ class TestDirectory(a.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_write_delegates_to_plugin(cls):
-		with tempfile.TemporaryDirectory(dir=a.__path__, prefix='__write_') as path:
-			directory = a.Directory(a, path, 'a.write_test')
-			plugin    = a.__PLUGINS__['Text']
+		with tempfile.TemporaryDirectory(dir=almasi.__path__, prefix='__write_') as path:
+			directory = almasi.Directory(almasi, path, 'almasi.write_test')
+			plugin    = almasi.__PLUGINS__['Text']
 
 			with patch.object(plugin, 'write', wraps=plugin.write) as write:
 				directory.write('notes.txt', 'text')
@@ -238,20 +238,20 @@ class TestDirectory(a.Tester):
 	@classmethod
 	def test_library_write(cls):
 		name = '__write_' + uuid.uuid4().hex
-		path = os.path.join(a.__path__, name + '.json')
+		path = os.path.join(almasi.__path__, name + '.json')
 
 		try:
-			a.write(name + '.json', {'value': 1})
-			assert getattr(a, name) == {'value': 1}
+			almasi.write(name + '.json', {'value': 1})
+			assert getattr(almasi, name) == {'value': 1}
 
-			a.write(name + '.json', {'value': 2})
-			assert getattr(a, name) == {'value': 2}
+			almasi.write(name + '.json', {'value': 2})
+			assert getattr(almasi, name) == {'value': 2}
 		finally:
 			if os.path.isfile(path):
 				os.unlink(path)
-			a.__children__.pop(name, None)
-			a.__dict__.pop(name, None)
-			a.__cached_names__.discard(name)
+			almasi.__children__.pop(name, None)
+			almasi.__dict__.pop(name, None)
+			almasi.__cached_names__.discard(name)
 
 
 if __name__ == '__main__':

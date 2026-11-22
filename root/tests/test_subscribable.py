@@ -6,10 +6,10 @@
 
 import threading
 
-import a
+import almasi
 
 
-class TestSubscribable(a.Tester):
+class TestSubscribable(almasi.Tester):
 
 	# ==========================================================================
 	# PRIVATE METHODS
@@ -55,7 +55,7 @@ class TestSubscribable(a.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def _source(cls):
-		source_type = type('IndexedSource', (a.Subscribable,), {
+		source_type = type('IndexedSource', (almasi.Subscribable,), {
 			'_matches_generator': cls._matches_generator
 		})
 		source = source_type()
@@ -73,7 +73,7 @@ class TestSubscribable(a.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_unimplemented_matching(cls):
-		source = a.Subscribable()
+		source = almasi.Subscribable()
 
 		try:
 			source._dispatch({1})

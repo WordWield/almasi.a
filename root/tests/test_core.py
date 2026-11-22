@@ -3,25 +3,25 @@ import time
 
 from unittest.mock import patch
 
-import a
+import almasi
 from lib.events import Events
 from lib.function import Function
 
 
-class TestCore(a.Tester):
+class TestCore(almasi.Tester):
 
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_undefined_surface(cls):
 		error    = None
-		expected = f'{a.Undefined.__lib__.__name__}.Undefined'
+		expected = f'{almasi.Undefined.__lib__.__name__}.Undefined'
 
-		assert bool(a.Undefined) == False
-		assert repr(a.Undefined) == expected
-		assert str(a.Undefined) == expected
+		assert bool(almasi.Undefined) == False
+		assert repr(almasi.Undefined) == expected
+		assert str(almasi.Undefined) == expected
 
 		try:
-			a.Undefined.foo
+			almasi.Undefined.foo
 		except AttributeError as e:
 			error = e
 
@@ -34,10 +34,10 @@ class TestCore(a.Tester):
 		errors = []
 
 		for action in [
-			lambda: a.Undefined(),
-			lambda: a.Undefined['x'],
-			lambda: len(a.Undefined),
-			lambda: iter(a.Undefined),
+			lambda: almasi.Undefined(),
+			lambda: almasi.Undefined['x'],
+			lambda: len(almasi.Undefined),
+			lambda: iter(almasi.Undefined),
 		]:
 			try:
 				action()
@@ -54,30 +54,30 @@ class TestCore(a.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_string_naming_conversions(cls):
-		assert a.String.snake_to_camel('almasi') == 'Almasi'
-		assert a.String.snake_to_camel('almasi', capitalize=False) == 'almasi'
-		assert a.String.camel_to_snake('Almasi') == 'almasi'
-		assert a.String.camel_to_snake('VectorDB') == 'vector_d_b'
-		assert a.String.camel_to_snake('VectorDB', allow_consequent_caps=True) == 'vector_db'
-		assert a.String.normalize_whitespace('  one\n\t two   ') == 'one two'
+		assert almasi.String.snake_to_camel('almasi') == 'Almasi'
+		assert almasi.String.snake_to_camel('almasi', capitalize=False) == 'almasi'
+		assert almasi.String.camel_to_snake('Almasi') == 'almasi'
+		assert almasi.String.camel_to_snake('VectorDB') == 'vector_d_b'
+		assert almasi.String.camel_to_snake('VectorDB', allow_consequent_caps=True) == 'vector_db'
+		assert almasi.String.normalize_whitespace('  one\n\t two   ') == 'one two'
 
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_string_formatting(cls):
-		assert a.String.indent('a\n\nb', prefix='> ') == '> a\n\n> b'
-		assert a.String.underlined('x') == f'{a.String.UNDERLINE}x{a.String.RESET}'
-		assert a.String.italic('x') == f'{a.String.ITALIC}x{a.String.RESET}'
-		assert a.String.strikethrough('x') == f'{a.String.STRIKETHROUGH}x{a.String.RESET}'
-		assert a.String.color('x') == 'x'
-		assert a.String.color('x', a.String.RED, 'bu') == (
-			f'{a.String.BOLD}{a.String.UNDERLINE}{a.String.RED}x{a.String.RESET}'
+		assert almasi.String.indent('a\n\nb', prefix='> ') == '> a\n\n> b'
+		assert almasi.String.underlined('x') == f'{almasi.String.UNDERLINE}x{almasi.String.RESET}'
+		assert almasi.String.italic('x') == f'{almasi.String.ITALIC}x{almasi.String.RESET}'
+		assert almasi.String.strikethrough('x') == f'{almasi.String.STRIKETHROUGH}x{almasi.String.RESET}'
+		assert almasi.String.color('x') == 'x'
+		assert almasi.String.color('x', almasi.String.RED, 'bu') == (
+			f'{almasi.String.BOLD}{almasi.String.UNDERLINE}{almasi.String.RED}x{almasi.String.RESET}'
 		)
 
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_string_hash_shape(cls):
-		one = a.String.hash('almasi', digits=12)
-		two = a.String.hash('almasi', digits=12)
+		one = almasi.String.hash('almasi', digits=12)
+		two = almasi.String.hash('almasi', digits=12)
 
 		assert one == two
 		assert isinstance(one, int)
@@ -137,33 +137,33 @@ class TestCore(a.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_timer_nested_same_name(cls):
-		a.Timer.reset()
+		almasi.Timer.reset()
 
 		with patch('lib.timer.time.perf_counter', side_effect=[1.0, 2.0, 3.0, 4.0]):
-			a.Timer.start('nested')
-			a.Timer.start('nested')
-			a.Timer.stop('nested')
-			a.Timer.stop('nested')
+			almasi.Timer.start('nested')
+			almasi.Timer.start('nested')
+			almasi.Timer.stop('nested')
+			almasi.Timer.stop('nested')
 
-		assert a.Timer._times['nested'] == [1.0, 3.0]
-		assert a.Timer._start['nested'] == []
+		assert almasi.Timer._times['nested'] == [1.0, 3.0]
+		assert almasi.Timer._start['nested'] == []
 
-		a.Timer.reset()
+		almasi.Timer.reset()
 
 	# Accumulate distinct intervals and reset measurements.
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_timer_accumulates_and_resets(cls):
-		a.Timer.reset()
-		a.Timer.start('almasi-test')
+		almasi.Timer.reset()
+		almasi.Timer.start('almasi-test')
 		time.sleep(0.001)
-		a.Timer.stop('almasi-test')
+		almasi.Timer.stop('almasi-test')
 
-		assert a.Timer.get_time('almasi-test') > 0
+		assert almasi.Timer.get_time('almasi-test') > 0
 
-		a.Timer.reset()
+		almasi.Timer.reset()
 
-		assert a.Timer.get_time('almasi-test') == 0
+		assert almasi.Timer.get_time('almasi-test') == 0
 
 
 if __name__ == '__main__':

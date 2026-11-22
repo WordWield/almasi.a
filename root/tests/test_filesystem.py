@@ -13,10 +13,10 @@ from functools import partial
 from unittest import TestCase
 from unittest.mock import Mock, patch
 
-import a
+import almasi
 
 
-class TestFilesystem(a.Tester):
+class TestFilesystem(almasi.Tester):
 
 	# ======================================================================
 	# PRIVATE METHODS
@@ -31,14 +31,14 @@ class TestFilesystem(a.Tester):
 		module.parent      = ancestor.__instance__
 		sys.modules[name]  = module
 
-		state = a.Imports.__lib__, a.Tester.__lib__, a.Undefined.__lib__
+		state = almasi.Imports.__lib__, almasi.Tester.__lib__, almasi.Undefined.__lib__
 		try:
 			# Execute in the owning module so extend() sees its canonical name.
 			# ----------------------------------------------------------------------
 			exec(f'{name} = parent.extend({name!r}, path={root!r})', module.__dict__)
 			library = module.__dict__[name]
 		finally:
-			a.Imports.__lib__, a.Tester.__lib__, a.Undefined.__lib__ = state
+			almasi.Imports.__lib__, almasi.Tester.__lib__, almasi.Undefined.__lib__ = state
 
 		return library
 
@@ -76,24 +76,24 @@ class TestFilesystem(a.Tester):
 	@classmethod
 	def test_identity_getters(cls):
 		with tempfile.TemporaryDirectory() as root:
-			file      = a.File(a, os.path.join(root, 'notes.txt'), 'a.notes')
-			directory = a.Directory(a, root, 'a.files')
+			file      = almasi.File(almasi, os.path.join(root, 'notes.txt'), 'almasi.notes')
+			directory = almasi.Directory(almasi, root, 'almasi.files')
 
 			for item, name, route, is_directory in (
-				(file, 'notes.txt', 'a.notes', False),
-				(directory, os.path.basename(root), 'a.files', True),
+				(file, 'notes.txt', 'almasi.notes', False),
+				(directory, os.path.basename(root), 'almasi.files', True),
 			):
-				assert item.get_lib() is a
+				assert item.get_lib() is almasi
 				assert item.get_name() == name
 				assert item.get_route() == route
 				assert item.get_path() == os.path.realpath(os.path.join(root, name) if item is file else root)
 				assert item.is_directory() is is_directory
 				assert all(not hasattr(item, alias) for alias in ('path', 'route', 'lib', 'name', 'data', 'hash', 'load_method', 'hash_method'))
 
-			assert a.Directory.get_path is a.File.get_path
-			assert a.Directory.get_route is a.File.get_route
-			assert a.Directory.get_lib is a.File.get_lib
-			assert a.Directory.get_name is a.File.get_name
+			assert almasi.Directory.get_path is almasi.File.get_path
+			assert almasi.Directory.get_route is almasi.File.get_route
+			assert almasi.Directory.get_lib is almasi.File.get_lib
+			assert almasi.Directory.get_name is almasi.File.get_name
 
 	# Keep a legitimate null result memoized without freshness probes.
 	# ----------------------------------------------------------------------
@@ -101,7 +101,7 @@ class TestFilesystem(a.Tester):
 	def test_null_memoization(cls):
 		load = Mock(return_value=None)
 		hash = Mock(side_effect=AssertionError('Unexpected freshness probe'))
-		file = a.File(a, __file__, 'a.null', load, hash)
+		file = almasi.File(almasi, __file__, 'almasi.null', load, hash)
 
 		assert file.load() is None
 		assert file.load() is None
@@ -113,7 +113,7 @@ class TestFilesystem(a.Tester):
 	@classmethod
 	def test_namespace_names(cls):
 		with tempfile.TemporaryDirectory() as root, patch.dict(sys.modules):
-			library   = cls._library('filesystem_names', root, a.A)
+			library   = cls._library('filesystem_names', root, almasi.A)
 			directory = library.mkdir('nested')
 
 			for face in (library, directory):
@@ -131,7 +131,7 @@ class TestFilesystem(a.Tester):
 	@classmethod
 	def test_join(cls):
 		with tempfile.TemporaryDirectory() as root:
-			directory = a.Directory(a, root, 'a.files')
+			directory = almasi.Directory(almasi, root, 'almasi.files')
 
 			assert directory.join() == os.path.realpath(root)
 			assert directory.join('notes.md') == os.path.join(os.path.realpath(root), 'notes.md')
@@ -143,7 +143,7 @@ class TestFilesystem(a.Tester):
 	@classmethod
 	def test_join_boundaries(cls):
 		with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as outside:
-			directory = a.Directory(a, root, 'a.files')
+			directory = almasi.Directory(almasi, root, 'almasi.files')
 			os.symlink(outside, directory.join('escape'))
 
 			for parts in (('/absolute',), ('..',), ('nested', '../../escape'), ('escape', 'notes.md'), (None,), ('',)):
@@ -155,7 +155,7 @@ class TestFilesystem(a.Tester):
 	@classmethod
 	def test_mkdir_and_link(cls):
 		with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as outside:
-			directory = a.Directory(a, root, 'a.files')
+			directory = almasi.Directory(almasi, root, 'almasi.files')
 			child     = directory.mkdir('read', 'nested')
 
 			assert child.is_directory()
@@ -174,7 +174,7 @@ class TestFilesystem(a.Tester):
 	@classmethod
 	def test_exact_read_and_iteration(cls):
 		with tempfile.TemporaryDirectory() as root:
-			directory = a.Directory(a, root, 'a.files')
+			directory = almasi.Directory(almasi, root, 'almasi.files')
 			values    = {'notes.txt': 'text', 'notes.md': 'markdown', 'notes.json': None}
 
 			for name, value in values.items():
@@ -184,7 +184,7 @@ class TestFilesystem(a.Tester):
 			assert directory.notes is None
 			assert {item.get_name(): item.load() for item in directory} == values
 
-			plugin = a.__PLUGINS__['Json']
+			plugin = almasi.__PLUGINS__['Json']
 			directory.write('empty.json', None)
 			with patch.object(plugin, 'load', wraps=plugin.load) as load:
 				assert directory.read('empty.json') is None
@@ -196,7 +196,7 @@ class TestFilesystem(a.Tester):
 	@classmethod
 	def test_read_errors(cls):
 		with tempfile.TemporaryDirectory() as root:
-			directory = a.Directory(a, root, 'a.files')
+			directory = almasi.Directory(almasi, root, 'almasi.files')
 			directory.write('missing.md.txt', 'other file')
 			directory.write('snake_name.md', 'different filename')
 
@@ -212,7 +212,7 @@ class TestFilesystem(a.Tester):
 	@classmethod
 	def test_selective_cache_invalidation(cls):
 		with tempfile.TemporaryDirectory() as root:
-			directory = a.Directory(a, root, 'a.files')
+			directory = almasi.Directory(almasi, root, 'almasi.files')
 			directory.write('notes.json', {'version': 1})
 			directory.write('other.json', {'stable': True})
 
@@ -232,8 +232,8 @@ class TestFilesystem(a.Tester):
 	@classmethod
 	def test_write_failures(cls):
 		with tempfile.TemporaryDirectory() as root:
-			directory = a.Directory(a, root, 'a.files')
-			plugin    = a.__PLUGINS__['Json']
+			directory = almasi.Directory(almasi, root, 'almasi.files')
+			plugin    = almasi.__PLUGINS__['Json']
 
 			directory.write('notes.json', {'old': True})
 			old = directory.notes
@@ -260,8 +260,8 @@ class TestFilesystem(a.Tester):
 	@classmethod
 	def test_temporary_visibility(cls):
 		with tempfile.TemporaryDirectory() as root:
-			directory = a.Directory(a, root, 'a.files')
-			plugin    = a.__PLUGINS__['Text']
+			directory = almasi.Directory(almasi, root, 'almasi.files')
+			plugin    = almasi.__PLUGINS__['Text']
 
 			with patch.object(plugin, 'write', side_effect=partial(cls._observe_write, directory)):
 				directory.write('notes.md', 'complete')
@@ -274,7 +274,7 @@ class TestFilesystem(a.Tester):
 	@classmethod
 	def test_copy_bytes(cls):
 		with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as sources:
-			directory = a.Directory(a, root, 'a.files')
+			directory = almasi.Directory(almasi, root, 'almasi.files')
 
 			for name, data in (('notes.txt', 'Привет'.encode()), ('sound.wav', bytes(range(256))), ('opaque.unknown', b'\x00\xff\x10')):
 				source = os.path.join(sources, name)
@@ -282,7 +282,7 @@ class TestFilesystem(a.Tester):
 					stream.write(data)
 
 				for repeat in range(2):
-					with patch.object(a.__PLUGINS__['Text'], 'write', side_effect=AssertionError('Plugin invoked')):
+					with patch.object(almasi.__PLUGINS__['Text'], 'write', side_effect=AssertionError('Plugin invoked')):
 						directory.copy(name, source)
 					with open(directory.join(name), 'rb') as stream:
 						assert stream.read() == data
@@ -292,7 +292,7 @@ class TestFilesystem(a.Tester):
 	@classmethod
 	def test_copy_source_errors(cls):
 		with tempfile.TemporaryDirectory() as root:
-			directory = a.Directory(a, root, 'a.files')
+			directory = almasi.Directory(almasi, root, 'almasi.files')
 			directory.write('notes.txt', 'original')
 			source = directory.join('notes.txt')
 
@@ -309,7 +309,7 @@ class TestFilesystem(a.Tester):
 	@classmethod
 	def test_copy_failures(cls):
 		with tempfile.TemporaryDirectory() as root:
-			directory = a.Directory(a, root, 'a.files')
+			directory = almasi.Directory(almasi, root, 'almasi.files')
 			directory.write('source.txt', 'new')
 			directory.write('notes.txt', 'old')
 			source = directory.join('source.txt')
@@ -335,7 +335,7 @@ class TestFilesystem(a.Tester):
 	@classmethod
 	def test_copy_boundaries(cls):
 		with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as outside:
-			directory = a.Directory(a, root, 'a.files')
+			directory = almasi.Directory(almasi, root, 'almasi.files')
 			directory.write('source.txt', 'source')
 			source = directory.join('source.txt')
 
@@ -351,7 +351,7 @@ class TestFilesystem(a.Tester):
 	@classmethod
 	def test_root_delegation(cls):
 		with tempfile.TemporaryDirectory() as root, patch.dict(sys.modules):
-			library = cls._library('filesystem_root', root, a.A)
+			library = cls._library('filesystem_root', root, almasi.A)
 
 			assert library.join() == os.path.realpath(root)
 			library.write('source.txt', 'new')
@@ -368,7 +368,7 @@ class TestFilesystem(a.Tester):
 	@classmethod
 	def test_inheritance(cls):
 		with tempfile.TemporaryDirectory() as parent_root, tempfile.TemporaryDirectory() as child_root, patch.dict(sys.modules):
-			parent = cls._library('filesystem_parent', parent_root, a.A)
+			parent = cls._library('filesystem_parent', parent_root, almasi.A)
 			child  = cls._library('filesystem_child', child_root, type(parent))
 
 			parent.write('root.md', 'inherited root')
@@ -397,7 +397,7 @@ class TestFilesystem(a.Tester):
 	@classmethod
 	def test_namespace_attribute_cache(cls):
 		with tempfile.TemporaryDirectory() as root, patch.dict(sys.modules):
-			library = cls._library('filesystem_cache', root, a.A)
+			library = cls._library('filesystem_cache', root, almasi.A)
 			library.write('notes.json', {'version': 1})
 			library.write('other.json', {'stable': True})
 
@@ -425,7 +425,7 @@ class TestFilesystem(a.Tester):
 	@classmethod
 	def test_inherited_namespace_cache_invalidation(cls):
 		with tempfile.TemporaryDirectory() as parent_root, tempfile.TemporaryDirectory() as child_root, patch.dict(sys.modules):
-			parent = cls._library('cache_parent', parent_root, a.A)
+			parent = cls._library('cache_parent', parent_root, almasi.A)
 			child  = cls._library('cache_child', child_root, type(parent))
 
 			parent.write('notes.json', {'value': 1})
@@ -450,7 +450,7 @@ class TestFilesystem(a.Tester):
 	@classmethod
 	def test_link_invalidates_namespace_cache(cls):
 		with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as first, tempfile.TemporaryDirectory() as second:
-			directory = a.Directory(a, root, 'a.mounts')
+			directory = almasi.Directory(almasi, root, 'almasi.mounts')
 
 			directory.link('mounted', first)
 			first_face = directory.mounted
@@ -465,7 +465,7 @@ class TestFilesystem(a.Tester):
 	@classmethod
 	def test_copy_refreshes_carriers(cls):
 		with tempfile.TemporaryDirectory() as root:
-			directory = a.Directory(a, root, 'a.files')
+			directory = almasi.Directory(almasi, root, 'almasi.files')
 			directory.write('notes.json', None)
 			directory.write('source.json', {'copied': True})
 			carrier = next(item for item in directory if item.get_name() == 'notes.json')
@@ -483,7 +483,7 @@ class TestFilesystem(a.Tester):
 	@classmethod
 	def test_copy_source_aliases(cls):
 		with tempfile.TemporaryDirectory() as root:
-			directory = a.Directory(a, root, 'a.files')
+			directory = almasi.Directory(almasi, root, 'almasi.files')
 			directory.write('notes.txt', 'original')
 			source = directory.join('notes.txt')
 
@@ -501,7 +501,7 @@ class TestFilesystem(a.Tester):
 	@classmethod
 	def test_read_failure_recovery(cls):
 		with tempfile.TemporaryDirectory() as root:
-			directory = a.Directory(a, root, 'a.files')
+			directory = almasi.Directory(almasi, root, 'almasi.files')
 			directory.write('notes.json', {'ready': True})
 
 			with patch('builtins.open', side_effect=PermissionError('Unreadable file')):

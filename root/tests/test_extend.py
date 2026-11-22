@@ -10,14 +10,14 @@ import runpy
 import sys
 import tempfile
 
-import a
+import almasi
 
 from contextlib    import contextmanager
 from unittest      import TestCase
 from unittest.mock import patch
 
 
-class TestExtend(a.Tester):
+class TestExtend(almasi.Tester):
 
 	# ======================================================================
 	# PRIVATE METHODS
@@ -28,13 +28,13 @@ class TestExtend(a.Tester):
 	@staticmethod
 	@contextmanager
 	def _runtime():
-		state = a.Imports.__lib__, a.Tester.__lib__, a.Undefined.__lib__
+		state = almasi.Imports.__lib__, almasi.Tester.__lib__, almasi.Undefined.__lib__
 
 		try:
 			with tempfile.TemporaryDirectory() as root, patch.dict(sys.modules), patch.object(sys, 'path', list(sys.path)):
 				yield root
 		finally:
-			a.Imports.__lib__, a.Tester.__lib__, a.Undefined.__lib__ = state
+			almasi.Imports.__lib__, almasi.Tester.__lib__, almasi.Undefined.__lib__ = state
 
 	# Write an importable library with its own filesystem root.
 	# ----------------------------------------------------------------------
@@ -58,9 +58,9 @@ class TestExtend(a.Tester):
 	@classmethod
 	def test_extend_preserves_library_resolution(cls):
 		with cls._runtime() as root:
-			parent_dir = cls._source(root, 'extend_parent', '''import a
+			parent_dir = cls._source(root, 'extend_parent', '''import almasi
 
-extend_parent = a.extend('extend_parent')
+extend_parent = almasi.extend('extend_parent')
 ''')
 			child_dir  = cls._source(root, 'extend_child', '''import extend_parent
 
@@ -69,7 +69,7 @@ extend_child = extend_parent.extend('extend_child')
 			os.makedirs(os.path.join(parent_dir, 'root', 'api'))
 
 			with open(os.path.join(parent_dir, 'root', 'api', 'shared.py'), 'w') as file:
-				file.write('import a\n\nclass Shared(a.Singleton):\n\tpass\n')
+				file.write('import almasi\n\nclass Shared(almasi.Singleton):\n\tpass\n')
 
 			sys.path[:0] = [child_dir, parent_dir]
 			child  = importlib.import_module('extend_child')
@@ -87,9 +87,9 @@ extend_child = extend_parent.extend('extend_child')
 	@classmethod
 	def test_import_python_inherited(cls):
 		with cls._runtime() as root:
-			parent_dir = cls._source(root, 'import_parent', '''import a
+			parent_dir = cls._source(root, 'import_parent', '''import almasi
 
-import_parent = a.extend('import_parent')
+import_parent = almasi.extend('import_parent')
 ''')
 			child_dir = cls._source(root, 'import_child', '''import import_parent
 
@@ -127,13 +127,13 @@ import_child = import_parent.extend('import_child')
 	@classmethod
 	def test_extend_rejects_class_declaration(cls):
 		with cls._runtime() as root:
-			directory = cls._source(root, 'extend_legacy', '''import a
+			directory = cls._source(root, 'extend_legacy', '''import almasi
 
-class ExtendLegacy(a.A):
+class ExtendLegacy(almasi.A):
 \tpass
 ''')
 			sys.path.insert(0, directory)
-			with TestCase().assertRaisesRegex(TypeError, 'a.extend'):
+			with TestCase().assertRaisesRegex(TypeError, 'almasi.extend'):
 				importlib.import_module('extend_legacy')
 
 	# Keep __main__ intact and run entry-point code only for direct execution.
@@ -141,9 +141,9 @@ class ExtendLegacy(a.A):
 	@classmethod
 	def test_extend_from_main(cls):
 		with cls._runtime() as root:
-			app_dir = cls._source(root, 'extend_app', '''import a
+			app_dir = cls._source(root, 'extend_app', '''import almasi
 
-extend_app = a.extend('extend_app')
+extend_app = almasi.extend('extend_app')
 
 if __name__ == '__main__':
 \textend_app.started = True
@@ -162,9 +162,9 @@ if __name__ == '__main__':
 	@classmethod
 	def test_extend_rejects_mismatched_source(cls):
 		with cls._runtime() as root:
-			directory = cls._source(root, 'extend_named', '''import a
+			directory = cls._source(root, 'extend_named', '''import almasi
 
-extend_named = a.extend('another_name')
+extend_named = almasi.extend('another_name')
 ''')
 			sys.path.insert(0, directory)
 			error = None
@@ -182,9 +182,9 @@ extend_named = a.extend('another_name')
 	@classmethod
 	def test_extend_rejects_invalid_name(cls):
 		with cls._runtime() as root:
-			directory = cls._source(root, 'extend_invalid', '''import a
+			directory = cls._source(root, 'extend_invalid', '''import almasi
 
-extend_invalid = a.extend('InvalidName')
+extend_invalid = almasi.extend('InvalidName')
 ''')
 			sys.path.insert(0, directory)
 			error = None

@@ -10,15 +10,15 @@ import sys
 
 from unittest.mock import Mock
 
-import a
+import almasi
 
 
-class TestResolution(a.Tester):
+class TestResolution(almasi.Tester):
 
 	# ----------------------------------------------------------------------
 	@classmethod
 	def _source_root(cls):
-		path = os.path.join(a.__path__, 'tests_runtime')
+		path = os.path.join(almasi.__path__, 'tests_runtime')
 		os.makedirs(path, exist_ok=True)
 		return path
 
@@ -38,7 +38,7 @@ class TestResolution(a.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def _remove_runtime(cls):
-		path = os.path.join(a.__path__, 'tests_runtime')
+		path = os.path.join(almasi.__path__, 'tests_runtime')
 
 		if os.path.isdir(path):
 			for module_name in list(sys.modules):
@@ -47,9 +47,9 @@ class TestResolution(a.Tester):
 
 			shutil.rmtree(path)
 
-		a.__children__.pop('tests_runtime', None)
-		a.__dict__.pop('tests_runtime', None)
-		a.__cached_names__.discard('tests_runtime')
+		almasi.__children__.pop('tests_runtime', None)
+		almasi.__dict__.pop('tests_runtime', None)
+		almasi.__cached_names__.discard('tests_runtime')
 
 	# ----------------------------------------------------------------------
 	@classmethod
@@ -60,18 +60,18 @@ class TestResolution(a.Tester):
 			cls._write_source(
 				'eager_carrier.py',
 				(
-					'import a\n\n'
-					'class EagerCarrier(a.Module):\n'
+					'import almasi\n\n'
+					'class EagerCarrier(almasi.Module):\n'
 					'\tvalue = 11\n'
 				)
 			)
-			EagerCarrier = a.tests_runtime.EagerCarrier
-			directory    = a.__children__['tests_runtime']
+			EagerCarrier = almasi.tests_runtime.EagerCarrier
+			directory    = almasi.__children__['tests_runtime']
 			carrier      = directory.__children__['EagerCarrier']
 
 			assert EagerCarrier.value == 11
-			assert isinstance(directory, a.Directory)
-			assert isinstance(carrier, a.File)
+			assert isinstance(directory, almasi.Directory)
+			assert isinstance(carrier, almasi.File)
 			assert carrier._data is EagerCarrier
 		finally:
 			cls._remove_runtime()
@@ -85,29 +85,29 @@ class TestResolution(a.Tester):
 			cls._write_source(
 				'iter_one.py',
 				(
-					'import a\n\n'
-					'class IterOne(a.Module):\n'
+					'import almasi\n\n'
+					'class IterOne(almasi.Module):\n'
 					'\tvalue = 1\n'
 				)
 			)
 			cls._write_source(
 				'iter_two.py',
 				(
-					'import a\n\n'
-					'class IterTwo(a.Module):\n'
+					'import almasi\n\n'
+					'class IterTwo(almasi.Module):\n'
 					'\tvalue = 2\n'
 				)
 			)
 
-			directory = a.tests_runtime
+			directory = almasi.tests_runtime
 			children  = list(directory)
 			routes    = sorted(child.get_route() for child in children)
 
 			assert routes == [
-				'a.tests_runtime.IterOne',
-				'a.tests_runtime.IterTwo',
+				'almasi.tests_runtime.IterOne',
+				'almasi.tests_runtime.IterTwo',
 			]
-			assert all(isinstance(child, a.File) for child in children)
+			assert all(isinstance(child, almasi.File) for child in children)
 			assert all(child._data is None for child in children)
 		finally:
 			cls._remove_runtime()
@@ -116,7 +116,7 @@ class TestResolution(a.Tester):
 	@classmethod
 	def test_file_load_is_memoized(cls):
 		load = Mock(return_value={'count': 1})
-		file = a.File(a, __file__, 'a.tests.FileMemo', load)
+		file = almasi.File(almasi, __file__, 'almasi.tests.FileMemo', load)
 		one  = file.load()
 		two  = file.load()
 
@@ -127,7 +127,7 @@ class TestResolution(a.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_directory_load_returns_self(cls):
-		directory = a.Directory(a, a.__path__, 'a')
+		directory = almasi.Directory(almasi, almasi.__path__, 'almasi')
 
 		assert directory.load() is directory
 		assert directory.is_directory()
@@ -140,7 +140,7 @@ class TestResolution(a.Tester):
 
 		try:
 			cls._source_root()
-			directory = a.tests_runtime
+			directory = almasi.tests_runtime
 
 			try:
 				directory.NoSuchCarrier
@@ -156,7 +156,7 @@ class TestResolution(a.Tester):
 	# @classmethod
 	# def test_child_directory_falls_back_to_parent_directory(cls):
 	# 	cls._remove_runtime()
-	# 	child_path = os.path.join(a.__path__, 'tests_runtime_child')
+	# 	child_path = os.path.join(almasi.__path__, 'tests_runtime_child')
 	# 	module     = sys.modules[__name__]
 
 	# 	try:
@@ -164,13 +164,13 @@ class TestResolution(a.Tester):
 	# 		cls._write_source(
 	# 			'parent_dir/parent_thing.py',
 	# 			(
-	# 				'import a\n\n'
-	# 				'class ParentThing(a.Module):\n'
+	# 				'import almasi\n\n'
+	# 				'class ParentThing(almasi.Module):\n'
 	# 				'\tvalue = 31\n'
 	# 			)
 	# 		)
 
-	# 		class ResolutionChild(a.A, path=child_path):
+	# 		class ResolutionChild(almasi.A, path=child_path):
 	# 			def initialize(self):
 	# 				pass
 

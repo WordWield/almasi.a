@@ -13,13 +13,13 @@ from contextlib import contextmanager
 from unittest import TestCase
 from unittest.mock import patch
 
-import a
+import almasi
 
 from lib.events   import Events
 from lib.function import Function
 
 
-class TestReload(a.Tester):
+class TestReload(almasi.Tester):
 
 	# ======================================================================
 	# PRIVATE METHODS
@@ -30,11 +30,11 @@ class TestReload(a.Tester):
 	@staticmethod
 	@contextmanager
 	def _runtime():
-		with tempfile.TemporaryDirectory(dir=a.__path__, prefix='__reload_') as path:
-			directory = a.Directory(a, path, f'a.{os.path.basename(path)}')
+		with tempfile.TemporaryDirectory(dir=almasi.__path__, prefix='__reload_') as path:
+			directory = almasi.Directory(almasi, path, f'almasi.{os.path.basename(path)}')
 
 			try:
-				with patch.object(a.Reloadable, '_observe_reload', return_value=None):
+				with patch.object(almasi.Reloadable, '_observe_reload', return_value=None):
 					yield directory
 			finally:
 				for name in tuple(sys.modules):
@@ -62,9 +62,9 @@ class TestReload(a.Tester):
 	def test_service_state_and_namespace(cls):
 		with cls._runtime() as directory:
 			path = cls._write(directory, 'session_store', '''
-import a
+import almasi
 
-class SessionStore(a.ReloadableSingleton):
+class SessionStore(almasi.ReloadableSingleton):
 	def initialize(self):
 		self.sessions = {}
 		self.requests = 0
@@ -82,9 +82,9 @@ class SessionStore(a.ReloadableSingleton):
 			assert service.handle('guest') == {'history': ['started']}
 
 			cls._write(directory, 'session_store', '''
-import a
+import almasi
 
-class SessionStore(a.ReloadableSingleton):
+class SessionStore(almasi.ReloadableSingleton):
 	def initialize(self):
 		raise AssertionError('Initialization must not run again')
 
@@ -110,9 +110,9 @@ class SessionStore(a.ReloadableSingleton):
 	def test_module_instances_and_removed_methods(cls):
 		with cls._runtime() as directory:
 			path = cls._write(directory, 'message_handler', '''
-import a
+import almasi
 
-class MessageHandler(a.ReloadableModule):
+class MessageHandler(almasi.ReloadableModule):
 	def process(self, value):
 		return 'old:' + value
 
@@ -129,9 +129,9 @@ class MessageHandler(a.ReloadableModule):
 			old_ids   = (id(one), id(two))
 
 			cls._write(directory, 'message_handler', '''
-import a
+import almasi
 
-class MessageHandler(a.ReloadableModule):
+class MessageHandler(almasi.ReloadableModule):
 	def process(self, value):
 		return 'new:' + value.upper()
 ''')
@@ -154,9 +154,9 @@ class MessageHandler(a.ReloadableModule):
 	def test_repeated_service_reload(cls):
 		with cls._runtime() as directory:
 			cls._write(directory, 'counter_service', '''
-import a
+import almasi
 
-class CounterService(a.ReloadableSingleton):
+class CounterService(almasi.ReloadableSingleton):
 	def increment(self):
 		self.value = getattr(self, 'value', 0) + 1
 		return self.value
@@ -166,9 +166,9 @@ class CounterService(a.ReloadableSingleton):
 
 			for step in (2, 3, 4):
 				cls._write(directory, 'counter_service', f'''
-import a
+import almasi
 
-class CounterService(a.ReloadableSingleton):
+class CounterService(almasi.ReloadableSingleton):
 	def increment(self):
 		self.value = getattr(self, 'value', 0) + {step}
 		return self.value
@@ -186,9 +186,9 @@ class CounterService(a.ReloadableSingleton):
 	def test_inherited_methods_and_super(cls):
 		with cls._runtime() as directory:
 			cls._write(directory, 'base_operation', '''
-import a
+import almasi
 
-class BaseOperation(a.ReloadableModule):
+class BaseOperation(almasi.ReloadableModule):
 	def execute(self, value):
 		return value + 1
 ''')
@@ -210,9 +210,9 @@ class BaseOperation(a.ReloadableModule):
 			assert grandchild.execute(4) == 13
 
 			cls._write(directory, 'base_operation', '''
-import a
+import almasi
 
-class BaseOperation(a.ReloadableModule):
+class BaseOperation(almasi.ReloadableModule):
 	def execute(self, value):
 		return value + 10
 ''')
@@ -230,9 +230,9 @@ class BaseOperation(a.ReloadableModule):
 	def test_registered_callbacks_and_detach(cls):
 		with cls._runtime() as directory:
 			cls._write(directory, 'notification_service', '''
-import a
+import almasi
 
-class NotificationService(a.ReloadableSingleton):
+class NotificationService(almasi.ReloadableSingleton):
 	def announce(self, payload):
 		return payload
 
@@ -249,9 +249,9 @@ class NotificationService(a.ReloadableSingleton):
 			assert service.received == [('old', {'foo': 'bar'})]
 
 			cls._write(directory, 'notification_service', '''
-import a
+import almasi
 
-class NotificationService(a.ReloadableSingleton):
+class NotificationService(almasi.ReloadableSingleton):
 	def announce(self, payload):
 		return payload
 
@@ -278,9 +278,9 @@ class NotificationService(a.ReloadableSingleton):
 	def test_async_callback_after_completion(cls):
 		with cls._runtime() as directory:
 			cls._write(directory, 'job_service', '''
-import a
+import almasi
 
-class JobService(a.ReloadableSingleton):
+class JobService(almasi.ReloadableSingleton):
 	async def run(self, value):
 		return value + 1
 ''')
@@ -289,9 +289,9 @@ class JobService(a.ReloadableSingleton):
 			assert asyncio.run(callback(10)) == 11
 
 			cls._write(directory, 'job_service', '''
-import a
+import almasi
 
-class JobService(a.ReloadableSingleton):
+class JobService(almasi.ReloadableSingleton):
 	async def run(self, value):
 		return value + 2
 ''')
@@ -304,9 +304,9 @@ class JobService(a.ReloadableSingleton):
 	def test_same_timestamp_and_length(cls):
 		with cls._runtime() as directory:
 			path = cls._write(directory, 'same_source', '''
-import a
+import almasi
 
-class SameSource(a.ReloadableModule):
+class SameSource(almasi.ReloadableModule):
 	def text(self):
 		return 'one'
 ''')
@@ -314,9 +314,9 @@ class SameSource(a.ReloadableModule):
 			mtime  = os.stat(path).st_mtime_ns
 
 			cls._write(directory, 'same_source', '''
-import a
+import almasi
 
-class SameSource(a.ReloadableModule):
+class SameSource(almasi.ReloadableModule):
 	def text(self):
 		return 'two'
 ''')
@@ -331,9 +331,9 @@ class SameSource(a.ReloadableModule):
 	def test_invalid_source_keeps_old_version(cls):
 		with cls._runtime() as directory:
 			path = cls._write(directory, 'safe_handler', '''
-import a
+import almasi
 
-class SafeHandler(a.ReloadableModule):
+class SafeHandler(almasi.ReloadableModule):
 	def respond(self):
 		return 'working'
 ''')
@@ -341,7 +341,7 @@ class SafeHandler(a.ReloadableModule):
 			handler   = old_class()
 			old_module = sys.modules[os.path.realpath(path)]
 
-			cls._write(directory, 'safe_handler', 'class SafeHandler(a.ReloadableModule):\n\tdef respond(\n')
+			cls._write(directory, 'safe_handler', 'class SafeHandler(almasi.ReloadableModule):\n\tdef respond(\n')
 
 			with TestCase().assertRaises(SyntaxError):
 				handler.__reload__()
@@ -357,9 +357,9 @@ class SafeHandler(a.ReloadableModule):
 	def test_invalid_class_contract_keeps_old_version(cls):
 		with cls._runtime() as directory:
 			cls._write(directory, 'task_processor', '''
-import a
+import almasi
 
-class TaskProcessor(a.ReloadableModule):
+class TaskProcessor(almasi.ReloadableModule):
 	def execute(self):
 		return 17
 ''')
@@ -367,8 +367,8 @@ class TaskProcessor(a.ReloadableModule):
 			task      = old_class()
 
 			for source in (
-				'import a\nclass WrongName(a.ReloadableModule):\n\tpass\n',
-				'import a\nclass TaskProcessor(a.ReloadableSingleton):\n\tpass\n',
+				'import almasi\nclass WrongName(almasi.ReloadableModule):\n\tpass\n',
+				'import almasi\nclass TaskProcessor(almasi.ReloadableSingleton):\n\tpass\n',
 			):
 				cls._write(directory, 'task_processor', source)
 
@@ -385,9 +385,9 @@ class TaskProcessor(a.ReloadableModule):
 	def test_incompatible_layout_rolls_back(cls):
 		with cls._runtime() as directory:
 			cls._write(directory, 'buffer_owner', '''
-import a
+import almasi
 
-class BufferOwner(a.ReloadableModule):
+class BufferOwner(almasi.ReloadableModule):
 	def read(self):
 		return self.buffer
 ''')
@@ -398,9 +398,9 @@ class BufferOwner(a.ReloadableModule):
 			two.buffer = ['queued']
 
 			cls._write(directory, 'buffer_owner', '''
-import a
+import almasi
 
-class BufferOwner(a.ReloadableModule):
+class BufferOwner(almasi.ReloadableModule):
 	__slots__ = ('slot',)
 
 	def read(self):
@@ -419,7 +419,7 @@ class BufferOwner(a.ReloadableModule):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_runtime_class_rejected(cls):
-		class InMemory(a.ReloadableModule):
+		class InMemory(almasi.ReloadableModule):
 			pass
 
 		with TestCase().assertRaisesRegex(TypeError, 'source-backed'):

@@ -11,13 +11,13 @@ import sys
 import tempfile
 import types
 
-import a
+import almasi
 
 from contextlib    import contextmanager
 from unittest.mock import patch
 
 
-class TestOwnership(a.Tester):
+class TestOwnership(almasi.Tester):
 
 	# ======================================================================
 	# PRIVATE METHODS
@@ -44,12 +44,12 @@ class TestOwnership(a.Tester):
 	@staticmethod
 	@contextmanager
 	def _runtime():
-		state = a.Imports.__lib__, a.Tester.__lib__, a.Undefined.__lib__
+		state = almasi.Imports.__lib__, almasi.Tester.__lib__, almasi.Undefined.__lib__
 		try:
 			with tempfile.TemporaryDirectory() as root, patch.dict(sys.modules):
 				yield root
 		finally:
-			a.Imports.__lib__, a.Tester.__lib__, a.Undefined.__lib__ = state
+			almasi.Imports.__lib__, almasi.Tester.__lib__, almasi.Undefined.__lib__ = state
 
 	# Write a valid source carrier without executing it during preparation.
 	# ----------------------------------------------------------------------
@@ -58,7 +58,7 @@ class TestOwnership(a.Tester):
 		directory = library.mkdir('api')
 		filename  = directory.join(library.String.camel_to_snake(name) + '.py')
 		with open(filename, 'w') as stream:
-			stream.write('import a\n\n\nclass ' + name + '(a.' + ancestor + '):\n\tpass\n')
+			stream.write('import almasi\n\n\nclass ' + name + '(almasi.' + ancestor + '):\n\tpass\n')
 		return filename
 
 	# ======================================================================
@@ -70,11 +70,11 @@ class TestOwnership(a.Tester):
 	@classmethod
 	def test_deferred_source_and_resource_ownership(cls):
 		with cls._runtime() as root:
-			owner    = cls._library('ownership_owner', root, a.A)
+			owner    = cls._library('ownership_owner', root, almasi.A)
 			filename = cls._source(owner, 'Probe')
 			carrier  = next(iter(owner.api))
-			foreign  = cls._library('ownership_foreign', root, a.A)
-			assert a.Imports.__lib__ is foreign
+			foreign  = cls._library('ownership_foreign', root, almasi.A)
+			assert almasi.Imports.__lib__ is foreign
 			probe = carrier.load()
 			assert carrier.get_lib() is owner
 			assert sys.modules[probe.__module__].__lib__ is owner
@@ -88,7 +88,7 @@ class TestOwnership(a.Tester):
 			assert owner.data == {'owner': True}
 			assert owner.clip == b'owner bytes'
 			assert all(item.get_lib() is owner for item in owner)
-			assert a.__PLUGINS__['Py'].lib is a
+			assert almasi.__PLUGINS__['Py'].lib is almasi
 
 	# A child reuses parent classes and services but owns its local overrides.
 	# ----------------------------------------------------------------------
@@ -96,7 +96,7 @@ class TestOwnership(a.Tester):
 	def test_inherited_identity_and_local_overrides(cls):
 		for parent_first in (False, True):
 			with cls._runtime() as root:
-				parent = cls._library('ownership_parent', root, a.A)
+				parent = cls._library('ownership_parent', root, almasi.A)
 				cls._source(parent, 'Probe')
 				cls._source(parent, 'Shared', 'Singleton')
 				cls._source(parent, 'Local')
@@ -104,7 +104,7 @@ class TestOwnership(a.Tester):
 					parent.api.Probe
 				child = cls._library('ownership_child', root, type(parent))
 				cls._source(child, 'Local')
-				cls._library('ownership_other', root, a.A)
+				cls._library('ownership_other', root, almasi.A)
 				assert child.api.Probe is parent.api.Probe
 				assert sys.modules[child.api.Probe.__module__].__lib__ is parent
 				assert child.api.Shared is parent.api.Shared

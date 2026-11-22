@@ -13,10 +13,10 @@ import tempfile
 from contextlib import contextmanager
 from unittest.mock import patch
 
-import a
+import almasi
 
 
-class TestFork(a.Tester):
+class TestFork(almasi.Tester):
 
 	# ======================================================================
 	# PRIVATE METHODS
@@ -46,8 +46,8 @@ class TestFork(a.Tester):
 			os.makedirs(os.path.join(root, 'services'))
 
 			TestFork._write(folder, name + '.py', (
-				'import a\n'
-				+ name + ' = a.extend(\'' + name + '\')\n'
+				'import almasi\n'
+				+ name + ' = almasi.extend(\'' + name + '\')\n'
 			))
 			TestFork._write(root, 'item.py', '''
 import almasi_fork_fixture
@@ -95,16 +95,16 @@ class Counter(almasi_fork_fixture.ReloadableSingleton):
 ''')
 			spec         = importlib.util.spec_from_file_location(name, os.path.join(folder, name + '.py'))
 			module       = importlib.util.module_from_spec(spec)
-			previous_lib = (a.Undefined.__lib__, a.Imports.__lib__, a.Tester.__lib__)
+			previous_lib = (almasi.Undefined.__lib__, almasi.Imports.__lib__, almasi.Tester.__lib__)
 
 			sys.modules[name] = module
 
 			try:
 				spec.loader.exec_module(module)
-				with patch.object(a.ReloadableSingleton, '_observe_reload', return_value=None):
+				with patch.object(almasi.ReloadableSingleton, '_observe_reload', return_value=None):
 					yield sys.modules[name], root
 			finally:
-				a.Undefined.__lib__, a.Imports.__lib__, a.Tester.__lib__ = previous_lib
+				almasi.Undefined.__lib__, almasi.Imports.__lib__, almasi.Tester.__lib__ = previous_lib
 
 				for module_name in tuple(sys.modules):
 					if module_name == name or module_name.startswith(os.path.realpath(root) + os.sep):
