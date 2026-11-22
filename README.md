@@ -1,275 +1,154 @@
 # Almasi
 
-**A filesystem-native Python runtime for building and composing libraries.**
+**What if your codebase was already your runtime architecture?**
+Almasi is an open-source Python foundation that turns source structure into a live, composable namespace—without a separate layer of registration and wiring.
+**For developers:** fewer moving parts, lazy components, natural composition. **For ambitious products:** a common foundation for persistent state and AI agents.
+[Watch the 2-minute overview](https://www.youtube.com/watch?v=eCk6kiAriR0) · [Persistent objects: Almasi O](https://github.com/WordWield/almasi.o) · [Agents: Almasi Do](https://github.com/WordWield/almasi.do)
 
-[Watch the 2-minute technical overview on YouTube](https://www.youtube.com/watch?v=eCk6kiAriR0&utm_source=chatgpt.com)
+## See it in 30 seconds
 
-Almasi makes the **filesystem itself the structure of a Python library**.
+Install the core from GitHub (Python 3.11+):
 
-Instead of maintaining separate registration, discovery, and integration layers, Almasi resolves components directly from the library's filesystem structure and exposes them through a native Python namespace.
+```bash
+python -m pip install git+https://github.com/WordWield/almasi.git
+```
 
-The result is a development model where **the structure of the codebase becomes the structure of the runtime**.
-
-## Core Ideas
-
-### Library = Class
-
-An Almasi library is backed by a Python class and a canonical published instance, but is declared with `extend()` rather than a class definition.
-
-In `mylib.py`:
+Use a library as if it were part of the runtime:
 
 ```python
-import almasi
+from almasi import o
 
+print(o)  # <Library 'almasi.o'>
+```
+
+On first access, Almasi retrieves the library's Git source, installs its declared dependencies and publishes its canonical Python namespace. Repeated imports reuse that instance. **The core stays small; libraries arrive when needed.** Git and internet access are required for first acquisition.
+
+Or define a filesystem-native library yourself:
+
+```text
+mylib.py
+root/
+└── greetings.py
+```
+
+```python
+# mylib.py
+import almasi
 
 mylib = almasi.extend('mylib')
 ```
 
-To build a library on top of another, use `mylib = parent.extend('mylib')` in the corresponding module. The resulting library class inherits from the parent's class, and namespace lookup follows that lineage. Library creation does **not** implicitly invoke `initialize()`; the application explicitly initializes the services it needs.
-
-When `extend()` is called directly from Python's `__main__` module, the resulting library is selected automatically as the application:
-
 ```python
-web_app = web.extend('web_app')
-```
-
-The selected application is stored as `almasi.__app__`. Every Almasi `Module` instance — including `Singleton` and event-controller instances — inherits `self.__app__` from the `Module` base class. This property resolves the current application at access time, so objects created before application selection also see it. `self.__lib__` identifies the library that defined the class, independently of `self.__app__`. The loader does not inject an application global into Python modules.
-
-```python
-class Example(web.Module):
-
-	def execute(self):
-		return self.__app__.services.SomeService
-```
-
-Application selection is process-wide, not per request. Before selection, `self.__app__` returns `None`. Since selection follows `__main__`, a script calling `extend()` directly is also treated as an application.
-
-### Filesystem → Namespace
-
-A library's filesystem structure maps directly to its Python namespace:
-
-```text
-mylib/
-└── root/
-    ├── foo/
-    │   ├── bar.py
-    │   └── config.json
-    └── README.txt
-```
-
-```python
+# root/greetings.py
 import mylib
 
-mylib.foo.bar
-mylib.foo.config
-mylib.README
-```
-
-Components are resolved lazily when accessed.
-
-### Lazy Runtime Resolution
-
-Almasi discovers components on demand:
-
-```text
-mylib.foo.bar
-       │
-       ▼
-   filesystem
-       │
-       ▼
-   resolve → load → cache
-```
-
-Python modules must inherit from `Module` to participate in the runtime:
-
-```python
-import mylib
-
-
-class Bar(mylib.Module):
+class Greetings(mylib.Module):
 
 	def hello(self):
-		print('Hello from Bar')
+		return 'Hello from the filesystem'
 ```
-
-### Extensible Plugins
-
-Filesystem resolution is separated from file semantics through a plugin system.
-
-Plugins can define how different resource types are discovered and loaded:
-
-```python
-class Json(almasi.Plugin):
-
-	EXTENSIONS = ('json',)
-
-	def __call__(self, name, parent_path, parent_route):
-		...
-```
-
-The runtime can therefore be extended without changing its core resolution model.
-
-### Library Composition
-
-Libraries remain ordinary Python modules and can be composed through normal imports:
-
-```python
-import mylib
-import other_lib
-
-mylib.foo
-other_lib.bar
-```
-
-Each library maintains its own structure and namespace while participating in the same runtime model.
-
-### Forked runtime namespaces
-
-Named forks isolate Almasi's lazy Python module globals, runtime classes, service
-singletons, and namespace caches without publishing another canonical Python
-library. Forks may themselves be forked.
 
 ```python
 import mylib
 
+print(mylib.greetings.hello())
+```
+
+A file becomes a module in the runtime namespace when it is needed. No manual registry of `greetings`, no generated integration layer.
+
+## The idea
+
+Most frameworks describe the same system repeatedly: files, package exports, service registries, plugin registries, dependency wiring and application configuration. Each representation can drift from the others.
+
+**Almasi makes the filesystem a first-class source of runtime structure.** Its libraries are canonical instances of classes, with inheritance, lazily resolved components and extensible file-type plugins.
+
+| Capability | What it changes |
+| --- | --- |
+| Filesystem-native namespaces | A `root/` tree resolves naturally into a Python library namespace |
+| Library inheritance | Extend a library without copying its components |
+| Lazy resolution | Discover and cache components on access |
+| Pluggable file semantics | Load Python, JSON, text and other supported resource types through plugins |
+| Named forks | Isolate runtime classes, services and module globals within a library lineage |
+| On-demand library acquisition | Retrieve WordWield libraries and their dependencies on first import |
+
+### A family, not a monolith
+
+**[Almasi Core](https://github.com/WordWield/almasi)** — runtime identity, filesystem-native discovery and library composition.
+
+**[Almasi O](https://github.com/WordWield/almasi.o)** — a persistent Python ontology: typed entities, identity, relationships, nested collections, schemas and LMDB-backed state.
+
+**[Almasi Do](https://github.com/WordWield/almasi.do)** — AI agents, structured outputs and provider orchestration that build on the same runtime and object model.
+
+The larger opportunity is architectural: applications and agents can build on shared native primitives instead of maintaining an ever-growing web of translations. Almasi is active infrastructure research and development, not a claim that every integration has already been completed.
+
+## How it works
+
+A library entry point declares its name through `extend()`:
+
+```python
+import almasi
+
+mylib = almasi.extend('mylib')
+```
+
+The entry file and library name must match, and a sibling `root/` directory must exist. Components stored under `root/` are resolved by their names, loaded when accessed and cached. Python components are classes derived from `Module`; other supported files use registered plugins.
+
+Libraries inherit the capabilities of their parent:
+
+```python
+from almasi import o
+
+# In the entry point of an appropriately named child library:
+# child = o.extend('child')
+```
+
+When a library is extended from `__main__`, Almasi also selects it as the active application. Application selection is process-wide; services do not implicitly initialize merely because a library is extended.
+
+### Named forks
+
+```python
 alice = mylib.fork('alice')
 bob   = mylib.fork('bob')
 
+assert alice is not bob
 assert mylib['alice'] is alice
-assert mylib['default'] is mylib
-assert alice is not bob  # Each fork resolves its own Python components
 ```
 
-Inside Python files loaded through a fork, `import mylib` (and imports of
-inherited library names) resolves to that fork. The ordinary application-level
-`import mylib` remains canonical, so use `mylib['alice']` to select the fork
-at the application boundary. Python code objects are reused between forks,
-but their classes and module globals are separate. The default library keeps
-its existing loader and cache behavior.
+Forks isolate Python-side runtime namespaces and service instances. They **do not** automatically duplicate external databases or other application-owned resources. Those lifecycle choices belong to the consuming library.
 
-The fork starts with fresh component caches and deep-copied ordinary public
-configuration values. Already resolved Python classes, bound methods, and
-service instances are not inherited. Library-specific lifecycle and external
-storage (for example an LMDB snapshot) belong to the consuming library's
-`fork()` override; Almasi does not clone persistent storage.
+### Filesystem operations
 
-## Files and directories
+The runtime also provides `join()`, `mkdir()`, `read()`, `write()`, `copy()` and `link()` on directory faces and library roots. Writes and copies use atomic replacement, and successful mutations invalidate affected cached filesystem carriers. [Read the detailed invariants](docs/almasi_invariants8.md).
 
-Almasi carriers expose identity through `get_path()`, `get_route()`, `get_lib()`, and `get_name()`. `is_directory()` is a method. Ordinary names such as `path`, `name`, `lib`, and `data` remain available to filesystem children.
+## Acquisition and security
 
 ```python
-docs = mylib.mkdir('docs')
-
-docs.write('intro.md', '# Welcome')
-docs.write('notes.txt', 'Hello, world!')
-mylib.write('scenario.json', {'title': 'Python Demo', 'scenes': []})
-docs.copy('narration.wav', source_filename)
-
-intro    = docs.read('intro.md')
-notes    = docs.notes
-scenario = mylib.scenario
-filename = docs.join('images', 'cover.png')
+from almasi import o, do
 ```
 
-| Method | Semantics |
-|---|---|
-| `join(*parts)` | Validate a relative path without creating anything; `join()` returns the base |
-| `mkdir(*parts)` | Create directories and return a native directory face |
-| `read(name)` | Read an exact filename through its registered plugin |
-| `write(name, value)` | Serialize through a plugin and atomically replace the destination |
-| `copy(name, source)` | Copy regular-file bytes and atomically replace the destination |
-| `link(name, path)` | Create or retarget a filesystem mount |
+Missing libraries are resolved from the default Git base `https://github.com/WordWield` and stored under `~/.cache/almasi/libraries`. Existing checkouts may be fast-forwarded on first import in a process. The loader installs a library's `requirements.txt` into the **active Python environment**.
 
-All six operations are also available on the library root. Paths must remain contained; absolute components, escaping traversal and unintended symlink writes are rejected. `write` supports UTF-8 `.txt` / `.md` and JSON; `copy` supports binary files and unknown extensions without serialization. Errors propagate as exceptions.
-
-Atomic writes and copies publish completed hidden temporary files with `os.replace`. Failures before replacement preserve the old destination and clean up temporary files. Atomic replacement does not promise power-loss durability. Successful mutations invalidate related carriers in the receiving namespace face while preserving unrelated cached resources. JSON `null` is memoized. Independently constructed faces and external edits are not globally refreshed.
-
-See [the current filesystem invariants](docs/almasi_invariants8.md) for identity, reserved names, inheritance and cache scope.
-
-## Qualified Almasi library imports
-
-The core and its lazy library namespace have a single canonical identity, `almasi`:
-
-```python
-from almasi import web, o, mcp
-```
-
-The core’s existing `__getattr__` delegates missing library names to
-`almasi.services.Libraries`. A library is loaded under its qualified
-identity, such as `almasi.mcp`, and `almasi.extend('mcp')` publishes the canonical
-instance in `sys.modules`. The official MCP SDK retains the unrelated top-level
-`import mcp` identity.
-
-```text
-from almasi import web
-    -> Libraries.imp('web')
-    -> reuse sys.modules['almasi.web'], if already loaded
-    -> reuse and try to fast-forward an existing local Git checkout
-    -> otherwise clone WordWield/almasi.web into the library directory
-    -> install requirements.txt dependencies, if declared
-    -> load the entry file as almasi.web
-    -> reuse the same canonical instance on subsequent imports
-```
-
-No manual `Libraries.initialize()` call or separate installation of each
-Almasi library is necessary. The default source directory is
-`~/.cache/almasi/libraries`, with optional settings:
-
-| Environment variable | Purpose |
+| Setting | Effect |
 | --- | --- |
-| `ALMASI_PATH` | Override the directory containing acquired libraries |
-| `ALMASI_GIT_BASE` | Override the Git source base; default `https://github.com/WordWield` |
+| `ALMASI_PATH` | Choose the directory for library checkouts |
+| `ALMASI_GIT_BASE` | Choose a Git source base, including SSH URLs |
 
-For example, `ALMASI_GIT_BASE=git@github.com:WordWield` uses SSH
-authentication. Private repositories require suitable Git credentials.
+Only libraries accessible with your Git credentials can be acquired. Git revisions are currently **not pinned or cryptographically verified**; imports execute source code and may install Python packages. Use only repositories you trust. This is convenient for development and experimentation, not a sandbox for untrusted code.
 
-The supported library layouts are `<checkout>/<name>.py` and
-`<checkout>/almasi/<name>.py`, both with a `root/` directory.
-The nested entry point preserves independent top-level Python packages,
-particularly the official MCP SDK. Git clones directly into the target directory;
-existing Git checkouts are updated with `git pull --ff-only` before first import in a process; if updating fails, the local version is used. An interrupted clone
-may require removing its incomplete directory before retrying.
+The supported library entry layouts are `<checkout>/<name>.py` and `<checkout>/almasi/<name>.py`, each with a `root/` directory. The latter preserves unrelated top-level packages such as the official Python `mcp` SDK. The supported lazy-import contract is `from almasi import name`, not direct `import almasi.name`.
 
-| Method | Contract |
-| --- | --- |
-| `get_path(name)` | Resolve the local checkout path |
-| `get_url(name)` | Derive the configured Git source |
-| `is_cloned(name)` | Check whether the local checkout directory exists |
-| `clone(name)` | Acquire the checkout when absent |
-| `imp(name)` | Reuse or load the canonical Almasi library |
+## For builders and collaborators
 
-Git handles authentication. Libraries acquires Almasi source and installs declared
-`requirements.txt` dependencies using the active Python environment before loading
-the library. Dependencies are prepared once per library import in each process,
-not on repeated accesses to an already loaded library. Library checkouts are not
-pip-installed distributions.
-Git revisions are not pinned or verified, and private repositories still require
-suitable Git credentials. Importing a library executes its Python source; only
-trusted repositories should be used.
+Almasi explores a focused thesis: **complexity should emerge from necessity, not from duplicate representations of the same concept.**
 
-This namespace supports `from almasi import <name>`. Direct
-`import almasi.<name>` uses Python's distinct submodule import mechanism
-and is not part of this contract.
+This is relevant to AI-native applications, agent infrastructure, developer tooling and software that needs persistent, inspectable structure. The three libraries demonstrate distinct layers of that thesis; there are no claimed adoption or benchmark numbers beyond published project tests.
 
-## Installation
+- [Source and issues](https://github.com/WordWield/almasi)
+- [Architecture and invariants](docs/almasi_invariants8.md)
+- [Python CI](https://github.com/WordWield/almasi/actions/workflows/python-tests.yml)
 
-For development, install the core directly from its Git repository:
+## Project status
 
-```bash
-git clone https://github.com/WordWield/almasi.git
-cd almasi
-python -m pip install -e .
-```
+Python 3.11+; Apache-2.0. The core builds as a wheel and is tested in CI on Python 3.11 and 3.12. PyPI publication is a separate release step; until it happens, use the Git installation command above.
 
-The distribution and import name are both `almasi`.
-PyPI publication and production-wheel packaging are separate release steps;
-the source-acquisition behavior is identical once the core is installed.
-
-## Author
-
-**Alexander Podgorny**
-
-AI architect and systems researcher.
-
-[LinkedIn](https://www.linkedin.com/in/podgorny/?utm_source=chatgpt.com)
+**Created by Alexander Podgorny** — AI systems architect and researcher. [Connect on LinkedIn](https://www.linkedin.com/in/podgorny/).
