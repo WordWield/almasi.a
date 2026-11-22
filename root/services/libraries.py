@@ -35,7 +35,7 @@ class Libraries(almasi.Singleton):
 		label = f'almasi.{name}: {operation}'
 
 		try:
-			with almasi.Spinner(label, failure_label=f'❌ {label}'):
+			with almasi.Spinner(text=label, failure_label=f'❌ {label}'):
 				subprocess.run(
 					command,
 					cwd            = cwd,
