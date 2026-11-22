@@ -69,7 +69,7 @@ class Libraries(almasi.Singleton):
 				entry = os.path.join(path, 'almasi', name + '.py')
 
 			almasi.Imports.load_module(
-				a,
+				almasi,
 				entry,
 				module_name = qualified
 			)
