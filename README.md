@@ -189,63 +189,65 @@ See [the current filesystem invariants](docs/almasi_invariants8.md) for identity
 
 ## Qualified Almasi library imports
 
-The base distribution also ships the `almasi` Python import namespace.
-No second Almasi distribution or global import hook is needed:
+The existing `a` distribution also installs the `almasi` import namespace:
 
 ```python
 from almasi import web
-
-# A canonical Almasi library instance, once its source is available.
-assert web.__name__ == 'almasi.web'
 ```
 
-The `Libraries` Singleton is owned by the Almasi core. The public
-operations are available as `a.Libraries` or `almasi.Libraries`:
+The namespace's `__getattr__` delegates to the canonical
+`a.services.Libraries` Singleton. It uses Almasi's existing `Imports`
+and `a.extend()` mechanism to publish `almasi.web` in `sys.modules`.
+No global Python import hook, second loaded-library registry or separate
+Almasi installation is needed.
 
-| Method | Return | Behavior |
-| --- | --- | --- |
-| `list()` | `list[str]` | Names of locally acquired, already loaded, and discoverable remote libraries |
-| `clone(name)` | `str` | Path to a complete checkout, cloned once when missing |
-| `imp(name)` | Almasi library instance | Reuse the published `almasi.<name>`, load local source, or acquire and load missing source |
+```python
+import a
 
-`from almasi import web` uses package-level `__getattr__`, which delegates
-to `Libraries.imp('web')`. Existing `a.extend()` publishes the canonical
-instance in `sys.modules`; there is no parallel loaded-library registry.
-Direct `import almasi.web` is **not** an API guaranteed by this entry point.
+available = a.services.Libraries.list()
+checkout  = a.services.Libraries.clone('web')
+web       = a.services.Libraries.imp('web')
+```
 
-By default, `Libraries` searches repositories named `almasi.<name>`
-owned by GitHub account `apodgorny`. Its source and checkout location can
-be configured without changing library code:
+| Method | Contract |
+| --- | --- |
+| `list()` | Sorted names of locally available, already imported and discoverable remote libraries |
+| `clone(name)` | Path of a complete local Git checkout, acquiring it only if absent |
+| `imp(name)` | Canonical Almasi library instance; reuse loaded, load local or clone then import |
+
+The repository naming convention is `almasi.<name>`, initially under
+GitHub account `apodgorny`. Its default is the replaceable
+`Libraries.DEFAULT_OWNER` constant, not a value embedded in operational
+code. Both source owner and local checkout directory may be overridden:
 
 | Environment variable | Default | Purpose |
 | --- | --- | --- |
-| `ALMASI_LIBRARY_OWNER` | `apodgorny` | GitHub account or organization containing libraries |
-| `ALMASI_LIBRARY_DIR` | `~/.almasi/libraries` | Shared local checkout directory |
+| `ALMASI_LIBRARY_OWNER` | `apodgorny` | GitHub user or organization |
+| `ALMASI_LIBRARY_DIR` | `~/.almasi/libraries` | Local source checkouts |
 
-Remote discovery uses GitHub's public REST API without a login. If an
-already-authenticated `gh` CLI is available, `list()` can also discover
-private repositories visible to that login. **SSH keys alone cannot list
-private GitHub repositories via the API**: a known private
-`almasi.<name>` can still be acquired by `clone(name)` or `imp(name)`
-using the local Git/SSH credentials. No OAuth flow or Almasi Auth service
-is invoked by Libraries.
+Public repositories are discoverable anonymously through GitHub.
+If the `gh` CLI is already authenticated, private repositories may be
+listed as well. Local SSH keys allow cloning known private repositories
+without Almasi Auth. No credentials are stored by Libraries.
 
-A locally acquired library loads offline. Failed or incomplete clones
-never become available as a valid local source. Import does not update
-existing checkouts. If a Python dependency required by an acquired
-library is missing, install it into the current Python environment
-separately; this initial loader is not a pip dependency manager.
+Git handles its own repository operations; clones are staged in unique
+temporary paths and published after verifying the source layout. A
+simultaneous clone may use the checkout already published by another
+caller. This does not promise atomic or serialized concurrent Python
+import execution.
 
-**Security:** importing a cloned Python library executes its code.
-Only configure owners you trust. Repository name and entry-point checks
-do not verify source integrity or pin a revision. A production hub needs
-an explicit trust, revision, and dependency policy before accepting
-untrusted publishers.
+Libraries does not update checkouts, install third-party Python dependencies,
+or verify Git revisions and publisher trust. Imports execute the repository's
+Python code: use only trusted sources. A future Hub can add source-trust
+and version-selection policies without moving project or authentication
+responsibilities into Libraries.
 
-The current pip distribution name remains `a` while downstream Almasi
-packages still declare that dependency. This change adds the `almasi`
-*import namespace* to the same installation; migration of the published
-distribution name to `almasi` must be coordinated with those packages.
+Only `from almasi import <name>` is supported by this namespace entry
+point; direct `import almasi.<name>` is a distinct import mechanism.
+
+The PyPI distribution is still named `a` because existing Almasi
+libraries depend on it. Renaming the distribution to `almasi` must be
+coordinated separately.
 
 ## Installation
 
