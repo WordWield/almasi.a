@@ -54,7 +54,7 @@ class Libraries(almasi.Singleton):
 		try:
 			self._run(
 				name,
-				'pulling new version',
+				'Checking for updates',
 				['git', '-C', self.get_path(name), 'pull', '--ff-only', '--quiet'],
 				timeout = 15
 			)
@@ -69,7 +69,7 @@ class Libraries(almasi.Singleton):
 		if os.path.isfile(requirements):
 			self._run(
 				name,
-				'installing requirements',
+				'Installing dependencies',
 				[sys.executable, '-m', 'pip', 'install', '-r', requirements],
 				cwd = self.get_path(name)
 			)
@@ -111,7 +111,7 @@ class Libraries(almasi.Singleton):
 			os.makedirs(os.path.dirname(destination), exist_ok=True)
 			self._run(
 				name,
-				'cloning',
+				'Cloning library',
 				['git', 'clone', '--quiet', '--', self.get_url(name), destination]
 			)
 
