@@ -3,14 +3,16 @@
 **What if your codebase was already your runtime architecture?**
 Almasi is an open-source Python foundation that turns source structure into a live, composable namespace—without a separate layer of registration and wiring.
 **For developers:** fewer moving parts, lazy components, natural composition. **For ambitious products:** a common foundation for persistent state and AI agents.
+![Almasi — the winged white elephant dancing with its trunk held high](https://raw.githubusercontent.com/WordWield/almasi/master/assets/almasi-elephant.png)
+
 [Watch the 2-minute overview](https://www.youtube.com/watch?v=eCk6kiAriR0) · [Persistent objects: Almasi O](https://github.com/WordWield/almasi.o) · [Agents: Almasi Do](https://github.com/WordWield/almasi.do)
 
 ## See it in 30 seconds
 
-Install the core from GitHub (Python 3.11+):
+Install from PyPI (Python 3.11+):
 
 ```bash
-python -m pip install git+https://github.com/WordWield/almasi.git
+python -m pip install almasi
 ```
 
 Use a library as if it were part of the runtime:
@@ -149,6 +151,6 @@ This is relevant to AI-native applications, agent infrastructure, developer tool
 
 ## Project status
 
-Python 3.11+; Apache-2.0. The core builds as a wheel and is tested in CI on Python 3.11 and 3.12. PyPI publication is a separate release step; until it happens, use the Git installation command above.
+Python 3.11+; Apache-2.0. The core builds as a wheel and is tested in CI on Python 3.11 and 3.12. Published on [PyPI](https://pypi.org/project/almasi/); install with `pip install almasi`.
 
 **Created by Alexander Podgorny** — AI systems architect and researcher. [Connect on LinkedIn](https://www.linkedin.com/in/podgorny/).
