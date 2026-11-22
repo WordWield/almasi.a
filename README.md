@@ -226,15 +226,15 @@ authentication. Private repositories require suitable Git credentials.
 The supported library layouts are `<checkout>/<name>.py` and
 `<checkout>/almasi/<name>.py`, both with a `root/` directory.
 The nested entry point preserves independent top-level Python packages,
-particularly the official MCP SDK. Checkout acquisition uses a temporary
-sibling directory; only a complete source tree is published. A successful
-import never updates an existing checkout.
+particularly the official MCP SDK. Git clones directly into the target directory;
+existing checkout directories are reused without updates. An interrupted clone
+may require removing its incomplete directory before retrying.
 
 | Method | Contract |
 | --- | --- |
 | `get_path(name)` | Resolve the local checkout path |
 | `get_url(name)` | Derive the configured Git source |
-| `is_cloned(name)` | Check for a usable local checkout |
+| `is_cloned(name)` | Check whether the local checkout directory exists |
 | `clone(name)` | Acquire the checkout when absent |
 | `imp(name)` | Reuse or load the canonical Almasi library |
 
