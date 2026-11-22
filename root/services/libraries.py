@@ -15,7 +15,6 @@ import os
 import shutil
 import subprocess
 import sys
-import tempfile
 import urllib.request
 
 import a
@@ -35,7 +34,7 @@ class Libraries(a.Singleton):
 	# Derive a library's checkout from its name and shared library path.
 	# ----------------------------------------------------------------------
 	def _get_path(self, name):
-		return os.path.join(os.environ['ALMASI_PATH'], name)
+		return os.path.join(os.environ['ALMASI_PATH'], self.PREFIX + name)
 
 	# Check whether a complete checkout already exists.
 	# ----------------------------------------------------------------------
@@ -105,19 +104,8 @@ class Libraries(a.Singleton):
 				)
 
 				os.makedirs(directory, exist_ok=True)
-				with tempfile.TemporaryDirectory(dir=directory) as stage:
-					checkout = os.path.join(stage, 'checkout')
-					subprocess.run(['git', 'clone', '--quiet', '--', source, checkout], check=True)
+				subprocess.run(['git', 'clone', '--quiet', '--', source, destination], check=True)
 
-					if (os.path.isfile(os.path.join(checkout, name + '.py'))
-						and os.path.isdir(os.path.join(checkout, 'root'))):
-						try:
-							os.rename(checkout, destination)
-						except OSError:
-							if not self.is_cloned(name):
-								raise
-					else:
-						raise ImportError(f'Invalid Almasi library: {source}')
 		else:
 			raise ValueError(f'Invalid library name: {name!r}')
 
