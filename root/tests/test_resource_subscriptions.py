@@ -11,6 +11,7 @@ import threading
 import time
 import uuid
 
+from unittest      import TestCase
 from unittest.mock import Mock, patch
 
 from watchfiles import Change
@@ -99,6 +100,26 @@ class TestResourceSubscriptions(almasi.Tester):
 
 		assert file.load() is loaded_class
 		assert loader.call_count == 2
+
+	# Leave a failed on-load hook retryable instead of memoizing a broken load.
+	# --------------------------------------------------------------------------
+	@classmethod
+	def test_file_load_retries_after_on_load_failure(cls):
+		observe = Mock(side_effect=[ValueError('observation failed'), None])
+		loaded_class = type('ObservedClass', (), {
+			'__on_load__': staticmethod(observe)
+		})
+		loader = Mock(return_value=loaded_class)
+		file   = almasi.File(almasi, __file__, 'almasi.observed', load_method=loader)
+
+		with TestCase().assertRaisesRegex(ValueError, 'observation failed'):
+			file.load()
+
+		assert not file._loaded
+		assert file.load() is loaded_class
+		assert file._loaded
+		assert loader.call_count == 2
+		assert observe.call_count == 2
 
 	# Reject computed or unrelated resources at the filesystem boundary.
 	# --------------------------------------------------------------------------
