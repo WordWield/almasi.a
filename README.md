@@ -51,7 +51,7 @@ class Greetings(mylib.Module):
 ```python
 import mylib
 
-print(mylib.greetings.hello())
+print(mylib.greetings().hello())
 ```
 
 A file becomes a module in the runtime namespace when it is needed. No manual registry of `greetings`, no generated integration layer.
