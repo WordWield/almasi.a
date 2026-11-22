@@ -6,9 +6,10 @@
 #
 # RESPONSIBILITY BOUNDARIES:
 # Owns: Library discovery and local source availability.
-# Delegates: Git operations to Git and source execution to Imports.
+# Delegates: Git operations to Git and namespace publication to a.extend().
 # ==============================================================================
 
+import importlib.util
 import json
 import os
 import shutil
@@ -118,19 +119,30 @@ class Libraries(a.Singleton):
 
 		return destination
 
-	# Reuse Python's published identity or delegate checked-out source.
+	# Publish the source under its canonical Almasi Python module name.
 	# ----------------------------------------------------------------------
 	def imp(self, name):
 		qualified = f'almasi.{name}'
 		library   = sys.modules.get(qualified)
 
 		if library is None:
-			path = self.clone(name)
-			a.Imports.load_module(a, os.path.join(path, name + '.py'), qualified_name=qualified)
+			path   = self.clone(name)
+			spec   = importlib.util.spec_from_file_location(qualified, os.path.join(path, name + '.py'))
+			module = importlib.util.module_from_spec(spec)
+			sys.modules[qualified] = module
+
+			try:
+				spec.loader.exec_module(module)
+			except Exception:
+				sys.modules.pop(qualified, None)
+				raise
+
 			library = sys.modules.get(qualified)
 
-		if not isinstance(library, a.A):
+		if isinstance(library, a.A):
+			result = library
+		else:
 			sys.modules.pop(qualified, None)
 			raise ImportError(f'Not an Almasi library: {qualified}')
 
-		return library
+		return result

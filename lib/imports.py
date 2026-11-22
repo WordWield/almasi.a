@@ -1,26 +1,19 @@
-# ==============================================================================
-# IMPORTS
-# ==============================================================================
-# PURPOSE:
-# Load Python sources under their canonical module names and reuse code.
-#
-# RESPONSIBILITY BOUNDARIES:
-# Owns: Python module execution, identity, and fork code memoization.
-# Delegates: Library identity to a.extend() and source selection to callers.
-# ==============================================================================
-
-import importlib.util
 import os
 import sys
+import importlib.util
 
 
 class Imports:
 
 	__fork_codes__ = {}
 
-	# ======================================================================
-	# PRIVATE METHODS
-	# ======================================================================
+	# Give each fork its own module identity while retaining legacy keys.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def module_key(cls, lib, path):
+		path = os.path.realpath(path)
+		key  = f'{path}#fork-{id(lib)}' if lib.__dict__.get('__fork_source__') is not None else path
+		return key
 
 	# Share compiled code objects without sharing the module's globals.
 	# ----------------------------------------------------------------------
@@ -39,30 +32,18 @@ class Imports:
 
 		exec(code, module.__dict__)
 
-	# ======================================================================
-	# PUBLIC METHODS
-	# ======================================================================
-
-	# Give each fork its own module identity while retaining legacy keys.
-	# ----------------------------------------------------------------------
-	@classmethod
-	def module_key(cls, lib, path):
-		path = os.path.realpath(path)
-		key  = f'{path}#fork-{id(lib)}' if lib.__dict__.get('__fork_source__') is not None else path
-		return key
-
 	# Discard source code after a known filesystem mutation.
 	# ----------------------------------------------------------------------
 	@classmethod
 	def invalidate_code(cls, path):
 		cls.__fork_codes__.pop(os.path.realpath(path), None)
 
-	# Load once by file identity or an explicitly qualified library identity.
+	# Load once with the explicitly supplied library, never the last imported one.
 	# ----------------------------------------------------------------------
 	@classmethod
-	def load_module(cls, lib, path, route=None, namespace=None, qualified_name=None):
+	def load_module(cls, lib, path, route=None, namespace=None):
 		path   = os.path.realpath(path)
-		key    = qualified_name or cls.module_key(lib, path)
+		key    = cls.module_key(lib, path)
 		module = sys.modules.get(key)
 
 		if module is None:
@@ -91,7 +72,7 @@ class Imports:
 		return module
 
 	# Stage fresh source without changing the published Python module.
-	# Read source directly so unchanged timestamps cannot reuse bytecode.
+	# Read the source directly so unchanged file timestamps cannot reuse bytecode.
 	# ----------------------------------------------------------------------
 	@classmethod
 	def prepare_module(cls, lib, path, route):
@@ -122,12 +103,12 @@ class Imports:
 
 		return module
 
-	# Read one source class through the shared Python module cache.
+	# Get class
 	# ----------------------------------------------------------------------
 	@classmethod
 	def get_class(cls, lib, class_name, path, route=None, namespace=None):
 		file_path = path
-
+		
 		if not path.endswith('.py'):
 			file_name = lib.String.camel_to_snake(class_name) + '.py'
 			file_path = os.path.realpath(os.path.join(path, file_name))
