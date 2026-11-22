@@ -62,7 +62,12 @@ class Libraries(almasi.Singleton):
 		library   = sys.modules.get(qualified)
 
 		if library is None:
-			path  = self.clone(name)
+			path         = self.clone(name)
+			requirements = os.path.join(path, 'requirements.txt')
+
+			if os.path.isfile(requirements):
+				subprocess.run([sys.executable, '-m', 'pip', 'install', '-r', requirements], check=True)
+
 			entry = os.path.join(path, name + '.py')
 
 			if not os.path.isfile(entry):

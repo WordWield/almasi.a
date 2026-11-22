@@ -238,10 +238,11 @@ may require removing its incomplete directory before retrying.
 | `clone(name)` | Acquire the checkout when absent |
 | `imp(name)` | Reuse or load the canonical Almasi library |
 
-Git handles authentication. Libraries does not currently install third-party
-Python dependencies, pin or verify Git revisions, or guarantee that private
-repositories are accessible. Install any required external packages in the
-active Python environment before using dependent components. Importing a
+Git handles authentication. If a library has a `requirements.txt`, Libraries
+installs its external Python dependencies into the active interpreter using
+`python -m pip` before loading its entry point. Library checkouts are not pip
+installable distributions. Git revisions are not pinned or verified, and private
+repositories still require suitable Git credentials. Importing a
 library executes its Python source; only trusted repositories should be used.
 
 This namespace supports `from almasi import <name>`. Direct
