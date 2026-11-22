@@ -191,7 +191,8 @@ class TestLibraries(a.Tester):
 	@classmethod
 	def test_failed_import_cleans_publication(cls):
 		with tempfile.TemporaryDirectory() as home:
-			cls._library(home, 'broken_lib', "raise RuntimeError('broken source')\n")
+			cls._library(home, 'broken_lib', '''raise RuntimeError('broken source')
+''')
 
 			with patch.dict(os.environ, {'ALMASI_LIBRARY_DIR': home}):
 				with patch.dict(sys.modules):
