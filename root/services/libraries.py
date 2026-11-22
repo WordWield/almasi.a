@@ -22,34 +22,31 @@ class Libraries(almasi.Singleton):
 	# PRIVATE METHODS
 	# ======================================================================
 
-	# Run a command with concise progress and actionable failure details.
+	# Show native Almasi progress while executing a subprocess.
 	# ----------------------------------------------------------------------
 	def _run(
 		self,
 		name,
 		operation,
-		completed,
 		command,
 		cwd     = None,
 		timeout = None
 	):
-		print(f'almasi.{name}: {operation} ... ', end='', flush=True)
+		label = f'almasi.{name}: {operation}'
 
 		try:
-			subprocess.run(
-				command,
-				cwd            = cwd,
-				capture_output = True,
-				text           = True,
-				timeout        = timeout,
-				check          = True
-			)
+			with almasi.Spinner(label, failure_label=f'❌ {label}'):
+				subprocess.run(
+					command,
+					cwd            = cwd,
+					capture_output = True,
+					text           = True,
+					timeout        = timeout,
+					check          = True
+				)
 		except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
 			details = getattr(error, 'stderr', None) or str(error)
-			print(f'-> ❌ failed: {str(details).strip()}')
-			raise RuntimeError(f'almasi.{name}: {operation} failed: {str(details).strip()}') from error
-		else:
-			print(f'-> ✅ {completed}')
+			raise RuntimeError(f'{label} failed: {str(details).strip()}') from error
 
 	# Keep the local checkout if Git cannot fetch or fast-forward.
 	# ----------------------------------------------------------------------
@@ -58,12 +55,11 @@ class Libraries(almasi.Singleton):
 			self._run(
 				name,
 				'pulling new version',
-				'synced',
 				['git', '-C', self.get_path(name), 'pull', '--ff-only', '--quiet'],
 				timeout = 15
 			)
-		except RuntimeError:
-			print(f'almasi.{name}: fallback ... -> ⚠️ using local version')
+		except RuntimeError as error:
+			print(f'⚠️ almasi.{name}: using local version ({error.__cause__})')
 
 	# Install requirements using the library's working directory.
 	# ----------------------------------------------------------------------
@@ -74,7 +70,6 @@ class Libraries(almasi.Singleton):
 			self._run(
 				name,
 				'installing requirements',
-				'ready',
 				[sys.executable, '-m', 'pip', 'install', '-r', requirements],
 				cwd = self.get_path(name)
 			)
@@ -117,7 +112,6 @@ class Libraries(almasi.Singleton):
 			self._run(
 				name,
 				'cloning',
-				'cloned',
 				['git', 'clone', '--quiet', '--', self.get_url(name), destination]
 			)
 
