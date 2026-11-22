@@ -37,13 +37,14 @@ class AMeta(type):
 
 	# Create a library class from an absolute or source-relative path.
 	# ----------------------------------------------------------------------
-	def __new__(mcls, name, bases, namespace, path=None, plugins=None, is_created_using_extend=False):
+	def __new__(mcls, name, bases, namespace, plugins=None, is_created_using_extend=False):
 		module_name  = namespace.get('__module__')
 		module       = sys.modules[module_name]
 		lib_file     = os.path.realpath(module.__file__)
 		lib_path     = os.path.dirname(lib_file)
-		path         = os.path.abspath(os.path.join(lib_path, path or 'root'))
-		plugins_path = os.path.join(lib_path, 'plugins')
+		repo_path    = os.path.dirname(lib_path) if os.path.basename(lib_path) == 'almasi' else lib_path
+		path         = os.path.join(repo_path, 'root')
+		plugins_path = os.path.join(repo_path, 'plugins')
 
 		# Only the bootstrap A class may be declared directly.
 		# ----------------------------------------------------------------------
@@ -260,7 +261,7 @@ class A(metaclass=AMeta, plugins=['Py', 'Json', 'Text', 'Bytes']):
 	# Extend the namespace through an explicit, canonical library name.
 	# Initialization belongs to the caller after extend() returns.
 	# ----------------------------------------------------------------------
-	def extend(self, name, path='root', plugins=None):
+	def extend(self, name, plugins=None):
 		caller      = sys._getframe(1).f_globals
 		module_name = caller['__name__']
 		module      = sys.modules[module_name]
@@ -286,7 +287,6 @@ class A(metaclass=AMeta, plugins=['Py', 'Json', 'Text', 'Bytes']):
 			self.String.snake_to_camel(name),
 			(type(self),),
 			{'__module__' : module_name},
-			path                    = path,
 			plugins                 = plugins,
 			is_created_using_extend = True
 		)
