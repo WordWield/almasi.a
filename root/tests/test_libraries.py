@@ -94,7 +94,7 @@ class TestLibraries(a.Tester):
 			with tempfile.TemporaryDirectory() as home:
 				cls._library(home, 'sample_lib')
 
-				with patch.dict(os.environ, {'ALMASI_LIBRARY_DIR': home}):
+				with patch.dict(os.environ, {'ALMASI_PATH': home}):
 					with patch.dict(sys.modules):
 						package = __import__('almasi', fromlist=['sample_lib'])
 						library = getattr(package, 'sample_lib')
@@ -118,7 +118,7 @@ class TestLibraries(a.Tester):
 			with tempfile.TemporaryDirectory() as home:
 				cls._library(home, 'mcp')
 
-				with patch.dict(os.environ, {'ALMASI_LIBRARY_DIR': home}):
+				with patch.dict(os.environ, {'ALMASI_PATH': home}):
 					with patch.dict(sys.modules, {'mcp': sdk}):
 						package = __import__('almasi', fromlist=['mcp'])
 						library = getattr(package, 'mcp')
@@ -137,10 +137,21 @@ class TestLibraries(a.Tester):
 		with tempfile.TemporaryDirectory() as home:
 			cls._library(home, 'local_lib')
 
-			with patch.dict(os.environ, {'ALMASI_LIBRARY_DIR': home}):
+			with patch.dict(os.environ, {'ALMASI_PATH': home}):
 				with patch.object(type(a.services.Libraries), '_repositories',
 								  return_value={'web': 'https://github.com/example/almasi.web.git'}):
 					assert a.services.Libraries.list() == ['web']
+
+	# A suffix determines the checkout path and cloned state.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_is_cloned(cls):
+		with tempfile.TemporaryDirectory() as home:
+			with patch.dict(os.environ, {'ALMASI_PATH': home}):
+				assert not a.services.Libraries.is_cloned('sample_lib')
+				cls._library(home, 'sample_lib')
+				assert a.services.Libraries.is_cloned('sample_lib')
+				assert a.services.Libraries._get_path('sample_lib') == os.path.join(home, 'sample_lib')
 
 	# Clone once and reuse a validated checkout.
 	# ----------------------------------------------------------------------
@@ -150,7 +161,7 @@ class TestLibraries(a.Tester):
 			origin = cls._git_origin(home, 'cloned_lib')
 			cache  = os.path.join(home, 'cache')
 
-			with patch.dict(os.environ, {'ALMASI_LIBRARY_DIR': cache}):
+			with patch.dict(os.environ, {'ALMASI_PATH': cache}):
 				with patch.object(type(a.services.Libraries), '_repositories',
 								  return_value={'cloned_lib': origin}):
 					path = a.services.Libraries.clone('cloned_lib')
@@ -167,7 +178,7 @@ class TestLibraries(a.Tester):
 			origin = cls._git_origin(home, 'parallel_lib')
 			cache  = os.path.join(home, 'cache')
 
-			with patch.dict(os.environ, {'ALMASI_LIBRARY_DIR': cache}):
+			with patch.dict(os.environ, {'ALMASI_PATH': cache}):
 				with patch.object(type(a.services.Libraries), '_repositories',
 								  return_value={'parallel_lib': origin}):
 					with ThreadPoolExecutor(max_workers=2) as executor:
@@ -194,7 +205,7 @@ class TestLibraries(a.Tester):
 			cls._library(home, 'broken_lib', '''raise RuntimeError('broken source')
 ''')
 
-			with patch.dict(os.environ, {'ALMASI_LIBRARY_DIR': home}):
+			with patch.dict(os.environ, {'ALMASI_PATH': home}):
 				with patch.dict(sys.modules):
 					with TestCase().assertRaisesRegex(RuntimeError, 'broken source'):
 						a.services.Libraries.imp('broken_lib')
