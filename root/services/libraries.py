@@ -35,7 +35,11 @@ class Libraries(a.Singleton):
 
 	# Check whether source is ready for Python import.
 	# ----------------------------------------------------------------------
-	def _is_local(self, name, path):
+	def _is_local(self, name):
+		directory = os.path.realpath(os.path.expanduser(
+			os.environ.get('ALMASI_LIBRARY_DIR', self.DIRECTORY)
+		))
+		path = os.path.join(directory, name)
 		return (os.path.isfile(os.path.join(path, name + '.py'))
 				and os.path.isdir(os.path.join(path, 'root')))
 
@@ -95,7 +99,7 @@ class Libraries(a.Singleton):
 			))
 			destination = os.path.join(directory, name)
 
-			if not self._is_local(name, destination):
+			if not self._is_local(name):
 				owner  = os.environ.get('ALMASI_LIBRARY_OWNER', self.OWNER)
 				source = self._repositories().get(
 					name, f'{self.SSH}:{owner}/{self.PREFIX}{name}.git'
@@ -106,11 +110,12 @@ class Libraries(a.Singleton):
 					checkout = os.path.join(stage, 'checkout')
 					subprocess.run(['git', 'clone', '--quiet', '--', source, checkout], check=True)
 
-					if self._is_local(name, checkout):
+					if (os.path.isfile(os.path.join(checkout, name + '.py'))
+						and os.path.isdir(os.path.join(checkout, 'root'))):
 						try:
 							os.rename(checkout, destination)
 						except OSError:
-							if not self._is_local(name, destination):
+							if not self._is_local(name):
 								raise
 					else:
 						raise ImportError(f'Invalid Almasi library: {source}')
