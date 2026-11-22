@@ -33,13 +33,18 @@ class Libraries(a.Singleton):
 	# PRIVATE METHODS
 	# ======================================================================
 
-	# Check whether source is ready for Python import.
+	# Derive a library's checkout from its name and shared library path.
 	# ----------------------------------------------------------------------
-	def _is_local(self, name):
+	def _get_path(self, name):
 		directory = os.path.realpath(os.path.expanduser(
-			os.environ.get('ALMASI_LIBRARY_DIR', self.DIRECTORY)
+			os.environ.get('ALMASI_PATH', self.DIRECTORY)
 		))
-		path = os.path.join(directory, name)
+		return os.path.join(directory, name)
+
+	# Check whether a complete checkout already exists.
+	# ----------------------------------------------------------------------
+	def is_cloned(self, name):
+		path = self._get_path(name)
 		return (os.path.isfile(os.path.join(path, name + '.py'))
 				and os.path.isdir(os.path.join(path, 'root')))
 
@@ -94,12 +99,10 @@ class Libraries(a.Singleton):
 	# ----------------------------------------------------------------------
 	def clone(self, name):
 		if a._is_valid_library_name(name):
-			directory   = os.path.realpath(os.path.expanduser(
-				os.environ.get('ALMASI_LIBRARY_DIR', self.DIRECTORY)
-			))
-			destination = os.path.join(directory, name)
+			destination = self._get_path(name)
+			directory   = os.path.dirname(destination)
 
-			if not self._is_local(name):
+			if not self.is_cloned(name):
 				owner  = os.environ.get('ALMASI_LIBRARY_OWNER', self.OWNER)
 				source = self._repositories().get(
 					name, f'{self.SSH}:{owner}/{self.PREFIX}{name}.git'
@@ -115,7 +118,7 @@ class Libraries(a.Singleton):
 						try:
 							os.rename(checkout, destination)
 						except OSError:
-							if not self._is_local(name):
+							if not self.is_cloned(name):
 								raise
 					else:
 						raise ImportError(f'Invalid Almasi library: {source}')
