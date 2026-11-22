@@ -211,13 +211,13 @@ web       = a.services.Libraries.imp('web')
 
 | Method | Contract |
 | --- | --- |
-| `list()` | Sorted names of locally available, already imported and discoverable remote libraries |
+| `list()` | Sorted names of discoverable GitHub libraries |
 | `clone(name)` | Path of a complete local Git checkout, acquiring it only if absent |
 | `imp(name)` | Canonical Almasi library instance; reuse loaded, load local or clone then import |
 
 The repository naming convention is `almasi.<name>`, initially under
 GitHub account `apodgorny`. Its default is the replaceable
-`Libraries.DEFAULT_OWNER` constant, not a value embedded in operational
+`Libraries.OWNER` constant, not a value embedded in operational
 code. Both source owner and local checkout directory may be overridden:
 
 | Environment variable | Default | Purpose |
@@ -231,10 +231,9 @@ listed as well. Local SSH keys allow cloning known private repositories
 without Almasi Auth. No credentials are stored by Libraries.
 
 Git handles its own repository operations; clones are staged in unique
-temporary paths and published after verifying the source layout. A
-simultaneous clone may use the checkout already published by another
-caller. This does not promise atomic or serialized concurrent Python
-import execution.
+temporary paths and published after checking the source layout. A
+simultaneous clone can use a completed checkout already published by
+another caller. Git does not serialize concurrent Python imports.
 
 Libraries does not update checkouts, install third-party Python dependencies,
 or verify Git revisions and publisher trust. Imports execute the repository's
