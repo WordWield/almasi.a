@@ -4,6 +4,7 @@
 # Acquire Almasi source libraries and publish their canonical Python identities.
 # ==============================================================================
 
+import errno
 import os
 import shutil
 import subprocess
@@ -78,7 +79,7 @@ class Libraries(a.Singleton):
 		destination = self.get_path(name)
 
 		if not self.is_cloned(name):
-			if os.path.lexists(destination):
+			if os.path.lexists(destination) and not self.is_cloned(name):
 				raise FileExistsError(f'Incomplete library checkout: {destination}')
 
 			os.makedirs(os.path.dirname(destination), exist_ok=True)
@@ -98,8 +99,12 @@ class Libraries(a.Singleton):
 
 				try:
 					os.rename(staging, destination)
-				except FileExistsError:
-					if not self.is_cloned(name):
+				except OSError as error:
+					is_competing_checkout = (
+						error.errno in (errno.EEXIST, errno.ENOTEMPTY)
+						and self.is_cloned(name)
+					)
+					if not is_competing_checkout:
 						raise
 			finally:
 				if os.path.exists(staging):
