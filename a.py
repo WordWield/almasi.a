@@ -12,7 +12,6 @@ import os, sys
 from lib.imports             import Imports
 from lib.module              import Module, ModuleMeta
 from lib.singleton           import Singleton
-from lib.libraries           import Libraries
 from lib.reloadable          import Reloadable, ReloadableModule, ReloadableSingleton
 from lib.subscribable        import Subscribable
 from lib.subscription        import Subscription
@@ -108,7 +107,6 @@ class A(metaclass=AMeta, plugins=['Py', 'Json', 'Text', 'Bytes']):
 	Directory     = Directory
 	Plugin        = Plugin
 	Singleton     = Singleton
-	Libraries      = Libraries()
 	Reloadable          = Reloadable
 	ReloadableModule    = ReloadableModule
 	ReloadableSingleton = ReloadableSingleton

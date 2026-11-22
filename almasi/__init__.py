@@ -1,19 +1,18 @@
 # ==============================================================================
 # ALMASI LIBRARY NAMESPACE
 # ==============================================================================
-# Resolve qualified Almasi libraries on first access without import hooks.
+# Resolve Almasi libraries through the core services without global hooks.
 # ==============================================================================
 
 import a
 
 
-Libraries = a.Libraries
-
-
-# Resolve requested libraries through the canonical Libraries service.
+# Resolve a missing library through the canonical Almasi service.
 # ----------------------------------------------------------------------
 def __getattr__(name):
-	if not a._is_valid_library_name(name):
+	if a._is_valid_library_name(name):
+		result = a.services.Libraries.imp(name)
+	else:
 		raise AttributeError(f'Module almasi has no attribute {name!r}')
 
-	return Libraries.imp(name)
+	return result
