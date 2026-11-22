@@ -29,14 +29,14 @@ class TestOwnership(almasi.Tester):
 	def _library(name, root, ancestor):
 		path               = os.path.join(root, name)
 		module             = types.ModuleType(name)
-		module.__file__    = path + '.py'
+		module.__file__    = os.path.join(path, name + '.py')
 		module.parent      = ancestor.__instance__
 		sys.modules[name]  = module
 
-		os.makedirs(path)
+		os.makedirs(os.path.join(path, 'root'))
 		# Execute in the owning module so extend() sees its canonical name.
 		# ----------------------------------------------------------------------
-		exec(f'{name} = parent.extend({name!r}, path={path!r})', module.__dict__)
+		exec(f'{name} = parent.extend({name!r})', module.__dict__)
 		return module.__dict__[name]
 
 	# Restore the process globals after exercising real library creation.

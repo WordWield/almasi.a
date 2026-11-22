@@ -311,19 +311,19 @@ class TestResourceSubscriptions(almasi.Tester):
 				handle = file.subscribe(events.append)
 
 				parent.shared.write('note.md', 'changed')
-				source._changed_paths(parent_root, {p_path: 'modified'})
+				source._changed_paths(parent.__path__, {p_path: 'modified'})
 				assert len(events) == 1
 
 				face.write('note.md', 'local')
-				source._changed_paths(child_root, {c_path: 'created'})
+				source._changed_paths(child.__path__, {c_path: 'created'})
 				assert len(events) == 2
 
 				parent.shared.write('note.md', 'hidden')
-				source._changed_paths(parent_root, {p_path: 'modified'})
+				source._changed_paths(parent.__path__, {p_path: 'modified'})
 				assert len(events) == 2
 
 				os.remove(c_path)
-				source._changed_paths(child_root, {c_path: 'deleted'})
+				source._changed_paths(child.__path__, {c_path: 'deleted'})
 				assert len(events) == 3
 
 				handle.cancel()
@@ -358,18 +358,18 @@ class TestResourceSubscriptions(almasi.Tester):
 				with open(child_path, 'wb') as stream:
 					stream.write(b'local')
 
-				source._changed_paths(child_root, {child_path: 'created'})
+				source._changed_paths(child.__path__, {child_path: 'created'})
 				assert source._effective(file) == child_path
 				assert len(events) == 1
 
 				with open(parent_path, 'wb') as stream:
 					stream.write(b'hidden')
 
-				source._changed_paths(parent_root, {parent_path: 'modified'})
+				source._changed_paths(parent.__path__, {parent_path: 'modified'})
 				assert len(events) == 1
 
 				os.unlink(child_path)
-				source._changed_paths(child_root, {child_path: 'deleted'})
+				source._changed_paths(child.__path__, {child_path: 'deleted'})
 				assert source._effective(file) == parent_path
 				assert len(events) == 2
 				handle.cancel()

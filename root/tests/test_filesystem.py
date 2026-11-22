@@ -26,8 +26,10 @@ class TestFilesystem(almasi.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def _library(cls, name, root, ancestor):
+		os.makedirs(os.path.join(root, 'root'), exist_ok=True)
+
 		module             = types.ModuleType(name)
-		module.__file__    = root + '.py'
+		module.__file__    = os.path.join(root, name + '.py')
 		module.parent      = ancestor.__instance__
 		sys.modules[name]  = module
 
@@ -35,7 +37,7 @@ class TestFilesystem(almasi.Tester):
 		try:
 			# Execute in the owning module so extend() sees its canonical name.
 			# ----------------------------------------------------------------------
-			exec(f'{name} = parent.extend({name!r}, path={root!r})', module.__dict__)
+			exec(f'{name} = parent.extend({name!r})', module.__dict__)
 			library = module.__dict__[name]
 		finally:
 			almasi.Imports.__lib__, almasi.Tester.__lib__, almasi.Undefined.__lib__ = state
@@ -353,7 +355,7 @@ class TestFilesystem(almasi.Tester):
 		with tempfile.TemporaryDirectory() as root, patch.dict(sys.modules):
 			library = cls._library('filesystem_root', root, almasi.A)
 
-			assert library.join() == os.path.realpath(root)
+			assert library.join() == os.path.realpath(library.__path__)
 			library.write('source.txt', 'new')
 			library.write('notes.txt', 'old')
 			assert library.notes == 'old'
