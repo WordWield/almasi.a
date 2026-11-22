@@ -10,10 +10,10 @@ import threading
 
 from watchfiles import Change, watch
 
-import a
+import almasi
 
 
-class Filesystem(a.Subscribable):
+class Filesystem(almasi.Subscribable):
 
 	# ==========================================================================
 	# FRAMEWORK METHODS
@@ -37,9 +37,9 @@ class Filesystem(a.Subscribable):
 	# Validate that each subscription identifies concrete Almasi resources.
 	# --------------------------------------------------------------------------
 	def _resources_in(self, identifiers):
-		resources = {identifiers} if isinstance(identifiers, a.FilesystemResource) else self._scope(identifiers)
+		resources = {identifiers} if isinstance(identifiers, almasi.FilesystemResource) else self._scope(identifiers)
 
-		if resources is None or any(not isinstance(item, a.FilesystemResource) for item in resources):
+		if resources is None or any(not isinstance(item, almasi.FilesystemResource) for item in resources):
 			raise TypeError('Filesystem subscriptions require a set of FilesystemResources')
 
 		return resources
@@ -66,7 +66,7 @@ class Filesystem(a.Subscribable):
 	def _resolve(self, namespace, relative):
 		parent = os.path.dirname(relative)
 		route  = namespace.__name__ + ('.' + parent.replace(os.sep, '.') if parent else '')
-		face   = a.Directory(namespace, os.path.join(namespace.__path__, parent), route)
+		face   = almasi.Directory(namespace, os.path.join(namespace.__path__, parent), route)
 		found  = face.__resolve__(os.path.basename(relative))
 		result = found.get_path() if found is not None else None
 
@@ -148,7 +148,7 @@ class Filesystem(a.Subscribable):
 		for resource in active - self._resources.keys():
 			self._resources[resource] = {
 				'roots': self._roots_for(resource),
-				'path' : self._effective(resource) if isinstance(resource, a.File) else None
+				'path' : self._effective(resource) if isinstance(resource, almasi.File) else None
 			}
 
 		for resource in self._resources.keys() - active:
@@ -221,7 +221,7 @@ class Filesystem(a.Subscribable):
 			for namespace in namespaces:
 				index, relative = self._source(namespace, path)
 				layer = tuple(namespace.__instances__())[index] if index is not None else namespace
-				a.Directory(layer, os.path.dirname(path), layer.__name__)._invalidate_children(path)
+				almasi.Directory(layer, os.path.dirname(path), layer.__name__)._invalidate_children(path)
 				sources[namespace, path] = (index, relative)
 
 		changed = {}
@@ -230,7 +230,7 @@ class Filesystem(a.Subscribable):
 			namespace   = resource._namespace_lib
 			base        = os.path.realpath(resource.get_path())
 			_, relative = self._source(namespace, base)
-			is_file     = isinstance(resource, a.File)
+			is_file     = isinstance(resource, almasi.File)
 			current     = self._effective(resource) if is_file else None
 
 			for path, status in paths.items():

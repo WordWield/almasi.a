@@ -19,10 +19,10 @@ An Almasi library is backed by a Python class and a canonical published instance
 In `mylib.py`:
 
 ```python
-import a
+import almasi
 
 
-mylib = a.extend('mylib')
+mylib = almasi.extend('mylib')
 ```
 
 To build a library on top of another, use `mylib = parent.extend('mylib')` in the corresponding module. The resulting library class inherits from the parent's class, and namespace lookup follows that lineage. Library creation does **not** implicitly invoke `initialize()`; the application explicitly initializes the services it needs.
@@ -33,7 +33,7 @@ When `extend()` is called directly from Python's `__main__` module, the resultin
 web_app = web.extend('web_app')
 ```
 
-The selected application is stored as `a.__app__`. Every Almasi `Module` instance — including `Singleton` and event-controller instances — inherits `self.__app__` from the `Module` base class. This property resolves the current application at access time, so objects created before application selection also see it. `self.__lib__` identifies the library that defined the class, independently of `self.__app__`. The loader does not inject an application global into Python modules.
+The selected application is stored as `almasi.__app__`. Every Almasi `Module` instance — including `Singleton` and event-controller instances — inherits `self.__app__` from the `Module` base class. This property resolves the current application at access time, so objects created before application selection also see it. `self.__lib__` identifies the library that defined the class, independently of `self.__app__`. The loader does not inject an application global into Python modules.
 
 ```python
 class Example(web.Module):
@@ -100,7 +100,7 @@ Filesystem resolution is separated from file semantics through a plugin system.
 Plugins can define how different resource types are discovered and loaded:
 
 ```python
-class Json(a.Plugin):
+class Json(almasi.Plugin):
 
 	EXTENSIONS = ('json',)
 
@@ -189,15 +189,15 @@ See [the current filesystem invariants](docs/almasi_invariants8.md) for identity
 
 ## Qualified Almasi library imports
 
-The core installs both the canonical `a` library and the `almasi` namespace:
+The core and its lazy library namespace have a single canonical identity, `almasi`:
 
 ```python
 from almasi import web, o, mcp
 ```
 
-The package-level `almasi.__getattr__` delegates to the native
-`a.services.Libraries` Singleton. A library is loaded under its qualified
-identity, such as `almasi.mcp`, and `a.extend('mcp')` publishes the canonical
+The core’s existing `__getattr__` delegates missing library names to
+`almasi.services.Libraries`. A library is loaded under its qualified
+identity, such as `almasi.mcp`, and `almasi.extend('mcp')` publishes the canonical
 instance in `sys.modules`. The official MCP SDK retains the unrelated top-level
 `import mcp` identity.
 
@@ -238,11 +238,12 @@ may require removing its incomplete directory before retrying.
 | `clone(name)` | Acquire the checkout when absent |
 | `imp(name)` | Reuse or load the canonical Almasi library |
 
-Git handles authentication. Libraries does not currently install third-party
-Python dependencies, pin or verify Git revisions, or guarantee that private
-repositories are accessible. Install any required external packages in the
-active Python environment before using dependent components. Importing a
-library executes its Python source; only trusted repositories should be used.
+Git handles authentication. Libraries acquires and loads Almasi source but
+does not install third-party Python dependencies; these must already be available
+in the active environment. Library checkouts are not pip-installed distributions.
+Git revisions are not pinned or verified, and private repositories still require
+suitable Git credentials. Importing a library executes its Python source; only
+trusted repositories should be used.
 
 This namespace supports `from almasi import <name>`. Direct
 `import almasi.<name>` uses Python's distinct submodule import mechanism
@@ -258,7 +259,7 @@ cd almasi
 python -m pip install -e .
 ```
 
-The current distribution metadata still uses the name `a`.
+The distribution and import name are both `almasi`.
 PyPI publication and production-wheel packaging are separate release steps;
 the source-acquisition behavior is identical once the core is installed.
 

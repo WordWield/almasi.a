@@ -2,10 +2,10 @@ import os
 
 from functools import partial
 
-import a
+import almasi
 
 
-class Text(a.Plugin):
+class Text(almasi.Plugin):
 
 	EXTENSIONS = ('txt', 'log', 'md', 'js', 'css', 'html')
 

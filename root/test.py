@@ -1,2 +1,2 @@
-import a
-a.tester.run()
+import almasi
+almasi.tester.run()
