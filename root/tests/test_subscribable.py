@@ -6,6 +6,8 @@
 
 import threading
 
+from unittest.mock import patch
+
 import almasi
 
 
@@ -198,10 +200,14 @@ class TestSubscribable(almasi.Tester):
 
 		source.subscribe(fail)
 		source.subscribe({1}, add)
-		source._dispatch({1})
-		source._dispatch({2})
+
+		with patch('lib.subscribable.logging.exception') as report:
+			source._dispatch({1})
+			source._dispatch({2})
 
 		assert frozenset({2}) in received
+		assert report.call_count == 2
+		assert report.call_args.args == ('Subscription callback failed',)
 
 	# Cancellation never waits for an already running callback.
 	# ----------------------------------------------------------------------
