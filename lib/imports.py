@@ -38,12 +38,19 @@ class Imports:
 	def invalidate_code(cls, path):
 		cls.__fork_codes__.pop(os.path.realpath(path), None)
 
-	# Load once with the explicitly supplied library, never the last imported one.
+	# Load under an explicit name when supplied; otherwise preserve file identity.
 	# ----------------------------------------------------------------------
 	@classmethod
-	def load_module(cls, lib, path, route=None, namespace=None):
+	def load_module(
+		cls,
+		lib,
+		path,
+		route       = None,
+		namespace   = None,
+		module_name = None
+	):
 		path   = os.path.realpath(path)
-		key    = cls.module_key(lib, path)
+		key    = module_name if module_name is not None else cls.module_key(lib, path)
 		module = sys.modules.get(key)
 
 		if module is None:

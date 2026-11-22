@@ -13,4 +13,4 @@ py-modules = ["a"]
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["lib*"]
+include = ["lib*", "almasi*"]
