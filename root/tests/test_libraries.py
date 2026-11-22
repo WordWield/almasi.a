@@ -238,7 +238,7 @@ class Item(fork_sample.Module):
 							assert library.revision == 'updated'
 							assert almasi.services.Libraries.imp('pull_lib') is library
 
-					assert log.getvalue().count('almasi.pull_lib: Checking for updates') == 1
+					assert log.getvalue().count('✔\033[0m almasi.pull_lib: Checking for updates') == 1, repr(log.getvalue())
 		finally:
 			almasi.Imports.__lib__, almasi.Tester.__lib__, almasi.Undefined.__lib__ = ownership
 			almasi.__dict__.pop('pull_lib', None)
@@ -307,7 +307,7 @@ class Item(fork_sample.Module):
 							sys.executable, '-m', 'pip', 'install', '-r', requirements
 						]
 						assert runner.call_args.kwargs['cwd'] == source
-						assert log.getvalue().count('almasi.deps_lib: Installing dependencies') == 2
+						assert log.getvalue().count('✔\033[0m almasi.deps_lib: Installing dependencies') == 2, repr(log.getvalue())
 		finally:
 			almasi.Imports.__lib__, almasi.Tester.__lib__, almasi.Undefined.__lib__ = ownership
 			almasi.__dict__.pop('deps_lib', None)
