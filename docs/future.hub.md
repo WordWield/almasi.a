@@ -123,7 +123,7 @@ The organization is configurable, so independent developers or users can publish
 
 Descriptions must not become a second manually maintained model of an App or Source.
 
-- Existing controller declarations, `@api.base.Controller.method`, method names, signatures, type information, and docstrings are the authoritative basis for describing Python capabilities.
+- Existing controller declarations, `@bus.base.Controller.method`, method names, signatures, type information, and docstrings are the authoritative basis for describing Python capabilities.
 - A **deterministic generator** derives a machine-readable `almasi.json` index from those sources during publication. The schema and extraction rules remain to be designed.
 - **GitHub Actions** should own automatic generation and publication on a release event. The index is published **as a release artifact beside the exact version** of the code, not treated as a manually edited project manifest.
 - The index records enough immutable version/commit identity for Hub to obtain the matching code and reject incompatible or stale metadata.
@@ -233,30 +233,30 @@ The current O transport is an invalidation relay, not a remote object API, trans
 An important risk remains: mounting an entire LMDB environment into an untrusted container grants broad storage access. Container isolation alone does not provide field-level authorization; sharing O must respect a clearly defined trust and permission boundary.
 
 
-## API bootstrap and lazy capability access
+## Bus bootstrap and lazy capability access
 
 Hub is the first locally available infrastructure capability, rather than a
 Source that must itself be discovered through Hub. After Hub starts, its
-management operations are exposed through the **same Almasi API and shared O
+management operations are exposed through the **same Almasi Bus and shared O
 request bus** as Source methods, not a separate RPC implementation.
 
 Conceptual Python interface (not yet implemented):
 
 ```python
-api.hub.load('google')
-api.google.search.web(query='...')
+bus.hub.load('google')
+bus.google.search.web(query='...')
 ```
 
-Resolving `api.google` ensures that a suitable Source is acquired, started,
+Resolving `bus.google` ensures that a suitable Source is acquired, started,
 and ready **at attribute resolution time**, before invoking `.search.web()`.
 Internally this uses the same Hub loading capability; no special discovery
-network protocol should be introduced for API. Since the current
-`api.request()` immediately returns a persistent request node, the future
-dotted API must explicitly wait for Hub's successful readiness result, and
+network protocol should be introduced for Bus. Since the current
+`bus.request()` immediately returns a persistent request node, the future
+dotted Bus must explicitly wait for Hub's successful readiness result, and
 surface installation or startup errors before routing Source calls.
 
 Hub uses the shared O bus for its operations but does **not** intermediate
-subsequent `api.google.search.web(...)` business calls. Their requests
+subsequent `bus.google.search.web(...)` business calls. Their requests
 travel directly through O to the running Source. The exact dynamic Python
 attribute mechanism, readiness and failure contracts, and concurrency
 deduplication remain to be designed and tested.
@@ -285,9 +285,9 @@ No new agent-specific log subscription mechanism is required.
 
 ### MCP resources and operations
 
-**The Source API has no Tool/Resource distinction.** Every callable Source
-capability is declared with `@api.base.Controller.method`; persistent
-state and subscriptions belong to O. Hub uses this same API to implement
+**The Source Bus has no Tool/Resource distinction.** Every callable Source
+capability is declared with `@bus.base.Controller.method`; persistent
+state and subscriptions belong to O. Hub uses this same Bus to implement
 its management operations, not a separate set of MCP-typed controllers.
 
 The MCP interface is an **adapter at Hub's external boundary**. It maps
@@ -385,6 +385,6 @@ The goal is **necessary symmetry**: unite genuine commonality, retain essential 
 
 ## Status
 
-**Future architecture, canonical name `almasi.hub`.** The shared O multiprocess storage/invalidation mechanism exists in `almasi.o`; a minimal Source/App request-response demonstration exists in `almasi.source` / `almasi.api`. A general `almasi.hub` orchestrator and its MCP discovery/management interface have **not** been implemented or verified by this document.
+**Future architecture, canonical name `almasi.hub`.** The shared O multiprocess storage/invalidation mechanism exists in `almasi.o`; a minimal Source/App request-response demonstration exists in `almasi.source` / `almasi.bus`. A general `almasi.hub` orchestrator and its MCP discovery/management interface have **not** been implemented or verified by this document.
 
 The goal is to remove unnecessary infrastructure, not accumulate a new platform in its place.
