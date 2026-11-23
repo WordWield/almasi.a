@@ -10,6 +10,7 @@ import sys
 import tempfile
 import weakref
 
+from fnmatch import fnmatchcase
 from functools import partial
 
 from .filesystem_resource import FilesystemResource
@@ -218,6 +219,15 @@ class Directory(FilesystemResource):
 	# ----------------------------------------------------------------------
 	def is_directory(self):
 		return True
+
+	# List direct resources matching a filename mask without loading them.
+	# ----------------------------------------------------------------------
+	def list(self, mask='*'):
+		return [
+			resource
+			for resource in self
+			if fnmatchcase(resource.get_name(), mask)
+		]
 
 	# Join relative components without creating or requiring the result.
 	# ----------------------------------------------------------------------
