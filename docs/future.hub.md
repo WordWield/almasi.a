@@ -287,7 +287,7 @@ No new agent-specific log subscription mechanism is required.
 
 **The Source Bus has no Tool/Resource distinction.** Every callable Source
 capability is declared with `@bus.base.Controller.method`; persistent
-state and subscriptions belong to O. Hub uses this same API to implement
+state and subscriptions belong to O. Hub uses this same Bus to implement
 its management operations, not a separate set of MCP-typed controllers.
 
 The MCP interface is an **adapter at Hub's external boundary**. It maps
