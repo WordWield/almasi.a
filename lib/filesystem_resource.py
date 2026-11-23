@@ -52,6 +52,11 @@ class FilesystemResource(Resource):
 	def get_name(self):
 		return os.path.basename(self.__path__)
 
+	# Return the physical basename without its final extension.
+	# --------------------------------------------------------------------------
+	def get_stem(self):
+		return os.path.splitext(self.get_name())[0]
+
 	# Read through the existing format plugin or directory loader.
 	# --------------------------------------------------------------------------
 	def read(self):
