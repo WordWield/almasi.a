@@ -125,11 +125,12 @@ to at most one 16-byte record per retained byte. No reader state is stored.
 - `read(since=None)` returns all retained timestamped entries. Pass a finite
   Unix timestamp to select entries at or after that time (inclusive).
   Byte and timestamp coordinates cannot be combined.
-- The result is `{'log': [{'timestamp': float, 'data': bytes}, ...],
+- The result is `{'log': [{'timestamp': float, 'text': str}, ...],
   'last_timestamp': float | None}`. With no matching entries, last_timestamp
   is the supplied since (or None). Pass it as since on the next read; equal
-  timestamps can repeat intentionally. Core preserves bytes; text decoding
-  and JSON serialization belong to consumers.
+  timestamps can repeat intentionally. Log decodes each entry as UTF-8 with
+  replacement for invalid or split sequences. Ordinary byte reads preserve
+  the original data without decoding.
 - Timestamps use the producer's capture time in Unix seconds, not the time
   the child generated a message. Each write is one entry, not necessarily a
   complete line or UTF-8 character. Timestamps are clamped to the preceding
@@ -151,10 +152,10 @@ import almasi
 log = almasi.resources.Log()
 log.write(b'hello\\n')
 result = log.read(since=None)
-assert result['log'][0]['data'] == b'hello\\n'
+assert result['log'][0]['text'] == 'hello\\n'
 log.write(b'next\\n')
 new = log.read(since=result['last_timestamp'])
-assert new['log'][-1]['data'] == b'next\\n'
+assert new['log'][-1]['text'] == 'next\\n'
 ~~~
 
 ## Verification

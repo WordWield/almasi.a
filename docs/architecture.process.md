@@ -46,7 +46,7 @@ process.stdout.unsubscribe(subscription)
 - `stdout`, `stderr`: stable `almasi.resources.Log` instances (Stream subclasses). Read and
   subscribe before or after launch. Only the process producer writes or
   closes them. History remains readable after completion. Use ordinary byte
-  reads or `read(since=timestamp)` for timestamped capture chunks; explicit
+  reads or `read(since=timestamp)` for timestamped UTF-8 text chunks; explicit
   `since=None` selects all retained entries. See architecture.resource.md.
 - `state`: stable `almasi.resources.Writable` containing a mapping with
   `status` ('created', 'running', 'exited', or 'failed') and `returncode`

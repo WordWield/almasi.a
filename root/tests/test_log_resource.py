@@ -31,15 +31,15 @@ class TestLogResource(a.Tester):
 	def _record(cls, resource, events, changed):
 		events.append(resource.read(since=None))
 
-	# Verify coherent timestamp and byte snapshots during concurrent writes.
+	# Verify coherent timestamp and text snapshots during concurrent writes.
 	# ----------------------------------------------------------------------
 	@classmethod
 	def _read_repeatedly(cls, resource):
 		for _ in range(100):
 			result = resource.read(since=None)
-			data   = b''.join(entry['data'] for entry in result['log'])
+			text   = ''.join(entry['text'] for entry in result['log'])
 
-			assert data == b'x' * len(data)
+			assert text == 'x' * len(text)
 			assert result['last_timestamp'] == result['log'][-1]['timestamp']
 
 	# ======================================================================
@@ -67,13 +67,30 @@ class TestLogResource(a.Tester):
 		assert resource.read(1, 2) == b'bc'
 		assert resource.read(since=11.0) == {
 			'log' : [
-				{'timestamp': 11.0, 'data': b'bc'},
-				{'timestamp': 11.0, 'data': b'd'},
-				{'timestamp': 11.0, 'data': b'e'}
+				{'timestamp': 11.0, 'text': 'bc'},
+				{'timestamp': 11.0, 'text': 'd'},
+				{'timestamp': 11.0, 'text': 'e'}
 			],
 			'last_timestamp': 11.0
 		}
 		assert resource.read(since=12.0) == {'log': [], 'last_timestamp': 12.0}
+
+	# Preserve original bytes while exposing UTF-8 text at the time coordinate.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_text(cls):
+		resource = a.resources.Log()
+		data     = 'Привет'.encode('utf-8')
+
+		resource.write(data)
+		resource.write(b'\xff')
+		resource.write(b'\xc3')
+		resource.write(b'\xa9')
+
+		assert resource.read() == data + b'\xff\xc3\xa9'
+		assert [entry['text'] for entry in resource.read(since=None)['log']] == [
+			'Привет', '\ufffd', '\ufffd', '\ufffd'
+		]
 
 	# Discard expired entries and keep the retained suffix of partial writes.
 	# ----------------------------------------------------------------------
@@ -86,8 +103,8 @@ class TestLogResource(a.Tester):
 			resource.write(b'abcd')
 			resource.write(b'e')
 			assert resource.read(since=None)['log'] == [
-				{'timestamp': 1.0, 'data': b'cd'},
-				{'timestamp': 2.0, 'data': b'e'}
+				{'timestamp': 1.0, 'text': 'cd'},
+				{'timestamp': 2.0, 'text': 'e'}
 			]
 
 			resource.write(b'f')
@@ -96,9 +113,9 @@ class TestLogResource(a.Tester):
 			resource.write(b'i')
 
 		assert resource.read(since=1.0)['log'] == [
-			{'timestamp': 4.0, 'data': b'g'},
-			{'timestamp': 5.0, 'data': b'h'},
-			{'timestamp': 6.0, 'data': b'i'}
+			{'timestamp': 4.0, 'text': 'g'},
+			{'timestamp': 5.0, 'text': 'h'},
+			{'timestamp': 6.0, 'text': 'i'}
 		]
 		assert resource.read(resource.start_position) == b'ghi'
 		assert os.fstat(resource._index.fileno()).st_size <= 3 * 16
@@ -119,7 +136,7 @@ class TestLogResource(a.Tester):
 
 			assert len(events) == 2
 			assert events[0] == events[1] == resource.read(since=None)
-			assert events[0]['log'][0]['data'] == b'abc'
+			assert events[0]['log'][0]['text'] == 'abc'
 
 			with TestCase().assertRaises(ValueError):
 				resource.write(b'late')
