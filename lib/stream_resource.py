@@ -6,7 +6,7 @@
 #
 # RESPONSIBILITY BOUNDARIES:
 # Owns: Range validation and normalization.
-# Delegates: Byte retrieval, retention and change observation to the source.
+# Delegates: Byte retrieval and retention to the source, subscriptions to Resource.
 # ==============================================================================
 
 from .resource import Resource

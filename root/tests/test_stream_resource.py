@@ -9,7 +9,7 @@
 # Delegates: Source storage to a mock byte source.
 # ==============================================================================
 
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import almasi
 
@@ -57,6 +57,39 @@ class TestStreamResource(almasi.Tester):
 				assert rejected
 
 			source.assert_not_called()
+
+	# Independent registrations remain on their own stream and can be canceled.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_subscriptions(cls):
+		resource = almasi.StreamResource()
+		other    = almasi.StreamResource()
+		callback = Mock()
+
+		resource._dispatch(None)
+		first  = resource.subscribe(callback)
+		second = resource.subscribe(callback)
+		third  = other.subscribe(callback)
+
+		try:
+			resource._dispatch(None)
+			assert callback.call_count == 2
+
+			first.cancel()
+			first.cancel()
+			resource._dispatch(None)
+			assert callback.call_count == 3
+
+			other._dispatch(None)
+			assert callback.call_count == 4
+
+			second.cancel()
+			resource._dispatch(None)
+			assert callback.call_count == 4
+		finally:
+			first.cancel()
+			second.cancel()
+			third.cancel()
 
 
 if __name__ == '__main__':

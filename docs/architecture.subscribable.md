@@ -35,13 +35,14 @@ a.Resource
   receives changes from its own producer.
 - `Subscription` owns one registration: its identifier set, callback and
   cancellation/update state. It is a runtime object, not a service.
-- `Resource` holds the common filesystem carrier identity and `subscribe()`.
-  `File` and `Directory` inherit it separately, preserving their existing
-  `is_directory()` methods.
+- `Resource` defines the common read and subscription contract and owns
+  direct registrations. `FilesystemResource` holds filesystem identity;
+  File and Directory inherit it separately.
 - `Filesystem` is the Almasi service that receives filesystem change events,
   resolves their effective resource identities and dispatches notifications.
-- `Resource.subscribe(callback)` delegates to the Filesystem service. It does
-  not own a separate observer, registration registry or background worker.
+- `FilesystemResource.subscribe(callback)` delegates to Filesystem instead
+  of using the direct registration set. There is no duplicate registry or
+  background worker on filesystem resources.
 
 A concrete service is the natural owner of exactly one logical subscription
 dispatcher. That does **not** imply exactly one OS watcher: the Filesystem
@@ -160,7 +161,7 @@ Filesystem events are physical: added, modified and deleted paths. The
 subscriber-facing identifiers represent the **effective Almasi resource**
 after namespace resolution, including library inheritance and overrides.
 
-`Resource.subscribe(callback)` subscribes to its logical resource:
+`FilesystemResource.subscribe(callback)` subscribes to its logical resource:
 - `File`: invalidation of that logical file, including replacement,
   deletion, recreation and changes of its effective inherited source.
 - `Directory`: invalidations of the directory's logical subtree, including

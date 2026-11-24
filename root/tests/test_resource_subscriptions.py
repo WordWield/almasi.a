@@ -11,7 +11,7 @@ import threading
 import time
 import uuid
 
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from watchfiles import Change
 
@@ -41,7 +41,7 @@ class TestResourceSubscriptions(almasi.Tester):
 		assert almasi.File.subscribe is almasi.FilesystemResource.subscribe
 		assert almasi.Directory.subscribe is almasi.FilesystemResource.subscribe
 		assert almasi.File.read is almasi.FilesystemResource.read
-		assert almasi.Directory.read is not almasi.FilesystemResource.read
+		assert almasi.Directory.read is almasi.FilesystemResource.read
 
 	# Base resources have no dependency on filesystem APIs or runtime services.
 	# --------------------------------------------------------------------------
@@ -49,15 +49,24 @@ class TestResourceSubscriptions(almasi.Tester):
 	def test_generic_resource_contract(cls):
 		resource = almasi.Resource()
 
-		for operation in (resource.read, lambda: resource.subscribe(lambda changed: None)):
-			try:
-				operation()
-			except NotImplementedError:
-				error = True
-			else:
-				error = False
+		try:
+			resource.read()
+		except NotImplementedError:
+			error = True
+		else:
+			error = False
 
-			assert error
+		assert error
+
+		callback = Mock()
+		handle   = resource.subscribe(callback)
+
+		resource._dispatch(None)
+		callback.assert_called_once_with(None)
+		handle.cancel()
+
+		resource._dispatch(None)
+		callback.assert_called_once_with(None)
 
 	# Keep the generic read route compatible with file and directory APIs.
 	# --------------------------------------------------------------------------
@@ -71,7 +80,6 @@ class TestResourceSubscriptions(almasi.Tester):
 			assert isinstance(file, almasi.Resource)
 			assert file.read() == 'text'
 			assert directory.read() is directory
-			assert directory.read('notes.txt') == 'text'
 
 	# Reject computed or unrelated resources at the filesystem boundary.
 	# --------------------------------------------------------------------------

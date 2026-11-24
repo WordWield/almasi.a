@@ -5,19 +5,36 @@
 # Define the source-independent read and subscription contract.
 #
 # RESPONSIBILITY BOUNDARIES:
-# Owns: The common read and observation interface.
-# Delegates: Reading, range support and observation to concrete sources.
+# Owns: Direct resource subscription registrations and notification delivery.
+# Delegates: Reading and indexed observation to concrete sources.
 # ==============================================================================
 
-
-from .module import Module
+from .module       import Module
+from .subscription import Subscription
 
 
 class Resource(Module):
 
-	# ==========================================================================
+	# ======================================================================
+	# PRIVATE METHODS
+	# ======================================================================
+
+	# End one direct registration when its handle is canceled.
+	# ----------------------------------------------------------------------
+	def _cancel_subscription(self, subscription):
+		subscription._active = False
+		self._subscriptions.discard(subscription)
+
+	# Notify live listeners without consuming the resource's content.
+	# ----------------------------------------------------------------------
+	def _dispatch(self, changed):
+		for subscription in tuple(self.__dict__.get('_subscriptions', ())):
+			if subscription._active:
+				subscription._callback(changed)
+
+	# ======================================================================
 	# PUBLIC METHODS
-	# ==========================================================================
+	# ======================================================================
 
 	# Read the resource through its concrete source.
 	# ----------------------------------------------------------------------
@@ -28,7 +45,10 @@ class Resource(Module):
 	):
 		raise NotImplementedError
 
-	# Subscribe to changes through its concrete source.
+	# Give each direct listener an independent cancellable registration.
 	# ----------------------------------------------------------------------
 	def subscribe(self, callback):
-		raise NotImplementedError
+		subscription = Subscription(self, None, callback)
+		self.__dict__.setdefault('_subscriptions', set()).add(subscription)
+
+		return subscription
