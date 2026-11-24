@@ -30,9 +30,9 @@ class Filesystem(almasi.Singleton):
 		instance = super().__new__(cls)
 
 		if '_resources' not in instance.__dict__:
-			instance._subscription_lock = threading.RLock()
-			instance._resources         = {}
-			instance._watchers          = {}
+			instance._observation_lock = threading.RLock()
+			instance._resources        = {}
+			instance._watchers         = {}
 
 		return instance
 
@@ -167,7 +167,7 @@ class Filesystem(almasi.Singleton):
 		root  = os.path.realpath(root)
 		paths = {os.path.realpath(path): status for path, status in paths.items()}
 
-		with self._subscription_lock:
+		with self._observation_lock:
 			observed = tuple(
 				(resource, entry['path'])
 				for resource, entry in self._resources.items()
@@ -224,7 +224,7 @@ class Filesystem(almasi.Singleton):
 				resource._invalidate()
 
 			if is_file:
-				with self._subscription_lock:
+				with self._observation_lock:
 					entry = self._resources.get(resource)
 
 					if entry is not None:
@@ -241,7 +241,7 @@ class Filesystem(almasi.Singleton):
 	# ----------------------------------------------------------------------
 	def observe(self, resource):
 		if isinstance(resource, almasi.FilesystemResource):
-			with self._subscription_lock:
+			with self._observation_lock:
 				if resource.is_subscribed():
 					if resource not in self._resources:
 						self._resources[resource] = {

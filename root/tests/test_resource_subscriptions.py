@@ -1,7 +1,12 @@
 # ==============================================================================
 # TEST RESOURCE SUBSCRIPTIONS
 # ==============================================================================
-# Verify filesystem invalidations, resource scopes, inheritance and OS watching.
+# PURPOSE:
+# Verify resource subscriptions and effective filesystem invalidations.
+#
+# RESPONSIBILITY BOUNDARIES:
+# Owns: Assertions about registration, cancellation and watcher lifetimes.
+# Delegates: Observation and dispatch to the real resource implementations.
 # ==============================================================================
 
 import os

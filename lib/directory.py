@@ -390,11 +390,12 @@ class Directory(FilesystemResource):
 			self._plugin(name)
 			file = self.__resolve__(name)
 
-			if file is None:
+			if file is not None:
+				if not isinstance(file, Directory):
+					result = file.load()
+				else:
+					raise IsADirectoryError(file.get_path())
+			else:
 				raise FileNotFoundError(self.join(name))
-			if isinstance(file, Directory):
-				raise IsADirectoryError(file.get_path())
-
-			result = file.load()
 
 		return result

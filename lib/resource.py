@@ -80,7 +80,7 @@ class Resource(Module):
 				try:
 					subscription.callback(changed, *args)
 				except Exception:
-					if self._observe is None:
+					if self._observe is not None:
+						logging.exception('Subscription callback failed')
+					else:
 						raise
-
-					logging.exception('Subscription callback failed')

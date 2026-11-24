@@ -1,7 +1,12 @@
 # ==============================================================================
 # FILESYSTEM RESOURCE
 # ==============================================================================
-# Represent a filesystem carrier with its library namespace and watcher.
+# PURPOSE:
+# Represent a filesystem carrier in its effective library namespace.
+#
+# RESPONSIBILITY BOUNDARIES:
+# Owns: Carrier identity and the common read entry point.
+# Delegates: Loading to concrete carriers and observation to Filesystem.
 # ==============================================================================
 
 import os

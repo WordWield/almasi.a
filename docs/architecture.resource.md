@@ -9,7 +9,7 @@
 identifier scope on a listener. `resource.is_subscribed()` reports whether
 external observation is needed.
 
-`resource.update(changed=None)` delivers the producer's change notification to
+`resource.update(changed=None, *args)` delivers the producer's change notification to
 live subscribers in registration order. Notifications do not consume content.
 Callbacks run synchronously in the producer's execution context. A canceled
 listener is skipped if it has not started; cancellation does not wait for a
@@ -35,6 +35,23 @@ Filesystem owns watcher roots and effective paths. It observes a resource
 once regardless of listener count, invalidates file and namespace caches before
 calling resource.update({path: status}), and releases unused OS watchers.
 Inherited overrides and fork-local observer identity remain unchanged.
+A file observes its logical identity across replacement, removal, recreation
+and changes of its supplying library layer. A directory observes its subtree.
+Hidden parent changes do not invalidate a local override; removing that
+override can reveal an inherited file. Notifications are coalescible hints,
+not an event history. OS watchers do not by themselves establish global
+cache freshness, nor guarantee gap-free delivery across watcher startup,
+overflow or restart.
+
+Example:
+
+~~~python
+import almasi
+
+resource = almasi.File(almasi, '/tmp/example.txt', 'almasi.example')
+subscription = resource.subscribe(print)
+subscription.cancel()
+~~~
 
 ## Streams
 
