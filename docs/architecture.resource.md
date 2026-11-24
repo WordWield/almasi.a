@@ -58,13 +58,51 @@ resource.unsubscribe(subscription_id)
 
 ## Streams
 
-`almasi.resources.Stream` inherits subscriptions and implements range validation for
-`read(position=None, length=None)`. A concrete source implements
-`_read(position, length)` and calls `self.update()` after making bytes
-available. Positions and lengths are non-negative integers or None, not
-booleans. Omitted position is zero; omitted length means the available end.
-A zero length requests no bytes. Consumers own their cursors; reads never
-consume shared state. The source owns retained history and storage.
+`almasi.resources.Stream(max_bytes=None)` is a concrete byte resource backed
+by an automatically removed temporary file. It does not interpret the bytes.
+It inherits the subscription contract and provides:
+
+- `write(data: bytes) -> None`: append bytes and notify after they are readable.
+  Empty writes do not notify. Writes after close raise ValueError.
+- `read(position=None, length=None) -> bytes`: read a finite available range
+  without consuming it or blocking for future bytes. Positions and lengths
+  are non-negative integers or None, not booleans. Omitted position is zero;
+  omitted length means the available end. Reads at or beyond the end return
+  empty bytes. Consumers own their own absolute cursors.
+- `start_position` and `end_position`: inclusive earliest retained and
+  exclusive latest absolute byte positions. These are individual observations,
+  not a joint atomic snapshot.
+- `close() -> None`: finish input and notify once. Existing bytes remain
+  readable; repeated close is harmless. `closed` distinguishes end of input
+  from temporarily absent bytes. The backing file is released automatically
+  when the stream is released, not on close.
+
+By default the entire history is retained on disk until release. For an
+indefinite source, pass a positive integer `max_bytes` to bound disk usage.
+The file reuses its byte locations circularly; absolute positions never wrap.
+Reading an expired position raises ValueError, including omitted position
+after byte zero has expired. A consumer can recover by selecting the current
+start position. Binary media consumers must handle codec/frame boundaries
+themselves. A read and a write are serialized at the storage boundary; the
+file cursor is private and never acts as a subscriber cursor. Callbacks run
+outside that storage lock; they are change hints, not a per-write event log.
+As with other directly updated Resources, callback exceptions propagate to
+the producer after the bytes or closure have been published.
+
+Example:
+
+~~~python
+import almasi
+
+stream = almasi.resources.Stream(max_bytes=1024 * 1024)
+subscription_id = stream.subscribe(print)
+
+stream.write(b'hello')
+assert stream.read(0, 5) == b'hello'
+stream.close()
+assert stream.closed
+stream.unsubscribe(subscription_id)
+~~~
 
 ## Verification
 
