@@ -11,7 +11,8 @@
 
 import asyncio
 import os
-from io import StringIO
+from contextlib import redirect_stderr
+from io         import StringIO
 
 import almasi
 
@@ -95,3 +96,14 @@ class TestProgress(almasi.Tester):
 		stream = StringIO()
 		asyncio.run(cls._run_async(stream))
 		assert stream.getvalue() == '✔ Ready\n'
+
+	# Report skipped work through the same default progress stream.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_skipped(cls):
+		stream = StringIO()
+
+		with redirect_stderr(stream):
+			almasi.Progress.skipped('Saved')
+
+		assert stream.getvalue() == '✔ Saved — skipped\n'
