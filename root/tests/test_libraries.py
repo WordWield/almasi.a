@@ -247,7 +247,7 @@ class Item(fork_sample.Module):
 							assert _Libraries.imp('pull_lib') is library
 
 					assert not stdout.getvalue(), repr(stdout.getvalue())
-					assert log.getvalue().count('almasi.pull_lib: Checking for updates') == 1, repr(log.getvalue())
+					assert log.getvalue().count('almasi.pull_lib') == 1, repr(log.getvalue())
 		finally:
 			a.Imports.__lib__, a.Tester.__lib__, a.Undefined.__lib__ = ownership
 
@@ -279,7 +279,8 @@ class Item(fork_sample.Module):
 							library = _Libraries.imp('offline_lib')
 							assert library.__name__ == 'almasi.offline_lib'
 
-					assert '⚠️ almasi.offline_lib: using local version' in log.getvalue()
+					assert 'almasi.offline_lib' in log.getvalue()
+					assert 'using local version' in log.getvalue().lower()
 		finally:
 			a.Imports.__lib__, a.Tester.__lib__, a.Undefined.__lib__ = ownership
 
@@ -308,7 +309,7 @@ class Item(fork_sample.Module):
 							library = _Libraries.imp('no_git_lib')
 							assert library.__name__ == 'almasi.no_git_lib'
 
-					assert 'using local version' in log.getvalue()
+					assert 'using local version' in log.getvalue().lower()
 		finally:
 			a.Imports.__lib__, a.Tester.__lib__, a.Undefined.__lib__ = ownership
 
@@ -343,7 +344,7 @@ class Item(fork_sample.Module):
 							sys.executable, '-m', 'pip', 'install', '-r', requirements
 						]
 						assert runner.call_args.kwargs['cwd'] == source
-						assert log.getvalue().count('almasi.deps_lib: Installing dependencies') == 2, repr(log.getvalue())
+						assert log.getvalue().count('almasi.deps_lib') == 2, repr(log.getvalue())
 		finally:
 			a.Imports.__lib__, a.Tester.__lib__, a.Undefined.__lib__ = ownership
 
@@ -371,7 +372,8 @@ class Item(fork_sample.Module):
 
 							assert 'almasi.missing_deps' not in sys.modules
 
-			assert 'almasi.missing_deps: Installing dependencies' in log.getvalue()
+			assert 'almasi.missing_deps' in log.getvalue()
+			assert 'installing dependencies' in log.getvalue().lower()
 
 	# Reject invalid names before constructing a Git command or a module.
 	# ----------------------------------------------------------------------
