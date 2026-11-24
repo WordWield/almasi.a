@@ -77,6 +77,75 @@ class TestGit(a.Tester):
 			with open(os.path.join(checkout, 'example.txt')) as stream:
 				assert stream.read() == 'second'
 
+	# Prevent checkout and push hooks from interfering with automated commands.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_ignore_hooks(cls):
+		git = a.services.Git
+
+		with tempfile.TemporaryDirectory(prefix='almasi_git_hooks_') as directory:
+			origin   = os.path.join(directory, 'origin')
+			checkout = os.path.join(directory, 'checkout')
+			hooks    = os.path.join(directory, 'hooks')
+			os.makedirs(hooks)
+
+			for name in ('post-checkout', 'pre-push'):
+				path = os.path.join(hooks, name)
+
+				with open(path, 'w') as stream:
+					stream.write('#!/bin/sh\nexit 91\n')
+
+				os.chmod(path, 0o755)
+
+			subprocess.run(['git', 'init', '--quiet', origin], check=True)
+			subprocess.run([
+				'git', '-C', origin,
+				'-c', 'user.name=Almasi Test',
+				'-c', 'user.email=test@example.test',
+				'-c', 'commit.gpgSign=false',
+				'-c', f'core.hooksPath={os.devnull}',
+				'commit', '--quiet', '--allow-empty', '-m', 'Fixture'
+			], check=True)
+
+			environment = {
+				'GIT_CONFIG_COUNT'   : '1',
+				'GIT_CONFIG_KEY_0'   : 'core.hooksPath',
+				'GIT_CONFIG_VALUE_0' : hooks
+			}
+
+			with patch.dict(os.environ, environment):
+				git.clone(origin, checkout)
+				assert git.is_repository(checkout)
+
+				arguments = ['git', '-C', checkout, 'push', 'origin', 'HEAD:refs/heads/copied']
+
+				blocked = subprocess.run(arguments, capture_output=True, text=True)
+				assert blocked.returncode != 0
+
+				git._run(arguments)
+
+				assert os.environ['GIT_CONFIG_COUNT'] == '1'
+				assert os.environ['GIT_CONFIG_VALUE_0'] == hooks
+
+	# Apply the same subprocess environment to GitHub CLI and its Git children.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_github_child_environment(cls):
+		git = a.services.Git
+
+		with patch.dict(os.environ, {'GIT_CONFIG_COUNT': '0'}):
+			with patch('subprocess.run') as run:
+				git._gh(['repo', 'create', 'owner/repo', '--private'])
+
+				assert run.call_args.args[0] == ['gh', 'repo', 'create', 'owner/repo', '--private']
+
+				environment = run.call_args.kwargs['env']
+				assert environment['GIT_CONFIG_COUNT'] == '1'
+				assert environment['GIT_CONFIG_KEY_0'] == 'core.hooksPath'
+				assert environment['GIT_CONFIG_VALUE_0'] == os.devnull
+				assert environment['GIT_TERMINAL_PROMPT'] == '0'
+				assert environment['GH_PROMPT_DISABLED'] == '1'
+
 	# Distinguish a missing repository from authentication and network errors.
 	# ----------------------------------------------------------------------
 	@classmethod

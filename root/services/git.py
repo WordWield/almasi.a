@@ -25,7 +25,7 @@ class Git(a.Singleton):
 	# PRIVATE METHODS
 	# ======================================================================
 
-	# Execute Git directly, preserving diagnostics and native failure types.
+	# Run commands without user hooks or interactive Git and GitHub prompts.
 	# ----------------------------------------------------------------------
 	def _run(
 		self,
@@ -33,8 +33,21 @@ class Git(a.Singleton):
 		timeout = None,
 		check   = True
 	):
+		environment = dict(
+			os.environ,
+			GH_HOST             = self._HOST,
+			GH_PROMPT_DISABLED  = '1',
+			GIT_TERMINAL_PROMPT = '0'
+		)
+
+		index = int(environment.get('GIT_CONFIG_COUNT', '0'))
+		environment[f'GIT_CONFIG_KEY_{index}']   = 'core.hooksPath'
+		environment[f'GIT_CONFIG_VALUE_{index}'] = os.devnull
+		environment['GIT_CONFIG_COUNT']         = str(index + 1)
+
 		return subprocess.run(
-			['git', *arguments],
+			arguments,
+			env            = environment,
 			capture_output = True,
 			text           = True,
 			timeout        = timeout,
@@ -60,15 +73,7 @@ class Git(a.Singleton):
 	# Use the authenticated GitHub CLI without interactive prompts.
 	# ----------------------------------------------------------------------
 	def _gh(self, arguments, check=True):
-		environment = dict(os.environ, GH_HOST=self._HOST, GH_PROMPT_DISABLED='1')
-
-		return subprocess.run(
-			['gh', *arguments],
-			env            = environment,
-			capture_output = True,
-			text           = True,
-			check          = check
-		)
+		return self._run(['gh', *arguments], check=check)
 
 	# ======================================================================
 	# PUBLIC METHODS
@@ -77,7 +82,7 @@ class Git(a.Singleton):
 	# Clone a trusted remote into an explicitly selected local directory.
 	# ----------------------------------------------------------------------
 	def clone(self, url: str, directory: str, timeout: float | None = None) -> str:
-		self._run(['clone', '--quiet', '--', url, directory], timeout=timeout)
+		self._run(['git', 'clone', '--quiet', '--', url, directory], timeout=timeout)
 
 		return directory
 
@@ -85,7 +90,7 @@ class Git(a.Singleton):
 	# ----------------------------------------------------------------------
 	def pull(self, directory: str, timeout: float | None = None) -> None:
 		self._run(
-			['-C', directory, '--git-dir=.git', '--work-tree=.', 'pull', '--ff-only', '--quiet'],
+			['git', '-C', directory, '--git-dir=.git', '--work-tree=.', 'pull', '--ff-only', '--quiet'],
 			timeout=timeout
 		)
 
@@ -96,7 +101,7 @@ class Git(a.Singleton):
 
 		if os.path.exists(os.path.join(directory, '.git')):
 			probe = self._run(
-				['-C', directory, '--git-dir=.git', '--work-tree=.', 'rev-parse', '--is-inside-work-tree'],
+				['git', '-C', directory, '--git-dir=.git', '--work-tree=.', 'rev-parse', '--is-inside-work-tree'],
 				check=False
 			)
 			result = probe.returncode == 0 and probe.stdout.strip() == 'true'

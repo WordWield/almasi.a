@@ -39,3 +39,7 @@ permission to create repositories under the target owner, and Git credentials
 to read the source and push the destination. Configure these before use,
 for example with `gh auth login --hostname github.com` and
 `gh auth setup-git --hostname github.com`. No new Python dependency is required.
+
+Core Git commands disable client-side Git hooks and terminal prompts for their
+subprocesses, including Git children started by `gh`. Normal manual Git commands,
+user configuration and server-side repository checks are unchanged.

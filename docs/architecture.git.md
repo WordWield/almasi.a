@@ -48,3 +48,7 @@ offline fallback independently of Core. Hub uses the Core Git service for
 its own workspaces and repository creation.
 Git owns no repository inventory or process supervision. Concurrent mutations
 to the same checkout must be coordinated by callers.
+
+Automated Git and GitHub CLI commands disable client-side hooks and terminal
+prompts through their subprocess environment. Git children inherit that setting;
+manual Git commands and persistent configuration remain unchanged.
