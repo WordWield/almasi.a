@@ -9,6 +9,7 @@ import logging
 import os
 import sys
 import types
+from functools import partial
 
 from .module    import Module, ModuleMeta
 from .singleton import Singleton
@@ -128,7 +129,7 @@ class Reloadable:
 					except Exception:
 						logging.exception('Reloadable source update failed: %s', file.get_path())
 
-			subscription = file.subscribe(changed)
+			subscription = partial(file.unsubscribe, file.subscribe(changed))
 			cls._reload_subscription = subscription
 
 	# Report an instance to its nearest inherited callback.

@@ -64,7 +64,7 @@ class TestReloadable(almasi.Tester):
 				assert type(service)._reload_subscription is subscription
 				assert seen == [service, service]
 
-				type(service)._reload_subscription.cancel()
+				type(service)._reload_subscription()
 				del type(service).__reload_callback__
 
 	# Report initialized instances and retain class-specific listeners after reload.
@@ -98,7 +98,7 @@ class TestReloadable(almasi.Tester):
 				assert type(first)._reload_subscription is subscription
 				del type(first).__reload_callback__
 
-				type(first)._reload_subscription.cancel()
+				type(first)._reload_subscription()
 
 	# A subclass inherits one callback, or replaces it with its own.
 	# ----------------------------------------------------------------------
