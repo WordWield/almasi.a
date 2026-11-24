@@ -45,8 +45,9 @@ class TestResourceSubscriptions(almasi.Tester):
 		assert almasi.Directory(almasi, os.path.dirname(__file__), 'almasi.tests').is_directory() is True
 		assert almasi.File.subscribe is almasi.Resource.subscribe
 		assert almasi.Directory.subscribe is almasi.Resource.subscribe
-		assert almasi.File.read is almasi.FilesystemResource.read
-		assert almasi.Directory.read is almasi.FilesystemResource.read
+		assert not hasattr(almasi.Directory, 'load')
+		assert almasi.File.read is not almasi.Resource.read
+		assert almasi.Directory.read is not almasi.Resource.read
 
 	# Base resources have no dependency on filesystem APIs or runtime services.
 	# --------------------------------------------------------------------------
@@ -380,7 +381,7 @@ class TestResourceSubscriptions(almasi.Tester):
 			face   = child.mkdir('shared')
 			file   = face.__resolve__('note.md')
 			events = []
-			source = child.services.Filesystem
+			source = almasi.services.Filesystem
 			p_path = parent.shared.join('note.md')
 			c_path = face.join('note.md')
 
@@ -429,7 +430,7 @@ class TestResourceSubscriptions(almasi.Tester):
 			file = almasi.File(parent, parent_path, 'binary_child_subscribe.static.logo')
 			file._namespace_lib = child
 			events = []
-			source = child.services.Filesystem
+			source = almasi.services.Filesystem
 
 			with patch.object(type(source), '_watch', return_value=None):
 				handle = file.subscribe(events.append)
@@ -454,26 +455,42 @@ class TestResourceSubscriptions(almasi.Tester):
 				assert len(events) == 2
 				file.unsubscribe(handle)
 
-	# A fork resolves its own concrete Filesystem singleton and registrations.
-	# --------------------------------------------------------------------------
+	# Forks keep separate resource identities under one physical observer.
+	# ----------------------------------------------------------------------
 	@classmethod
-	def test_fork_service_isolation(cls):
+	def test_fork_resource_isolation(cls):
 		with tempfile.TemporaryDirectory() as root:
-			first  = almasi.fork('filesystem_first_' + uuid.uuid4().hex)
-			second = almasi.fork('filesystem_second_' + uuid.uuid4().hex)
-			one    = first.services.Filesystem
-			two    = second.services.Filesystem
+			first   = almasi.fork('filesystem_first_' + uuid.uuid4().hex)
+			second  = almasi.fork('filesystem_second_' + uuid.uuid4().hex)
+			service = almasi.services.Filesystem
+			path    = os.path.join(root, 'item.txt')
+			one     = almasi.File(first, path, 'almasi.item')
+			two     = almasi.File(second, path, 'almasi.item')
+			events  = []
 
-			assert one is not two
-			assert type(one) is not type(two)
+			with patch.object(type(service), '_watch', return_value=None):
+				first_id  = one.subscribe(events.append)
+				second_id = two.subscribe(events.append)
 
-			with patch.object(type(one), '_watch', return_value=None):
-				file   = almasi.File(first, os.path.join(root, 'item.txt'), 'almasi.item')
-				handle = file.subscribe(lambda changed: None)
-				assert file in one._resources
-				assert not two._resources
-				file.unsubscribe(handle)
-				assert not one._watchers
+				try:
+					assert one in service._resources
+					assert two in service._resources
+					assert one._namespace_lib is first
+					assert two._namespace_lib is second
+					assert os.path.realpath(root) in service._watchers
+
+					one.unsubscribe(first_id)
+					assert one not in service._resources
+					assert two in service._resources
+					assert os.path.realpath(root) in service._watchers
+
+					two.update({'item.txt': 'modified'})
+					assert events == [{'item.txt': 'modified'}]
+				finally:
+					one.unsubscribe(first_id)
+					two.unsubscribe(second_id)
+
+				assert os.path.realpath(root) not in service._watchers
 
 	# Nested filesystem notifications keep each batch's own change details.
 	# --------------------------------------------------------------------------

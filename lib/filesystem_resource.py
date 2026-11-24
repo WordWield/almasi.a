@@ -5,11 +5,12 @@
 # Represent a filesystem carrier in its effective library namespace.
 #
 # RESPONSIBILITY BOUNDARIES:
-# Owns: Carrier identity and the common read entry point.
-# Delegates: Loading to concrete carriers and observation to Filesystem.
+# Owns: Carrier identity in its supplying and effective namespaces.
+# Delegates: Reading to concrete carriers and observation to Filesystem.
 # ==============================================================================
 
 import os
+from importlib import import_module
 
 from .resource import Resource
 
@@ -26,7 +27,7 @@ class FilesystemResource(Resource):
 		self.__lib__         = lib
 		self.__path__        = os.path.realpath(path)
 		self.__route__       = route
-		self._namespace_lib = lib
+		self._namespace_lib  = lib
 
 	# Describe the carrier without realizing its content.
 	# --------------------------------------------------------------------------
@@ -37,11 +38,11 @@ class FilesystemResource(Resource):
 	# PRIVATE METHODS
 	# ======================================================================
 
-	# Observe this carrier in its effective namespace.
+	# Import the published Almasi instance, not its entry module during startup.
 	# ----------------------------------------------------------------------
 	@property
 	def _observe(self):
-		return self._namespace_lib.services.Filesystem.observe
+		return import_module('almasi').services.Filesystem.observe
 
 	# ==========================================================================
 	# PUBLIC METHODS
@@ -71,8 +72,3 @@ class FilesystemResource(Resource):
 	# --------------------------------------------------------------------------
 	def get_stem(self):
 		return os.path.splitext(self.get_name())[0]
-
-	# Read through the existing format plugin or directory loader.
-	# --------------------------------------------------------------------------
-	def read(self, *args, **kwargs):
-		return self.load(*args, **kwargs)

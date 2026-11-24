@@ -1,7 +1,12 @@
 # ==============================================================================
 # RELOADABLE
 # ==============================================================================
+# PURPOSE:
 # Observe source changes and notify consumers of live instances.
+#
+# RESPONSIBILITY BOUNDARIES:
+# Owns: Class replacement and its source observation lifecycle.
+# Delegates: Source notification and registration storage to File.
 # ==============================================================================
 
 import gc
@@ -9,7 +14,6 @@ import logging
 import os
 import sys
 import types
-from functools import partial
 
 from .module    import Module, ModuleMeta
 from .singleton import Singleton
@@ -78,6 +82,15 @@ class Reloadable:
 
 						raise
 
+					# Preserve the original File and its registration across class replacement.
+					# --------------------------------------------------------------
+					if '_reload_subscription' in cls.__dict__:
+						new._reload_file         = cls._reload_file
+						new._reload_subscription = cls._reload_subscription
+
+					if '__reload_callback__' in cls.__dict__:
+						new.__reload_callback__ = cls.__reload_callback__
+
 					sys.modules[key] = fresh
 					directory = cls.__lib__.Directory(
 						cls.__lib__,
@@ -103,34 +116,34 @@ class Reloadable:
 	def __on_load__(cls, file):
 		cls._observe_reload(file)
 
-	# The observed class owns one subscription, inherited by its replacements.
+	# Keep the exact source resource and its registration ID.
 	# ----------------------------------------------------------------------
 	@classmethod
 	def _observe_reload(cls, file):
 		if '_reload_subscription' not in cls.__dict__:
-			def changed(changes):
-				nonlocal cls
+			cls._reload_file         = file
+			cls._reload_subscription = file.subscribe(cls._reload_changed)
 
-				if os.path.isfile(file.get_path()):
-					try:
-						current = cls
-						target  = current() if issubclass(current, Singleton) else current
-						fresh   = target.__reload__()
-						cls     = type(fresh) if isinstance(fresh, Singleton) else fresh
+	# Resolve the currently published class even when the callback was bound
+	# before an earlier reload.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def _reload_changed(cls, changes):
+		file = cls._reload_file
 
-						cls._reload_subscription = subscription
-						callback = current.__dict__.get('__reload_callback__')
-						if callback is not None:
-							cls.__reload_callback__ = callback
+		if os.path.isfile(file.get_path()):
+			try:
+				key     = cls.__dict__.get('__original_module__', cls.__module__)
+				current = sys.modules[key].__dict__[cls.__name__]
+				target  = current() if issubclass(current, Singleton) else current
+				fresh   = target.__reload__()
+				current = type(fresh) if isinstance(fresh, Singleton) else fresh
 
-						for instance in gc.get_objects():
-							if type(instance) is cls:
-								Reloadable._notify(instance)
-					except Exception:
-						logging.exception('Reloadable source update failed: %s', file.get_path())
-
-			subscription = partial(file.unsubscribe, file.subscribe(changed))
-			cls._reload_subscription = subscription
+				for instance in gc.get_objects():
+					if type(instance) is current:
+						Reloadable._notify(instance)
+			except Exception:
+				logging.exception('Reloadable source update failed: %s', file.get_path())
 
 	# Report an instance to its nearest inherited callback.
 	# ----------------------------------------------------------------------

@@ -152,7 +152,7 @@ class A(metaclass=AMeta, plugins=['Py', 'Json', 'Text', 'Bytes']):
 				raise AttributeError(f'Library `{self.__name__}` has no attribute `{name}`')
 			result = self.services.Libraries.imp(name)
 		else:
-			result = value.load()
+			result = value.read()
 		self.__dict__[name] = result
 		self.__cached_names__.add(name)
 		return result

@@ -56,3 +56,8 @@ class File(FilesystemResource):
 			self._loaded = True
 
 		return self._data
+
+	# Read the file through its memoized format loader.
+	# ----------------------------------------------------------------------
+	def read(self):
+		return self.load()

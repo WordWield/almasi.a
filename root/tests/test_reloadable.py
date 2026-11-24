@@ -37,6 +37,7 @@ class TestReloadable(almasi.Tester):
 				service.initialize()
 				assert service.read() == 6
 				seen         = []
+				file         = type(service)._reload_file
 				subscription = type(service)._reload_subscription
 				type(service).__on_reload__(seen.append)
 
@@ -64,7 +65,9 @@ class TestReloadable(almasi.Tester):
 				assert type(service)._reload_subscription is subscription
 				assert seen == [service, service]
 
-				type(service)._reload_subscription()
+				assert type(service)._reload_file is file
+				file.unsubscribe(subscription)
+				assert not file.is_subscribed()
 				del type(service).__reload_callback__
 
 	# Report initialized instances and retain class-specific listeners after reload.
@@ -80,6 +83,7 @@ class TestReloadable(almasi.Tester):
 			with patch.object(type(almasi.services.Filesystem), '_watch', return_value=None):
 				handler = directory.Handler
 				seen         = []
+				file         = handler._reload_file
 				subscription = handler._reload_subscription
 				handler.__on_reload__(seen.append)
 				first   = handler()
@@ -98,7 +102,9 @@ class TestReloadable(almasi.Tester):
 				assert type(first)._reload_subscription is subscription
 				del type(first).__reload_callback__
 
-				type(first)._reload_subscription()
+				assert type(first)._reload_file is file
+				file.unsubscribe(subscription)
+				assert not file.is_subscribed()
 
 	# A subclass inherits one callback, or replaces it with its own.
 	# ----------------------------------------------------------------------
