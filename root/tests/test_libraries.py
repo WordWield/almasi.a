@@ -256,7 +256,7 @@ class Item(fork_sample.Module):
 							assert almasi.services.Libraries.imp('pull_lib') is library
 
 					assert not stdout.getvalue(), repr(stdout.getvalue())
-					assert log.getvalue().count('✔\033[0m almasi.pull_lib: Checking for updates') == 1, repr(log.getvalue())
+					assert log.getvalue().count('✔ almasi.pull_lib: Checking for updates') == 1, repr(log.getvalue())
 		finally:
 			almasi.Imports.__lib__, almasi.Tester.__lib__, almasi.Undefined.__lib__ = ownership
 			almasi.__dict__.pop('pull_lib', None)
@@ -355,7 +355,7 @@ class Item(fork_sample.Module):
 							sys.executable, '-m', 'pip', 'install', '-r', requirements
 						]
 						assert runner.call_args.kwargs['cwd'] == source
-						assert log.getvalue().count('✔\033[0m almasi.deps_lib: Installing dependencies') == 2, repr(log.getvalue())
+						assert log.getvalue().count('✔ almasi.deps_lib: Installing dependencies') == 2, repr(log.getvalue())
 		finally:
 			almasi.Imports.__lib__, almasi.Tester.__lib__, almasi.Undefined.__lib__ = ownership
 			almasi.__dict__.pop('deps_lib', None)
@@ -377,8 +377,10 @@ class Item(fork_sample.Module):
 				with patch.dict(os.environ, {'ALMASI_PATH': home}):
 					with patch('subprocess.run', side_effect=failure):
 						with patch.dict(sys.modules):
-							with TestCase().assertRaisesRegex(RuntimeError, 'dependency unavailable'):
+							with TestCase().assertRaises(subprocess.CalledProcessError) as raised:
 								almasi.services.Libraries.imp('missing_deps')
+
+							assert raised.exception is failure
 
 							assert 'almasi.missing_deps' not in sys.modules
 

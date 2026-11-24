@@ -43,7 +43,7 @@ else:
 ```
 
 Libraries retains its existing naming, shared cache, dependency installation,
-progress and offline fallback policies; it delegates Git operations to this
-service. Hub can use the same operations for its own independent workspaces.
+offline fallback policy; it delegates Git operations to this service and
+presentation to [Progress](architecture.progress.md). Hub can use the same operations for its own independent workspaces.
 Git owns no repository inventory or process supervision. Concurrent mutations
 to the same checkout must be coordinated by callers.

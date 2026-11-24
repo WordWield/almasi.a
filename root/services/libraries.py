@@ -12,7 +12,6 @@
 import os
 import subprocess
 import sys
-from contextlib import contextmanager
 
 import almasi
 
@@ -27,26 +26,13 @@ class Libraries(almasi.Singleton):
 	# PRIVATE METHODS
 	# ======================================================================
 
-	# Report library preparation progress while preserving failure diagnostics.
-	# ----------------------------------------------------------------------
-	@contextmanager
-	def _progress(self, name, operation):
-		label = f'almasi.{name}: {operation}'
-
-		try:
-			with almasi.Spinner(text=label, stream=sys.stderr, failure_label=f'❌ {label}'):
-				yield
-		except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
-			details = getattr(error, 'stderr', None) or str(error)
-			raise RuntimeError(f'{label} failed: {str(details).strip()}') from error
-
 	# Install requirements using the library's working directory.
 	# ----------------------------------------------------------------------
 	def _install_requirements(self, name):
 		requirements = os.path.join(self.get_path(name), 'requirements.txt')
 
 		if os.path.isfile(requirements):
-			with self._progress(name, 'Installing dependencies'):
+			with almasi.Progress(f'almasi.{name}: Installing dependencies'):
 				subprocess.run(
 					[sys.executable, '-m', 'pip', 'install', '-r', requirements],
 					cwd            = self.get_path(name),
@@ -88,7 +74,7 @@ class Libraries(almasi.Singleton):
 		destination = self.get_path(name)
 
 		if not self.is_cloned(name):
-			with self._progress(name, 'Cloning library'):
+			with almasi.Progress(f'almasi.{name}: Cloning library'):
 				almasi.services.Git.clone(self.get_url(name), destination)
 
 		return destination
@@ -107,10 +93,11 @@ class Libraries(almasi.Singleton):
 
 				try:
 					if git.is_repository(path):
-						with self._progress(name, 'Checking for updates'):
+						with almasi.Progress(f'almasi.{name}: Checking for updates'):
 							git.pull(path, timeout=self._PULL_TIMEOUT)
-				except (RuntimeError, OSError) as error:
-					print(f'⚠️ almasi.{name}: using local version ({error.__cause__ or error})', file=sys.stderr)
+				except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+					details = getattr(error, 'stderr', None) or str(error)
+					print(f'⚠️ almasi.{name}: using local version ({str(details).strip()})', file=sys.stderr)
 			else:
 				path = self.clone(name)
 
