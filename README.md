@@ -106,6 +106,29 @@ from almasi import o
 
 When a library is extended from `__main__`, Almasi also selects it as the active application. Application selection is process-wide; services do not implicitly initialize merely because a library is extended.
 
+### Namespace fallback
+
+A library can delegate missing public attributes to an ordinary Python object:
+
+```python
+from types import SimpleNamespace
+
+mylib.__fallback__ = SimpleNamespace(remote='external value')
+assert mylib.remote == 'external value'
+```
+
+`__fallback__` defaults to `None` (disabled). Existing Python attributes and
+native filesystem resolution always take precedence; Core's native lazy
+library import is unchanged. If native lookup finds no component, the
+library returns `getattr(library.__fallback__, name)` for public names
+(names not beginning with an underscore). The result is not cached as a
+filesystem component, even when it is `None`. AttributeError from the
+fallback propagates normally. Assign `None` to disable it again.
+
+The fallback is configured on one library face, not its directories,
+children or forks. Install it separately on a fork if needed. This is a
+namespace extension, not a second filesystem resolver.
+
 ### Named forks
 
 ```python

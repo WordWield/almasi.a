@@ -123,6 +123,7 @@ class A(metaclass=AMeta, plugins=['Py', 'Json', 'Text', 'Bytes']):
 	Progress      = Progress
 
 	__app__       = None
+	__fallback__  = None
 
 	dual_method   = DualMethod
 	dual_property = DualProperty
@@ -131,7 +132,7 @@ class A(metaclass=AMeta, plugins=['Py', 'Json', 'Text', 'Bytes']):
 	# FRAMEWORK METHODS
 	# ======================================================================
 
-	# Resolve attribute
+	# Resolve native components first, then delegate missing public attributes.
 	# ----------------------------------------------------------------------
 	def __getattr__(self, name):
 		value   = None
@@ -149,14 +150,17 @@ class A(metaclass=AMeta, plugins=['Py', 'Json', 'Text', 'Bytes']):
 			if value is not None:
 				break
 
-		if value is None:
-			if self is not A.__instance__ or not self._is_valid_library_name(name):
-				raise AttributeError(f'Library `{self.__name__}` has no attribute `{name}`')
-			result = self.services.Libraries.imp(name)
+		is_library_import = self is A.__instance__ and self._is_valid_library_name(name)
+
+		if value is not None or is_library_import:
+			result = value.read() if value is not None else self.services.Libraries.imp(name)
+			self.__dict__[name] = result
+			self.__cached_names__.add(name)
+		elif self.__fallback__ is not None and not name.startswith('_'):
+			result = getattr(self.__fallback__, name)
 		else:
-			result = value.read()
-		self.__dict__[name] = result
-		self.__cached_names__.add(name)
+			raise AttributeError(f'Library `{self.__name__}` has no attribute `{name}`')
+
 		return result
 
 	# Resolve a named fork without changing the canonical Python import.

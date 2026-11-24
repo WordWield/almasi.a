@@ -68,7 +68,9 @@ At creation, `A.fork()`:
 4. Creates fresh plugin instances and a fork-aware Python import environment.
 5. Records `__fork_source__` and `__fork_name__`, then registers the fork on its source face.
 
-Resolved classes, service instances, bound methods, and callable runtime state are **not** copied from the canonical library. Components are resolved and created separately in each fork when requested.
+Resolved classes, service instances, bound methods, callable runtime state,
+and the per-face `__fallback__` object are **not** copied from the canonical library.
+A new fork starts with no fallback unless explicitly configured. Components are resolved and created separately in each fork when requested.
 
 A fork is therefore not the same operation as `extend()`. `extend()` defines and publishes a canonical library class with a filesystem/inheritance lineage; `fork()` creates a detached runtime instance of an existing library.
 

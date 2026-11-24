@@ -1,7 +1,12 @@
 # ==============================================================================
 # TEST LIBRARY FORKS
 # ==============================================================================
-# Verify fork isolation through genuine Almasi module and service resolution.
+# PURPOSE:
+# Verify independent runtime namespaces and native attribute resolution.
+#
+# RESPONSIBILITY BOUNDARIES:
+# Owns: Temporary library fixtures and namespace assertions.
+# Delegates: Loading, caching and fork identity to Almasi.
 # ==============================================================================
 
 import importlib
@@ -10,7 +15,8 @@ import os
 import sys
 import tempfile
 
-from contextlib import contextmanager
+from contextlib   import contextmanager
+from types        import SimpleNamespace
 from unittest.mock import patch
 
 import almasi
@@ -180,6 +186,44 @@ class Counter(almasi_fork_fixture.ReloadableSingleton):
 			assert bob_service.increment() == 1
 			assert default_service.value == 0
 			assert alice_service.value == 2
+
+	# Resolve native names before fallback without caching delegated attributes.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_namespace_fallback(cls):
+		with cls._runtime() as (library, root):
+			library.__fallback__ = SimpleNamespace(
+				Item     = 'not the native class',
+				settings = 'fallback settings',
+				remote   = None,
+				_private = 'not public'
+			)
+
+			assert isinstance(library.Item, type)
+			assert library.remote is None
+
+			library.__fallback__.remote = 12
+			assert library.remote == 12
+			assert not hasattr(library, '_private')
+			assert not hasattr(library, 'unknown')
+
+			library.settings = 'explicit settings'
+			assert library.settings == 'explicit settings'
+
+			library.write('remote.json', 21)
+			assert library.remote == 21
+
+			fork = library.fork('isolated_fallback')
+			assert fork.__fallback__ is None
+			assert not hasattr(fork, 'unknown')
+
+			library.__fallback__.external = 42
+			assert library.external == 42
+			assert not hasattr(fork, 'external')
+
+			library.__fallback__ = None
+			assert not hasattr(library, 'external')
+			assert library.remote == 21
 
 	# Capture the parent's configuration but allocate fresh class identities.
 	# ----------------------------------------------------------------------
