@@ -145,6 +145,10 @@ Forks isolate Python-side runtime namespaces and service instances. They **do no
 
 The runtime also provides `join()`, `mkdir()`, `read()`, `write()`, `copy()` and `link()` on directory faces and library roots. Writes and copies use atomic replacement, and successful mutations invalidate affected cached filesystem carriers. [Read the detailed invariants](docs/almasi_invariants8.md).
 
+## Git repository management
+
+Core provides [Git checkout and GitHub repository operations](docs/git.md) through `a.services.Git`.
+
 ## Acquisition and security
 
 ```python

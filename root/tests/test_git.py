@@ -2,144 +2,97 @@
 # TEST GIT
 # ==============================================================================
 # PURPOSE:
-# Exercise Git acquisition and fast-forward updates on real local repositories.
+# Verify remote Git operations without creating real GitHub repositories.
 #
 # RESPONSIBILITY BOUNDARIES:
-# Owns: Isolated repository fixtures and public API assertions.
-# Delegates: Checkout operations to Git and fixture creation to the Git CLI.
+# Owns: CLI command and failure contract assertions.
+# Delegates: Actual GitHub communication to the Git service.
 # ==============================================================================
 
-import os
 import subprocess
-import tempfile
-from unittest import TestCase
 
-from almasi import a, Git
+from unittest.mock import patch
+
+from almasi import a
 
 
 class TestGit(a.Tester):
 
 	# ======================================================================
-	# PRIVATE METHODS
-	# ======================================================================
-
-	# Create fixture commits without user signing or hooks.
-	# ----------------------------------------------------------------------
-	@staticmethod
-	def _commit(directory, content):
-		with open(os.path.join(directory, 'data.txt'), 'w') as file:
-			file.write(content)
-
-		subprocess.run(
-			['git', '-C', directory, 'add', 'data.txt'],
-			check=True, capture_output=True
-		)
-		subprocess.run(
-			[
-				'git', '-C', directory,
-				'-c', 'user.name=Almasi Test',
-				'-c', 'user.email=almasi@example.test',
-				'-c', 'commit.gpgSign=false',
-				'-c', f'core.hooksPath={os.devnull}',
-				'commit', '-qm', content
-			],
-			check=True, capture_output=True
-		)
-
-	# Create a repository with a committed file.
-	# ----------------------------------------------------------------------
-	@classmethod
-	def _origin(cls, directory):
-		subprocess.run(['git', 'init', '-q', directory], check=True, capture_output=True)
-		cls._commit(directory, 'initial')
-
-	# ======================================================================
 	# PUBLIC METHODS
 	# ======================================================================
 
-	# Acquire a working checkout and update it from its configured origin.
+	# Distinguish a missing repository from authentication and network errors.
 	# ----------------------------------------------------------------------
 	@classmethod
-	def test_clone_and_pull(cls):
-		git = Git
-		assert git is Git
+	def test_exists(cls):
+		git = a.services.Git
 
-		with tempfile.TemporaryDirectory() as home:
-			origin   = os.path.join(home, 'origin')
-			checkout = os.path.join(home, 'nested', 'checkout')
-			cls._origin(origin)
+		with patch.object(git, '_gh') as gh:
+			gh.return_value = subprocess.CompletedProcess([], 0, 'HTTP/2 200 OK', '')
+			assert git.exists('owner/repo') is True
 
-			assert not git.is_repository(checkout)
-			assert git.clone(origin, checkout) == checkout
-			assert git.is_repository(checkout)
+			gh.return_value = subprocess.CompletedProcess([], 1, 'HTTP/2 404 Not Found', 'gh: Not Found')
+			assert git.exists('owner/repo') is False
 
-			with open(os.path.join(checkout, 'data.txt')) as file:
-				assert file.read() == 'initial'
+			gh.return_value = subprocess.CompletedProcess([], 1, 'HTTP/2 403 Forbidden', 'gh: Forbidden')
 
-			cls._commit(origin, 'updated')
-			git.pull(checkout, timeout=15)
+			try:
+				git.exists('owner/repo')
+			except RuntimeError as error:
+				assert 'Forbidden' in str(error)
+			else:
+				assert False, 'A permission error must not report a missing repository'
 
-			with open(os.path.join(checkout, 'data.txt')) as file:
-				assert file.read() == 'updated'
+			gh.return_value = subprocess.CompletedProcess([], 1, '', 'network unavailable')
 
-	# Reject nested directories and invalid markers; recognize linked worktrees.
+			try:
+				git.exists('owner/repo')
+			except RuntimeError as error:
+				assert 'network unavailable' in str(error)
+			else:
+				assert False, 'A network error must not report a missing repository'
+
+	# Create with the requested visibility and explicit owner.
 	# ----------------------------------------------------------------------
 	@classmethod
-	def test_repository_identity(cls):
-		git = Git
+	def test_create_empty(cls):
+		git = a.services.Git
 
-		with tempfile.TemporaryDirectory() as home:
-			origin   = os.path.join(home, 'origin')
-			nested   = os.path.join(origin, 'nested')
-			worktree = os.path.join(home, 'worktree')
-			cls._origin(origin)
-			os.mkdir(nested)
+		with patch.object(git, '_gh') as gh:
+			assert git.create('owner/repo') == 'https://github.com/owner/repo.git'
+			gh.assert_called_once_with(['repo', 'create', 'owner/repo', '--private'])
 
-			assert not git.is_repository(home)
-			assert not git.is_repository(nested)
+		with patch.object(git, '_gh') as gh:
+			git.create('owner/repo', private=False)
+			gh.assert_called_once_with(['repo', 'create', 'owner/repo', '--public'])
 
-			with TestCase().assertRaises(subprocess.CalledProcessError):
-				git.pull(nested)
-
-			os.mkdir(os.path.join(nested, '.git'))
-			assert not git.is_repository(nested)
-
-			subprocess.run(
-				['git', '-C', origin, 'worktree', 'add', '-qb', 'linked', worktree],
-				check=True, capture_output=True
-			)
-			assert git.is_repository(worktree)
-
-	# Preserve a divergent local commit and expose the failed update to callers.
+	# Seed from an ordinary repository, without requiring GitHub template flags.
 	# ----------------------------------------------------------------------
 	@classmethod
-	def test_divergence(cls):
-		git = Git
+	def test_create_from_repository(cls):
+		git = a.services.Git
 
-		with tempfile.TemporaryDirectory() as home:
-			origin   = os.path.join(home, 'origin')
-			checkout = os.path.join(home, 'checkout')
-			cls._origin(origin)
-			git.clone(origin, checkout)
+		with patch.object(git, 'clone') as clone, patch.object(git, '_gh') as gh:
+			assert git.create('owner/new', from_repo='base/old') == 'https://github.com/owner/new.git'
 
-			cls._commit(checkout, 'local')
-			cls._commit(origin,   'remote')
+			url, directory = clone.call_args.args
+			assert url == 'https://github.com/base/old.git'
+			gh.assert_called_once_with([
+				'repo', 'create', 'owner/new', '--private',
+				'--source', directory, '--remote', 'destination', '--push'
+			])
 
-			with TestCase().assertRaises(subprocess.CalledProcessError):
-				git.pull(checkout)
-
-			with open(os.path.join(checkout, 'data.txt')) as file:
-				assert file.read() == 'local'
-
-	# Expose clone failures without reporting a usable checkout.
+	# Reject ambiguous names before invoking the CLI.
 	# ----------------------------------------------------------------------
 	@classmethod
-	def test_failed_clone(cls):
-		with tempfile.TemporaryDirectory() as home:
-			git      = Git
-			checkout = os.path.join(home, 'checkout')
+	def test_invalid_repository(cls):
+		git = a.services.Git
 
-			with TestCase().assertRaises(subprocess.CalledProcessError):
-				git.clone(os.path.join(home, 'missing'), checkout)
-
-			assert not git.is_repository(checkout)
+		with patch.object(git, '_gh') as gh:
+			try:
+				git.exists('repo')
+			except ValueError:
+				assert not gh.called
+			else:
+				assert False, 'An explicit owner is required'
