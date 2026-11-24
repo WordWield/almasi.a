@@ -66,7 +66,9 @@ class AMeta(type):
 		instance.__cached_names__ = set()
 		instance.__forks__       = {}
 
-		# Track live library namespaces for targeted cache invalidation.
+		# Keep dynamic namespace names out of the shared class key layout.
+		# ----------------------------------------------------------------------
+		instance.__dict__ = dict(instance.__dict__.items())
 		Directory.__namespace_faces__.add(instance)
 
 		Undefined.__lib__ = instance
@@ -350,6 +352,9 @@ class A(metaclass=AMeta, plugins=['Py', 'Json', 'Text', 'Bytes']):
 		fork.__fork_builtins__ = builtins.__dict__.copy()
 		fork.__fork_builtins__['__import__'] = fork._fork_import
 
+		# A fork has the same dynamic namespace contract as its canonical face.
+		# ----------------------------------------------------------------------
+		fork.__dict__ = dict(fork.__dict__.items())
 		Directory.__namespace_faces__.add(fork)
 		self.__forks__[name] = fork
 

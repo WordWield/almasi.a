@@ -29,6 +29,10 @@ class Directory(FilesystemResource):
 		super().__init__(lib, path, route)
 		self.__children__     = lib.__children__ if self.get_path() == os.path.realpath(lib.__path__) else {}
 		self.__cached_names__ = set()
+
+		# Keep dynamic namespace names out of the class-wide shared key layout.
+		# ----------------------------------------------------------------------
+		self.__dict__ = dict(self.__dict__.items())
 		Directory.__namespace_faces__.add(self)
 
 	# Realize resolved children without exposing their carriers.
