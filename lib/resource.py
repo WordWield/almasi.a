@@ -17,7 +17,8 @@ from .subscription import Subscription
 
 class Resource(Module):
 
-	_observe = None
+	_observe       = None
+	_subscriptions = None
 
 	# ======================================================================
 	# FRAMEWORK METHODS
@@ -44,21 +45,24 @@ class Resource(Module):
 	# Tell an external detector whether this resource needs observation.
 	# ----------------------------------------------------------------------
 	def is_subscribed(self):
-		return bool(self.__dict__.get('_subscriptions'))
+		return bool(self._subscriptions)
 
 	# Register an independent listener and establish external observation.
 	# ----------------------------------------------------------------------
 	def subscribe(self, callback):
 		if callable(callback):
 			subscription = Subscription(self, callback)
-			listeners    = self.__dict__.setdefault('_subscriptions', {})
-			listeners[subscription] = True
+
+			if self._subscriptions is None:
+				self._subscriptions = {}
+
+			self._subscriptions[subscription] = True
 
 			if self._observe is not None:
 				try:
 					self._observe(self)
 				except BaseException:
-					listeners.pop(subscription, None)
+					self._subscriptions.pop(subscription, None)
 					raise
 		else:
 			raise TypeError('Subscription callback must be callable')
@@ -68,20 +72,22 @@ class Resource(Module):
 	# Remove one listener and release observation after the last listener.
 	# ----------------------------------------------------------------------
 	def unsubscribe(self, subscription):
-		if self.__dict__.get('_subscriptions', {}).pop(subscription, None):
+		if self._subscriptions and self._subscriptions.pop(subscription, None):
 			if self._observe is not None:
 				self._observe(self)
 
 	# Notify live listeners in registration order without consuming content.
 	# ----------------------------------------------------------------------
-	def update(self, changed=None, *args):
-		subscriptions = self.__dict__.get('_subscriptions')
+	def update(self, *args):
+		subscriptions = self._subscriptions
 
 		if subscriptions:
+			args = args or (None,)
+
 			for subscription in tuple(subscriptions):
 				if subscription in subscriptions:
 					try:
-						subscription.callback(changed, *args)
+						subscription.callback(*args)
 					except Exception:
 						if self._observe is not None:
 							logging.exception('Subscription callback failed')
