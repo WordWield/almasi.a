@@ -149,11 +149,11 @@ except KeyboardInterrupt:
 			try:
 				process.start()
 				assert event.wait(10)
-				assert process.stdout.read() == b'True\\n'
+				assert process.stdout.read() == b'True\n'
 
 				process.stop(signal.SIGINT)
 				assert process.wait(timeout=10) == 0
-				assert process.stdout.read() == b'True\\ncleaned up\\nstopped\\n'
+				assert process.stdout.read() == b'True\ncleaned up\nstopped\n'
 			finally:
 				process.stop()
 				process.stdout.unsubscribe(subscription)
