@@ -24,7 +24,7 @@ class TestStreamResource(almasi.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_ranges(cls):
-		resource = almasi.StreamResource()
+		resource = almasi.resources.Stream()
 		data     = b'abcdef'
 
 		assert isinstance(resource, almasi.Resource)
@@ -43,7 +43,7 @@ class TestStreamResource(almasi.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_invalid_ranges(cls):
-		resource = almasi.StreamResource()
+		resource = almasi.resources.Stream()
 
 		with patch.object(resource, '_read') as source:
 			for position, length in ((-1, None), (0, -1), ('1', None), (True, None), (0, 1.5)):
@@ -62,8 +62,8 @@ class TestStreamResource(almasi.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_subscriptions(cls):
-		resource = almasi.StreamResource()
-		other    = almasi.StreamResource()
+		resource = almasi.resources.Stream()
+		other    = almasi.resources.Stream()
 		callback = Mock()
 
 		resource.update()

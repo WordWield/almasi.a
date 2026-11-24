@@ -18,7 +18,6 @@ from lib.reloadable          import Reloadable, ReloadableModule, ReloadableSing
 from lib.logger              import Logger
 from lib.string              import String
 from lib.resource            import Resource
-from lib.stream_resource     import StreamResource
 from lib.filesystem_resource import FilesystemResource
 from lib.file                import File
 from lib.directory           import Directory
@@ -105,7 +104,6 @@ class A(metaclass=AMeta, plugins=['Py', 'Json', 'Text', 'Bytes']):
 	Module        = Module
 	Logger        = Logger
 	Resource           = Resource
-	StreamResource     = StreamResource
 	FilesystemResource = FilesystemResource
 	File          = File
 	Directory     = Directory

@@ -1,5 +1,5 @@
 # ==============================================================================
-# STREAM RESOURCE
+# STREAM
 # ==============================================================================
 # PURPOSE:
 # Read finite byte ranges from a stream without consuming shared state.
@@ -9,10 +9,10 @@
 # Delegates: Byte access and retention to the source; subscriptions to Resource.
 # ==============================================================================
 
-from .resource import Resource
+import almasi
 
 
-class StreamResource(Resource):
+class Stream(almasi.Resource):
 
 	# ======================================================================
 	# PRIVATE METHODS

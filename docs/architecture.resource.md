@@ -58,7 +58,7 @@ resource.unsubscribe(subscription_id)
 
 ## Streams
 
-`StreamResource` inherits subscriptions and implements range validation for
+`almasi.resources.Stream` inherits subscriptions and implements range validation for
 `read(position=None, length=None)`. A concrete source implements
 `_read(position, length)` and calls `self.update()` after making bytes
 available. Positions and lengths are non-negative integers or None, not
