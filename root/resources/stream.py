@@ -40,24 +40,28 @@ class Stream(almasi.Resource):
 	# PRIVATE METHODS
 	# ======================================================================
 
-	# Read one available range without consuming bytes or exposing file offsets.
+	# Map an absolute range to its first contiguous file segment.
+	# ----------------------------------------------------------------------
+	def _seek(self, position: int, length: int) -> int:
+		if self._max_bytes is not None:
+			position %= self._max_bytes
+			length    = min(length, self._max_bytes - position)
+
+		self._file.seek(position)
+
+		return length
+
+	# Read retained bytes without exposing or consuming the file cursor.
 	# ----------------------------------------------------------------------
 	def _read(self, position: int, length: int | None) -> bytes:
 		with self._lock:
 			if position >= self.start_position:
 				available = max(0, self.end_position - position)
-				size      = available if length is None else min(length, available)
+				size      = available if length is None else min(available, length)
 				result    = b''
 
 				if size:
-					offset = position
-					first  = size
-
-					if self._max_bytes is not None:
-						offset %= self._max_bytes
-						first   = min(size, self._max_bytes - offset)
-
-					self._file.seek(offset)
+					first  = self._seek(position, size)
 					result = self._file.read(first)
 
 					if first < size:
@@ -76,12 +80,7 @@ class Stream(almasi.Resource):
 	# ----------------------------------------------------------------------
 	@property
 	def start_position(self) -> int:
-		position = 0
-
-		if self._max_bytes is not None:
-			position = max(0, self._end_position - self._max_bytes)
-
-		return position
+		return 0 if self._max_bytes is None else max(0, self._end_position - self._max_bytes)
 
 	# Report the exclusive end of all bytes ever written.
 	# ----------------------------------------------------------------------
@@ -122,24 +121,17 @@ class Stream(almasi.Resource):
 			if not self._closed:
 				if isinstance(data, bytes):
 					if data:
-						end    = self._end_position + len(data)
-						offset = self._end_position
+						end = self._end_position + len(data)
 
 						if self._max_bytes is not None:
-							data   = data[-self._max_bytes:]
-							offset = (end - len(data)) % self._max_bytes
+							data = memoryview(data)[-self._max_bytes:]
 
-						first = len(data)
-
-						if self._max_bytes is not None:
-							first = min(first, self._max_bytes - offset)
-
-						self._file.seek(offset)
-						self._file.write(memoryview(data)[:first])
+						first = self._seek(end - len(data), len(data))
+						self._file.write(data[:first])
 
 						if first < len(data):
 							self._file.seek(0)
-							self._file.write(memoryview(data)[first:])
+							self._file.write(data[first:])
 
 						self._file.flush()
 						self._end_position = end
