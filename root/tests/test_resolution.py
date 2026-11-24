@@ -126,10 +126,10 @@ class TestResolution(almasi.Tester):
 
 	# ----------------------------------------------------------------------
 	@classmethod
-	def test_directory_load_returns_self(cls):
+	def test_directory_read_returns_self(cls):
 		directory = almasi.Directory(almasi, almasi.__path__, 'almasi')
 
-		assert directory.load() is directory
+		assert directory.read() is directory
 		assert directory.is_directory()
 
 	# ----------------------------------------------------------------------
