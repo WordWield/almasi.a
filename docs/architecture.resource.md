@@ -34,8 +34,9 @@ distinct behavior, plugins and namespace resolution.
 - `File.read()` reuses `File.load()` and its existing memoization;
   `None` is still a valid cached file result.
 - `Directory.read()` returns the directory namespace itself.
-  It inherits the same read implementation as File. Existing `load()`,
-  `write()`, `mkdir()`, `copy()`, `link()` and namespace access remain available.
+  `Directory.read(name)` retains the historical validated file lookup and
+  plugin load behavior. Existing `load()`, `write()`, `mkdir()`, `copy()`,
+  `link()` and namespace access contracts remain available.
 - The existing `a.services.Filesystem(a.Subscribable)` watcher indexes only
   `FilesystemResource` instances; it does not accept unrelated Resource
   specializations. It continues to observe effective inherited sources,
@@ -48,7 +49,8 @@ existing plugin/module cache; computed resources in O may store their own value.
 ## Verification and compatibility
 
 `root/tests/test_resource_subscriptions.py` covers the hierarchy, abstract
-contract, uniform `read()`, direct subscription delivery and source-specific
+contract, uniform `read()`, existing `Directory.read(name)`, direct subscription
+delivery and source-specific
 registration and existing watcher notification/inheritance/cleanup behaviors.
 Other filesystem, plugin, fork and reload tests must remain green.
 
