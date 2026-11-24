@@ -2,14 +2,16 @@
 # TEST GIT
 # ==============================================================================
 # PURPOSE:
-# Verify remote Git operations without creating real GitHub repositories.
+# Verify local Git operations and remote GitHub commands without network writes.
 #
 # RESPONSIBILITY BOUNDARIES:
 # Owns: CLI command and failure contract assertions.
 # Delegates: Actual GitHub communication to the Git service.
 # ==============================================================================
 
+import os
 import subprocess
+import tempfile
 
 from unittest.mock import patch
 
@@ -21,6 +23,49 @@ class TestGit(a.Tester):
 	# ======================================================================
 	# PUBLIC METHODS
 	# ======================================================================
+
+	# Exercise clone, fast-forward pull and checkout recognition with real Git.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_local_checkout(cls):
+		git = a.services.Git
+
+		with tempfile.TemporaryDirectory(prefix='almasi_git_test_') as directory:
+			origin   = os.path.join(directory, 'origin')
+			checkout = os.path.join(directory, 'checkout')
+
+			subprocess.run(['git', 'init', '--quiet', origin], check=True)
+			filename = os.path.join(origin, 'example.txt')
+
+			with open(filename, 'w') as stream:
+				stream.write('first')
+
+			subprocess.run(['git', '-C', origin, 'add', '.'], check=True)
+			commit = [
+				'git', '-C', origin,
+				'-c', 'user.name=Almasi Test',
+				'-c', 'user.email=test@example.test',
+				'-c', 'commit.gpgSign=false',
+				'-c', f'core.hooksPath={os.devnull}',
+				'commit', '--quiet', '-m'
+			]
+			subprocess.run([*commit, 'Initial'], check=True)
+
+			assert git.is_repository(origin)
+			assert not git.is_repository(checkout)
+			assert git.clone(origin, checkout) == checkout
+			assert git.is_repository(checkout)
+
+			with open(filename, 'w') as stream:
+				stream.write('second')
+
+			subprocess.run(['git', '-C', origin, 'add', '.'], check=True)
+			subprocess.run([*commit, 'Update'], check=True)
+
+			git.pull(checkout)
+
+			with open(os.path.join(checkout, 'example.txt')) as stream:
+				assert stream.read() == 'second'
 
 	# Distinguish a missing repository from authentication and network errors.
 	# ----------------------------------------------------------------------

@@ -2,12 +2,11 @@
 # GIT SERVICE
 # ==============================================================================
 # PURPOSE:
-# Provide reusable Git checkout operations to Almasi libraries.
+# Provide local Git and remote GitHub operations to Almasi libraries.
 #
 # RESPONSIBILITY BOUNDARIES:
-# Owns: Remote GitHub repository existence and creation.
-# Delegates: Local checkout operations to the installer's implementation.
-# Delegates: Remote authentication and creation to GitHub CLI.
+# Owns: Local checkout and remote GitHub repository operations.
+# Delegates: Git execution and authentication to Git and GitHub CLI.
 # ==============================================================================
 
 import os
@@ -15,19 +14,33 @@ import re
 import subprocess
 import tempfile
 
-from almasi import a, _git
+from almasi import a
 
 
-_Git = getattr(_git, '_Git', None) or _git.Git
-
-
-class Git(_Git, a.Module):
+class Git(a.Module):
 
 	_HOST = 'github.com'
 
 	# ======================================================================
 	# PRIVATE METHODS
 	# ======================================================================
+
+	# Execute Git directly, preserving diagnostics and native failure types.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def _run(
+		cls,
+		arguments,
+		timeout = None,
+		check   = True
+	):
+		return subprocess.run(
+			['git', *arguments],
+			capture_output = True,
+			text           = True,
+			timeout        = timeout,
+			check          = check
+		)
 
 	# Validate an explicit GitHub owner/name, never a URL or shell option.
 	# ----------------------------------------------------------------------
@@ -63,6 +76,38 @@ class Git(_Git, a.Module):
 	# ======================================================================
 	# PUBLIC METHODS
 	# ======================================================================
+
+	# Clone a trusted remote into an explicitly selected local directory.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def clone(cls, url: str, directory: str, timeout: float | None = None) -> str:
+		cls._run(['clone', '--quiet', '--', url, directory], timeout=timeout)
+
+		return directory
+
+	# Update this checkout without merging or implicitly using a parent repo.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def pull(cls, directory: str, timeout: float | None = None) -> None:
+		cls._run(
+			['-C', directory, '--git-dir=.git', '--work-tree=.', 'pull', '--ff-only', '--quiet'],
+			timeout=timeout
+		)
+
+	# Recognize working checkout roots, including linked Git worktrees.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def is_repository(cls, directory: str) -> bool:
+		result = False
+
+		if os.path.exists(os.path.join(directory, '.git')):
+			probe = cls._run(
+				['-C', directory, '--git-dir=.git', '--work-tree=.', 'rev-parse', '--is-inside-work-tree'],
+				check=False
+			)
+			result = probe.returncode == 0 and probe.stdout.strip() == 'true'
+
+		return result
 
 	# Check repository visibility to the authenticated GitHub identity.
 	# ----------------------------------------------------------------------

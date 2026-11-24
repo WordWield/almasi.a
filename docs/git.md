@@ -1,7 +1,8 @@
 # Git service
 
 `a.services.Git` provides Git checkout operations and authenticated GitHub
-repository management. It does not require initialization.
+repository management. It does not require initialization. Core is independent of the installer's
+private Git implementation.
 
 ```python
 from almasi import a
@@ -28,7 +29,7 @@ git.clone('https://github.com/owner/project.git', './project')
   authorized for public release. If creation succeeds but the push fails, the
   destination may remain empty and must be inspected before retrying.
 - `clone(url, directory, timeout=None)`, `pull(directory, timeout=None)`,
-  `is_repository(directory)`: inherited local checkout operations; Git errors
+  `is_repository(directory)`: local checkout operations implemented by Core; Git errors
   propagate. clone returns the directory, pull returns None, and
   is_repository returns a boolean.
 
