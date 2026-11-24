@@ -6,7 +6,7 @@
 
 `a.Resource(a.Module)` provides a single shared Module ancestry for all
 resource specializations, including filesystem and computed resources. It
-remains source-independent and defines `read()` and
+remains source-independent and defines `read(position=None, length=None)` and
 `subscribe(callback)`, each raising `NotImplementedError` until implemented
 by a concrete resource. It does not own caching, a filesystem path, an O object
 ID, subscription indexes or a notification transport.
@@ -51,3 +51,24 @@ Other filesystem, plugin, fork and reload tests must remain green.
 
 This document covers Almasi only. O's `ComputedResource` implementation and
 Web's MCP resource subscriptions belong to their respective repositories.
+
+## Stream specialization
+
+`almasi.StreamResource(almasi.Resource)` is a source-independent byte-stream
+base. A concrete subclass implements `_read(position, length)` and
+`subscribe(callback)` using its source. The source owns storage, retained history,
+and observation. The base does not allocate a buffer or track subscriber cursors.
+
+`read(position=None, length=None)` returns finite bytes available at the requested
+absolute zero-based byte position. Omitted position means zero; omitted length
+means through the currently available end. Both coordinates must be non-negative
+integers (not booleans) or None; invalid coordinates raise ValueError. Length zero
+requests no bytes. The source returns fewer bytes at the current end and reports
+unavailable retained history rather than silently shifting the starting position.
+Each consumer owns its next position, calculated as the requested position plus
+the number of bytes received. Reads do not consume shared state. The source
+implements change notifications using the existing subscription contract.
+
+For example, a concrete stream resource read at position 100 with length 50
+returns at most bytes 100 through 149. Ordinary non-stream resources retain
+whole-value reads; range support is not implied for them.

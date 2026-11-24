@@ -1,7 +1,12 @@
 # ==============================================================================
 # RESOURCE
 # ==============================================================================
+# PURPOSE:
 # Define the source-independent read and subscription contract.
+#
+# RESPONSIBILITY BOUNDARIES:
+# Owns: The common read and observation interface.
+# Delegates: Reading, range support and observation to concrete sources.
 # ==============================================================================
 
 
@@ -16,7 +21,11 @@ class Resource(Module):
 
 	# Read the resource through its concrete source.
 	# ----------------------------------------------------------------------
-	def read(self):
+	def read(
+		self,
+		position : int | None = None,
+		length   : int | None = None
+	):
 		raise NotImplementedError
 
 	# Subscribe to changes through its concrete source.
