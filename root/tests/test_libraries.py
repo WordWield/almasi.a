@@ -184,7 +184,7 @@ class Item(fork_sample.Module):
 	def test_custom_git_source(cls):
 		with tempfile.TemporaryDirectory() as origin:
 			with patch.dict(os.environ, {'ALMASI_GIT_BASE': origin}):
-				assert Libraries.get_url('web') == f'{origin}/a.web.git'
+				assert Libraries.get_url('web') == f'{origin}/almasi.web.git'
 
 	# A suffix determines the checkout path and cloned state.
 	# ----------------------------------------------------------------------
