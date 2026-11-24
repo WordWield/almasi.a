@@ -9,10 +9,10 @@ import tempfile
 
 from unittest.mock import patch
 
-import almasi
+from almasi import a
 
 
-class TestReloadable(almasi.Tester):
+class TestReloadable(a.Tester):
 
 	# ==========================================================================
 	# PUBLIC METHODS
@@ -22,17 +22,17 @@ class TestReloadable(almasi.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_service_reload(cls):
-		with tempfile.TemporaryDirectory(dir=almasi.__path__, prefix='__reloadable_') as path:
+		with tempfile.TemporaryDirectory(dir=a.__path__, prefix='__reloadable_') as path:
 			file_path = os.path.join(path, 'counter.py')
 			with open(file_path, 'w', encoding='utf-8') as stream:
 				stream.write(
-					'import almasi\nclass Counter(almasi.ReloadableSingleton):\n'
+					'from almasi import a\nclass Counter(a.ReloadableSingleton):\n'
 					'\tdef initialize(self):\n\t\tself.value = 5\n'
 					'\tdef read(self):\n\t\treturn self.value + 1\n'
 				)
 
-			directory = almasi.Directory(almasi, path, 'almasi.' + os.path.basename(path))
-			with patch.object(type(almasi.services.Filesystem), '_watch', return_value=None):
+			directory = a.Directory(a, path, 'almasi.' + os.path.basename(path))
+			with patch.object(type(a.services.Filesystem), '_watch', return_value=None):
 				service = directory.Counter
 				service.initialize()
 				assert service.read() == 6
@@ -43,11 +43,11 @@ class TestReloadable(almasi.Tester):
 
 				with open(file_path, 'w', encoding='utf-8') as stream:
 					stream.write(
-						'import almasi\nclass Counter(almasi.ReloadableSingleton):\n'
+						'from almasi import a\nclass Counter(a.ReloadableSingleton):\n'
 						'\tdef initialize(self):\n\t\traise AssertionError()\n'
 						'\tdef read(self):\n\t\treturn self.value + 2\n'
 					)
-				almasi.services.Filesystem._changed_paths(almasi.__path__, {file_path: 'modified'})
+				a.services.Filesystem._changed_paths(a.__path__, {file_path: 'modified'})
 				assert service.read() == 7
 				assert directory.Counter is service
 				assert type(service)._reload_subscription is subscription
@@ -55,11 +55,11 @@ class TestReloadable(almasi.Tester):
 
 				with open(file_path, 'w', encoding='utf-8') as stream:
 					stream.write(
-						'import almasi\nclass Counter(almasi.ReloadableSingleton):\n'
+						'from almasi import a\nclass Counter(a.ReloadableSingleton):\n'
 						'\tdef read(self):\n\t\treturn self.value + 3\n'
 					)
 
-				almasi.services.Filesystem._changed_paths(almasi.__path__, {file_path: 'modified'})
+				a.services.Filesystem._changed_paths(a.__path__, {file_path: 'modified'})
 				assert service.read() == 8
 				assert directory.Counter is service
 				assert type(service)._reload_subscription is subscription
@@ -74,13 +74,13 @@ class TestReloadable(almasi.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_module_callbacks(cls):
-		with tempfile.TemporaryDirectory(dir=almasi.__path__, prefix='__reloadable_') as path:
+		with tempfile.TemporaryDirectory(dir=a.__path__, prefix='__reloadable_') as path:
 			file_path = os.path.join(path, 'handler.py')
 			with open(file_path, 'w', encoding='utf-8') as stream:
-				stream.write('import almasi\nclass Handler(almasi.ReloadableModule):\n\tpass\n')
+				stream.write('from almasi import a\nclass Handler(a.ReloadableModule):\n\tpass\n')
 
-			directory = almasi.Directory(almasi, path, 'almasi.' + os.path.basename(path))
-			with patch.object(type(almasi.services.Filesystem), '_watch', return_value=None):
+			directory = a.Directory(a, path, 'almasi.' + os.path.basename(path))
+			with patch.object(type(a.services.Filesystem), '_watch', return_value=None):
 				handler = directory.Handler
 				seen         = []
 				file         = handler._reload_file
@@ -92,9 +92,9 @@ class TestReloadable(almasi.Tester):
 				assert seen == [first, second]
 
 				with open(file_path, 'w', encoding='utf-8') as stream:
-					stream.write('import almasi\nclass Handler(almasi.ReloadableModule):\n\tversion = 2\n')
+					stream.write('from almasi import a\nclass Handler(a.ReloadableModule):\n\tversion = 2\n')
 
-				almasi.services.Filesystem._changed_paths(almasi.__path__, {file_path: 'modified'})
+				a.services.Filesystem._changed_paths(a.__path__, {file_path: 'modified'})
 
 				assert seen == [first, second, first, second]
 				assert type(first).version == 2
@@ -110,7 +110,7 @@ class TestReloadable(almasi.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_inherited_callback(cls):
-		class Parent(almasi.ReloadableModule):
+		class Parent(a.ReloadableModule):
 			pass
 
 		class Child(Parent):

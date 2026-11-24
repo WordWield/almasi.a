@@ -14,10 +14,10 @@ import sys
 from functools import partial
 from threading import Event
 
-import almasi
+from almasi import a
 
 
-class TestProcess(almasi.Tester):
+class TestProcess(a.Tester):
 
 	# ======================================================================
 	# PRIVATE METHODS
@@ -43,7 +43,7 @@ class TestProcess(almasi.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_lifecycle(cls):
-		process = almasi.Process([sys.executable, '-c', 'import sys; data = sys.stdin.buffer.read(); sys.stdout.buffer.write(data); sys.stderr.buffer.write(b"error"); sys.exit(7)'])
+		process = a.Process([sys.executable, '-c', 'import sys; data = sys.stdin.buffer.read(); sys.stdout.buffer.write(data); sys.stderr.buffer.write(b"error"); sys.exit(7)'])
 		stdout  = process.stdout
 		stderr  = process.stderr
 		state   = process.state
@@ -53,7 +53,7 @@ class TestProcess(almasi.Tester):
 
 		try:
 			assert state.read() == {'status': 'created', 'returncode': None}
-			assert not isinstance(process, almasi.Module)
+			assert not isinstance(process, a.Module)
 			process.start()
 
 			assert process.stdin.write(b'input') == 5
@@ -78,7 +78,7 @@ class TestProcess(almasi.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_large_output(cls):
-		process = almasi.Process([sys.executable, '-c', 'import os; os.write(1, b"a" * 1048576); os.write(2, b"b" * 1048576)'])
+		process = a.Process([sys.executable, '-c', 'import os; os.write(1, b"a" * 1048576); os.write(2, b"b" * 1048576)'])
 
 		try:
 			process.start()
@@ -92,7 +92,7 @@ class TestProcess(almasi.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_stop(cls):
-		process = almasi.Process([sys.executable, '-u', '-c', 'import time; print("ready"); time.sleep(60)'])
+		process = a.Process([sys.executable, '-u', '-c', 'import time; print("ready"); time.sleep(60)'])
 		event   = Event()
 
 		subscription = process.stdout.subscribe(partial(cls._signal, event))
@@ -123,7 +123,7 @@ class TestProcess(almasi.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_retention(cls):
-		process = almasi.Process(
+		process = a.Process(
 			[sys.executable, '-c', 'import sys; sys.stdout.write("abcdef"); sys.stderr.write("123456")'],
 			max_bytes=3
 		)
@@ -141,7 +141,7 @@ class TestProcess(almasi.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_single_launch(cls):
-		process = almasi.Process([sys.executable, '-c', 'print("once")'])
+		process = a.Process([sys.executable, '-c', 'print("once")'])
 
 		try:
 			process.start()
@@ -163,7 +163,7 @@ class TestProcess(almasi.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_launch_failure(cls):
-		process = almasi.Process([''])
+		process = a.Process([''])
 
 		try:
 			process.start()

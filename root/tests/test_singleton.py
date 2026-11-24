@@ -2,10 +2,10 @@ import os
 import shutil
 import sys
 
-import almasi
+from almasi import a
 
 
-class TestSingleton(almasi.Tester):
+class TestSingleton(a.Tester):
 
 	# ======================================================================
 	# PRIVATE METHODS
@@ -15,7 +15,7 @@ class TestSingleton(almasi.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def _source_root(cls):
-		path = os.path.join(almasi.__path__, 'tests_runtime')
+		path = os.path.join(a.__path__, 'tests_runtime')
 		os.makedirs(path, exist_ok=True)
 		return path
 
@@ -34,7 +34,7 @@ class TestSingleton(almasi.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def _remove_runtime(cls):
-		path = os.path.join(almasi.__path__, 'tests_runtime')
+		path = os.path.join(a.__path__, 'tests_runtime')
 
 		if os.path.isdir(path):
 			for module_name in list(sys.modules):
@@ -43,9 +43,9 @@ class TestSingleton(almasi.Tester):
 
 			shutil.rmtree(path)
 
-		almasi.__children__.pop('tests_runtime', None)
-		almasi.__dict__.pop('tests_runtime', None)
-		almasi.__cached_names__.discard('tests_runtime')
+		a.__children__.pop('tests_runtime', None)
+		a.__dict__.pop('tests_runtime', None)
+		a.__cached_names__.discard('tests_runtime')
 
 	# ======================================================================
 	# PUBLIC METHODS
@@ -61,16 +61,16 @@ class TestSingleton(almasi.Tester):
 			cls._write_source(
 				'counting_service.py',
 				(
-					'import almasi\n\n'
-					'class CountingService(almasi.Singleton):\n'
+					'from almasi import a\n\n'
+					'class CountingService(a.Singleton):\n'
 					'\tcount = 0\n\n'
 					'\tdef initialize(self):\n'
 					'\t\ttype(self).count += 1\n'
 					'\t\tself.value = 13\n'
 				)
 			)
-			one = almasi.tests_runtime.CountingService
-			two = almasi.tests_runtime.CountingService
+			one = a.tests_runtime.CountingService
+			two = a.tests_runtime.CountingService
 
 			error      = None
 			init_error = None
@@ -107,13 +107,13 @@ class TestSingleton(almasi.Tester):
 			cls._write_source(
 				'initializing_service.py',
 				(
-					'import almasi\n\n'
-					'class InitializingService(almasi.Singleton):\n\n'
+					'from almasi import a\n\n'
+					'class InitializingService(a.Singleton):\n\n'
 					'\tdef initialize(self):\n'
 					'\t\tself.value = getattr(self, ' + repr('missing') + ', 17)\n'
 				)
 			)
-			service = almasi.tests_runtime.InitializingService
+			service = a.tests_runtime.InitializingService
 
 			service.initialize()
 
@@ -126,7 +126,7 @@ class TestSingleton(almasi.Tester):
 	@classmethod
 	def test_service_singletons_follow_concrete_classes(cls):
 		for child_first in (False, True):
-			class Parent(almasi.Singleton):
+			class Parent(a.Singleton):
 				pass
 
 			class Child(Parent):
@@ -157,13 +157,13 @@ class TestSingleton(almasi.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_singleton_instance_supports_type_checks(cls):
-		class Parent(almasi.Singleton):
+		class Parent(a.Singleton):
 			pass
 
 		class Child(Parent):
 			pass
 
-		class Unrelated(almasi.Singleton):
+		class Unrelated(a.Singleton):
 			pass
 
 		parent    = Parent()
@@ -192,8 +192,8 @@ class TestSingleton(almasi.Tester):
 			try:
 				cls._write_source(
 					'base_service.py',
-					'import almasi\n\n\n'
-					'class BaseService(almasi.Singleton):\n'
+					'from almasi import a\n\n\n'
+					'class BaseService(a.Singleton):\n'
 					'\tdef initialize(self, value):\n'
 					'\t\tself.value = value\n\n'
 					'\tdef describe(self):\n'
@@ -201,8 +201,8 @@ class TestSingleton(almasi.Tester):
 				)
 				cls._write_source(
 					'middle_service.py',
-					'import almasi\n\n\n'
-					'class MiddleService(almasi.tests_runtime.BaseService):\n'
+					'from almasi import a\n\n\n'
+					'class MiddleService(a.tests_runtime.BaseService):\n'
 					'\tdef initialize(self, value):\n'
 					'\t\tsuper().initialize(value + 1)\n\n'
 					'\tdef describe(self):\n'
@@ -210,17 +210,17 @@ class TestSingleton(almasi.Tester):
 				)
 				cls._write_source(
 					'leaf_service.py',
-					'import almasi\n\n\n'
-					'class LeafService(almasi.tests_runtime.MiddleService):\n'
+					'from almasi import a\n\n\n'
+					'class LeafService(a.tests_runtime.MiddleService):\n'
 					'\tdef describe(self):\n'
 					'\t\treturn super().describe() + (23,)\n'
 				)
-				base = almasi.tests_runtime.BaseService
+				base = a.tests_runtime.BaseService
 				if parent_initialized:
 					base.initialize(3)
 
-				leaf   = almasi.tests_runtime.LeafService
-				middle = almasi.tests_runtime.MiddleService
+				leaf   = a.tests_runtime.LeafService
+				middle = a.tests_runtime.MiddleService
 				error  = None
 
 				try:
@@ -232,9 +232,9 @@ class TestSingleton(almasi.Tester):
 				assert 'not initialized' in str(error)
 				assert type(leaf).__bases__ == (type(middle),)
 				assert type(middle).__bases__ == (type(base),)
-				assert leaf is almasi.tests_runtime.LeafService
-				assert middle is almasi.tests_runtime.MiddleService
-				assert base is almasi.tests_runtime.BaseService
+				assert leaf is a.tests_runtime.LeafService
+				assert middle is a.tests_runtime.MiddleService
+				assert base is a.tests_runtime.BaseService
 				assert leaf is not middle
 				assert middle is not base
 
@@ -263,7 +263,7 @@ class TestSingleton(almasi.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_inherited_initializer_can_retry_after_failure(cls):
-		class Parent(almasi.Singleton):
+		class Parent(a.Singleton):
 
 			# ======================================================================
 			# PUBLIC METHODS
@@ -312,19 +312,19 @@ class TestSingleton(almasi.Tester):
 		try:
 			cls._write_source(
 				'ready_service.py',
-				'import almasi\n\n\n'
-				'class ReadyService(almasi.Singleton):\n'
+				'from almasi import a\n\n\n'
+				'class ReadyService(a.Singleton):\n'
 				'\tdef read(self):\n'
 				'\t\treturn 31\n'
 			)
 			cls._write_source(
 				'ready_child.py',
-				'import almasi\n\n\n'
-				'class ReadyChild(almasi.tests_runtime.ReadyService):\n'
+				'from almasi import a\n\n\n'
+				'class ReadyChild(a.tests_runtime.ReadyService):\n'
 				'\tpass\n'
 			)
-			child  = almasi.tests_runtime.ReadyChild
-			parent = almasi.tests_runtime.ReadyService
+			child  = a.tests_runtime.ReadyChild
+			parent = a.tests_runtime.ReadyService
 			error  = None
 
 			assert child.read() == 31
@@ -358,24 +358,24 @@ class TestSingleton(almasi.Tester):
 
 			return value
 
-		RuntimePlugin = type('RuntimePlugin', (almasi.Plugin,), {'__call__' : call})
+		RuntimePlugin = type('RuntimePlugin', (a.Plugin,), {'__call__' : call})
 
-		plugin = RuntimePlugin(almasi)
-		file   = plugin('RuntimeThing', almasi.__path__, 'almasi', source_lib=almasi)
+		plugin = RuntimePlugin(a)
+		file   = plugin('RuntimeThing', a.__path__, 'almasi', source_lib=a)
 
-		assert plugin.lib is almasi
+		assert plugin.lib is a
 		assert file.get_route() == 'almasi.RuntimeThing'
-		assert file.load() == 'almasi'
+		assert file.load() == 'almasi.a'
 
 	# Require the owning plugin to supply its execution contract.
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_base_plugin_contract_raises(cls):
-		plugin = almasi.Plugin(almasi)
+		plugin = a.Plugin(a)
 		error  = None
 
 		try:
-			plugin('Name', almasi.__path__, 'a', source_lib=almasi)
+			plugin('Name', a.__path__, 'a', source_lib=a)
 		except NotImplementedError as e:
 			error = e
 

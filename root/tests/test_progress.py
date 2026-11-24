@@ -14,10 +14,10 @@ import os
 from contextlib import redirect_stderr
 from io         import StringIO
 
-import almasi
+from almasi import a
 
 
-class TestProgress(almasi.Tester):
+class TestProgress(a.Tester):
 
 	# ======================================================================
 	# PRIVATE METHODS
@@ -27,7 +27,7 @@ class TestProgress(almasi.Tester):
 	# ----------------------------------------------------------------------
 	@staticmethod
 	async def _run_async(stream):
-		async with almasi.Progress('Waiting', stream=stream) as progress:
+		async with a.Progress('Waiting', stream=stream) as progress:
 			progress.update('Ready')
 
 	# ======================================================================
@@ -40,7 +40,7 @@ class TestProgress(almasi.Tester):
 	def test_redirected_output(cls):
 		stream = StringIO()
 
-		with almasi.Progress('Starting', stream=stream) as progress:
+		with a.Progress('Starting', stream=stream) as progress:
 			progress.update('Working')
 			progress.update('Done')
 			assert stream.getvalue() == ''
@@ -57,7 +57,7 @@ class TestProgress(almasi.Tester):
 		failure = ValueError('original')
 
 		try:
-			with almasi.Progress('Starting', stream=stream) as progress:
+			with a.Progress('Starting', stream=stream) as progress:
 				progress.update('Failed operation')
 				raise failure
 		except ValueError as error:
@@ -77,7 +77,7 @@ class TestProgress(almasi.Tester):
 
 		try:
 			with os.fdopen(slave, 'w', encoding='utf-8') as stream:
-				with almasi.Progress('Starting', stream=stream) as progress:
+				with a.Progress('Starting', stream=stream) as progress:
 					progress.update('Completed')
 
 				progress.update('Verified')
@@ -104,6 +104,6 @@ class TestProgress(almasi.Tester):
 		stream = StringIO()
 
 		with redirect_stderr(stream):
-			almasi.Progress.skipped('Saved')
+			a.Progress.skipped('Saved')
 
 		assert stream.getvalue() == '✔ Saved — skipped\n'

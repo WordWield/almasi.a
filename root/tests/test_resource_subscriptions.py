@@ -20,10 +20,10 @@ from unittest.mock import Mock, patch
 
 from watchfiles import Change
 
-import almasi
+from almasi import a
 
 
-class TestResourceSubscriptions(almasi.Tester):
+class TestResourceSubscriptions(a.Tester):
 
 	# ==========================================================================
 	# PUBLIC METHODS
@@ -33,27 +33,27 @@ class TestResourceSubscriptions(almasi.Tester):
 	# --------------------------------------------------------------------------
 	@classmethod
 	def test_resource_hierarchy(cls):
-		assert issubclass(almasi.File, almasi.FilesystemResource)
-		assert issubclass(almasi.Directory, almasi.FilesystemResource)
-		assert issubclass(almasi.FilesystemResource, almasi.Resource)
-		assert issubclass(almasi.Resource, almasi.Module)
-		assert issubclass(almasi.File, almasi.Module)
-		assert issubclass(almasi.Directory, almasi.Module)
-		assert almasi.Resource.__bases__ == (almasi.Module,)
-		assert not issubclass(almasi.Directory, almasi.File)
-		assert almasi.File.is_directory(almasi.File(almasi, __file__, 'almasi.file')) is False
-		assert almasi.Directory(almasi, os.path.dirname(__file__), 'almasi.tests').is_directory() is True
-		assert almasi.File.subscribe is almasi.Resource.subscribe
-		assert almasi.Directory.subscribe is almasi.Resource.subscribe
-		assert not hasattr(almasi.Directory, 'load')
-		assert almasi.File.read is not almasi.Resource.read
-		assert almasi.Directory.read is not almasi.Resource.read
+		assert issubclass(a.File, a.FilesystemResource)
+		assert issubclass(a.Directory, a.FilesystemResource)
+		assert issubclass(a.FilesystemResource, a.Resource)
+		assert issubclass(a.Resource, a.Module)
+		assert issubclass(a.File, a.Module)
+		assert issubclass(a.Directory, a.Module)
+		assert a.Resource.__bases__ == (a.Module,)
+		assert not issubclass(a.Directory, a.File)
+		assert a.File.is_directory(a.File(a, __file__, 'almasi.file')) is False
+		assert a.Directory(a, os.path.dirname(__file__), 'almasi.tests').is_directory() is True
+		assert a.File.subscribe is a.Resource.subscribe
+		assert a.Directory.subscribe is a.Resource.subscribe
+		assert not hasattr(a.Directory, 'load')
+		assert a.File.read is not a.Resource.read
+		assert a.Directory.read is not a.Resource.read
 
 	# Base resources have no dependency on filesystem APIs or runtime services.
 	# --------------------------------------------------------------------------
 	@classmethod
 	def test_generic_resource_contract(cls):
-		resource = almasi.Resource()
+		resource = a.Resource()
 
 		try:
 			resource.read()
@@ -78,7 +78,7 @@ class TestResourceSubscriptions(almasi.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_cancel_during_dispatch(cls):
-		resource = almasi.Resource()
+		resource = a.Resource()
 		callback = Mock()
 
 		cancel_second = Mock()
@@ -98,8 +98,8 @@ class TestResourceSubscriptions(almasi.Tester):
 	@classmethod
 	def test_callback_failure_isolation(cls):
 		with tempfile.TemporaryDirectory() as root:
-			file     = almasi.File(almasi, os.path.join(root, 'failure.txt'), 'almasi.failure')
-			service  = almasi.services.Filesystem
+			file     = a.File(a, os.path.join(root, 'failure.txt'), 'almasi.failure')
+			service  = a.services.Filesystem
 			callback = Mock()
 
 			with patch.object(type(service), '_watch', return_value=None):
@@ -107,7 +107,7 @@ class TestResourceSubscriptions(almasi.Tester):
 				second = file.subscribe(callback)
 
 				try:
-					with patch('lib.resource.logging.exception') as report:
+					with patch('almasi.a.lib.resource.logging.exception') as report:
 						file.update({'failure.txt': 'modified'})
 
 					callback.assert_called_once_with({'failure.txt': 'modified'})
@@ -120,7 +120,7 @@ class TestResourceSubscriptions(almasi.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_nonblocking_cancel(cls):
-		resource = almasi.Resource()
+		resource = a.Resource()
 		started  = threading.Event()
 		release  = threading.Event()
 		callback = Mock(side_effect=lambda changed: (started.set(), release.wait(2)))
@@ -144,11 +144,11 @@ class TestResourceSubscriptions(almasi.Tester):
 	@classmethod
 	def test_resource_read(cls):
 		with tempfile.TemporaryDirectory() as root:
-			directory = almasi.Directory(almasi, root, 'almasi.assets')
+			directory = a.Directory(a, root, 'almasi.assets')
 			directory.write('notes.txt', 'text')
 			file = next(item for item in directory if item.get_name() == 'notes.txt')
 
-			assert isinstance(file, almasi.Resource)
+			assert isinstance(file, a.Resource)
 			assert file.read() == 'text'
 			assert directory.read() is directory
 			assert directory.read('notes.txt') == 'text'
@@ -157,10 +157,10 @@ class TestResourceSubscriptions(almasi.Tester):
 	# --------------------------------------------------------------------------
 	@classmethod
 	def test_filesystem_only_observation(cls):
-		service = almasi.services.Filesystem
+		service = a.services.Filesystem
 
 		try:
-			service.observe(almasi.Resource())
+			service.observe(a.Resource())
 		except TypeError:
 			error = True
 		else:
@@ -173,10 +173,10 @@ class TestResourceSubscriptions(almasi.Tester):
 	@classmethod
 	def test_file_and_directory_notifications(cls):
 		with tempfile.TemporaryDirectory() as root:
-			directory = almasi.Directory(almasi, root, 'almasi.assets')
+			directory = a.Directory(a, root, 'almasi.assets')
 			directory.write('notes.txt', 'before')
 			file      = next(item for item in directory if item.get_name() == 'notes.txt')
-			service   = almasi.services.Filesystem
+			service   = a.services.Filesystem
 			got_file  = []
 			got_dir   = []
 			path      = directory.join('notes.txt')
@@ -218,8 +218,8 @@ class TestResourceSubscriptions(almasi.Tester):
 			with open(path, 'w', encoding='utf-8') as stream:
 				stream.write('before')
 
-			file    = almasi.File(almasi, path, 'almasi.symlinked')
-			service = almasi.services.Filesystem
+			file    = a.File(a, path, 'almasi.symlinked')
+			service = a.services.Filesystem
 			events  = []
 
 			with patch.object(type(service), '_watch', return_value=None):
@@ -234,8 +234,8 @@ class TestResourceSubscriptions(almasi.Tester):
 	def test_directory_removal_and_recreation(cls):
 		with tempfile.TemporaryDirectory() as parent:
 			root      = os.path.join(parent, 'foo')
-			directory = almasi.Directory(almasi, root, 'almasi.foo')
-			service   = almasi.services.Filesystem
+			directory = a.Directory(a, root, 'almasi.foo')
+			service   = a.services.Filesystem
 			events    = []
 			os.mkdir(root)
 
@@ -260,8 +260,8 @@ class TestResourceSubscriptions(almasi.Tester):
 	def test_recursive_directory_changes_without_limit(cls):
 		with tempfile.TemporaryDirectory() as parent:
 			root      = os.path.join(parent, 'foo')
-			directory = almasi.Directory(almasi, root, 'almasi.foo')
-			service   = almasi.services.Filesystem
+			directory = a.Directory(a, root, 'almasi.foo')
+			service   = a.services.Filesystem
 			events    = []
 			os.mkdir(root)
 
@@ -291,9 +291,9 @@ class TestResourceSubscriptions(almasi.Tester):
 				with open(path, 'w', encoding='utf-8') as stream:
 					stream.write('before')
 
-			one     = almasi.File(almasi, one_path, 'almasi.one')
-			two     = almasi.File(almasi, two_path, 'almasi.two')
-			service = almasi.services.Filesystem
+			one     = a.File(a, one_path, 'almasi.one')
+			two     = a.File(a, two_path, 'almasi.two')
+			service = a.services.Filesystem
 			events  = []
 
 			with patch.object(type(service), '_watch', return_value=None):
@@ -324,8 +324,8 @@ class TestResourceSubscriptions(almasi.Tester):
 			with open(path, 'w', encoding='utf-8') as stream:
 				stream.write('initial')
 
-			file     = almasi.File(almasi, path, 'almasi.shared')
-			service  = almasi.services.Filesystem
+			file     = a.File(a, path, 'almasi.shared')
+			service  = a.services.Filesystem
 			first    = []
 			second   = []
 
@@ -354,7 +354,7 @@ class TestResourceSubscriptions(almasi.Tester):
 	@classmethod
 	def test_event_coalescing(cls):
 		with tempfile.TemporaryDirectory() as root:
-			service = almasi.services.Filesystem
+			service = a.services.Filesystem
 			path    = os.path.join(root, 'created.js')
 			hidden  = os.path.join(root, '.almasi-temp.js')
 
@@ -372,16 +372,16 @@ class TestResourceSubscriptions(almasi.Tester):
 	# --------------------------------------------------------------------------
 	@classmethod
 	def test_inherited_override_switch(cls):
-		from almasi import tests
+		tests = a.tests
 
 		with tempfile.TemporaryDirectory() as parent_root, tempfile.TemporaryDirectory() as child_root:
-			parent = tests.TestFilesystem._library('resource_parent_subscribe', parent_root, almasi.A)
+			parent = tests.TestFilesystem._library('resource_parent_subscribe', parent_root, a.A)
 			child  = tests.TestFilesystem._library('resource_child_subscribe', child_root, type(parent))
 			parent.mkdir('shared').write('note.md', 'inherited')
 			face   = child.mkdir('shared')
 			file   = face.__resolve__('note.md')
 			events = []
-			source = almasi.services.Filesystem
+			source = a.services.Filesystem
 			p_path = parent.shared.join('note.md')
 			c_path = face.join('note.md')
 
@@ -413,10 +413,10 @@ class TestResourceSubscriptions(almasi.Tester):
 	# --------------------------------------------------------------------------
 	@classmethod
 	def test_unknown_extension_override_visibility(cls):
-		from almasi import tests
+		tests = a.tests
 
 		with tempfile.TemporaryDirectory() as parent_root, tempfile.TemporaryDirectory() as child_root:
-			parent = tests.TestFilesystem._library('binary_parent_subscribe', parent_root, almasi.A)
+			parent = tests.TestFilesystem._library('binary_parent_subscribe', parent_root, a.A)
 			child  = tests.TestFilesystem._library('binary_child_subscribe', child_root, type(parent))
 			parent.mkdir('static')
 			child.mkdir('static')
@@ -427,10 +427,10 @@ class TestResourceSubscriptions(almasi.Tester):
 			with open(parent_path, 'wb') as stream:
 				stream.write(b'inherited')
 
-			file = almasi.File(parent, parent_path, 'binary_child_subscribe.static.logo')
+			file = a.File(parent, parent_path, 'binary_child_subscribe.static.logo')
 			file._namespace_lib = child
 			events = []
-			source = almasi.services.Filesystem
+			source = a.services.Filesystem
 
 			with patch.object(type(source), '_watch', return_value=None):
 				handle = file.subscribe(events.append)
@@ -460,12 +460,12 @@ class TestResourceSubscriptions(almasi.Tester):
 	@classmethod
 	def test_fork_resource_isolation(cls):
 		with tempfile.TemporaryDirectory() as root:
-			first   = almasi.fork('filesystem_first_' + uuid.uuid4().hex)
-			second  = almasi.fork('filesystem_second_' + uuid.uuid4().hex)
-			service = almasi.services.Filesystem
+			first   = a.fork('filesystem_first_' + uuid.uuid4().hex)
+			second  = a.fork('filesystem_second_' + uuid.uuid4().hex)
+			service = a.services.Filesystem
 			path    = os.path.join(root, 'item.txt')
-			one     = almasi.File(first, path, 'almasi.item')
-			two     = almasi.File(second, path, 'almasi.item')
+			one     = a.File(first, path, 'almasi.item')
+			two     = a.File(second, path, 'almasi.item')
 			events  = []
 
 			with patch.object(type(service), '_watch', return_value=None):
@@ -497,8 +497,8 @@ class TestResourceSubscriptions(almasi.Tester):
 	@classmethod
 	def test_reentrant_filesystem_payload(cls):
 		with tempfile.TemporaryDirectory() as root:
-			file    = almasi.File(almasi, os.path.join(root, 'nested.txt'), 'almasi.nested')
-			service = almasi.services.Filesystem
+			file    = a.File(a, os.path.join(root, 'nested.txt'), 'almasi.nested')
+			service = a.services.Filesystem
 			events  = []
 
 			def callback(resources):
@@ -522,8 +522,8 @@ class TestResourceSubscriptions(almasi.Tester):
 	@classmethod
 	def test_concurrent_filesystem_payload(cls):
 		with tempfile.TemporaryDirectory() as root:
-			file     = almasi.File(almasi, os.path.join(root, 'parallel.txt'), 'almasi.parallel')
-			service  = almasi.services.Filesystem
+			file     = a.File(a, os.path.join(root, 'parallel.txt'), 'almasi.parallel')
+			service  = a.services.Filesystem
 			barrier  = threading.Barrier(2)
 			received = []
 
@@ -560,7 +560,7 @@ class TestResourceSubscriptions(almasi.Tester):
 			with open(path, 'w', encoding='utf-8') as stream:
 				stream.write('before')
 
-			file     = almasi.File(almasi, path, 'almasi.observed')
+			file     = a.File(a, path, 'almasi.observed')
 			received = threading.Event()
 			events   = []
 

@@ -15,10 +15,10 @@ from functools          import partial
 from unittest           import TestCase
 from unittest.mock      import Mock
 
-import almasi
+from almasi import a
 
 
-class TestStreamResource(almasi.Tester):
+class TestStreamResource(a.Tester):
 
 	# ======================================================================
 	# PRIVATE METHODS
@@ -45,9 +45,9 @@ class TestStreamResource(almasi.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_ranges(cls):
-		resource = almasi.resources.Stream()
+		resource = a.resources.Stream()
 
-		assert isinstance(resource, almasi.Resource)
+		assert isinstance(resource, a.Resource)
 		assert resource.read() == b''
 		assert resource.start_position == resource.end_position == 0
 
@@ -70,7 +70,7 @@ class TestStreamResource(almasi.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_invalid_ranges(cls):
-		resource = almasi.resources.Stream()
+		resource = a.resources.Stream()
 
 		for position, length in ((-1, None), (0, -1), ('1', None), (True, None), (0, 1.5)):
 			with TestCase().assertRaises(ValueError):
@@ -78,7 +78,7 @@ class TestStreamResource(almasi.Tester):
 
 		for max_bytes in (0, -1, True, 1.5):
 			with TestCase().assertRaises(ValueError):
-				almasi.resources.Stream(max_bytes=max_bytes)
+				a.resources.Stream(max_bytes=max_bytes)
 
 		with TestCase().assertRaises(TypeError):
 			resource.write('not bytes')
@@ -89,8 +89,8 @@ class TestStreamResource(almasi.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_subscriptions(cls):
-		resource = almasi.resources.Stream()
-		other    = almasi.resources.Stream()
+		resource = a.resources.Stream()
+		other    = a.resources.Stream()
 		callback = Mock()
 
 		first  = resource.subscribe(callback)
@@ -123,7 +123,7 @@ class TestStreamResource(almasi.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_bounded_history(cls):
-		resource = almasi.resources.Stream(max_bytes=5)
+		resource = a.resources.Stream(max_bytes=5)
 
 		for data, start, end, expected in (
 			(b'abc',       0,  3, b'abc'),
@@ -146,7 +146,7 @@ class TestStreamResource(almasi.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_close(cls):
-		resource = almasi.resources.Stream()
+		resource = a.resources.Stream()
 		callback = Mock()
 		subscription = resource.subscribe(callback)
 
@@ -173,7 +173,7 @@ class TestStreamResource(almasi.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_concurrent_ranges(cls):
-		resource = almasi.resources.Stream()
+		resource = a.resources.Stream()
 		data     = bytes(range(256)) * 4096
 		resource.write(data)
 
@@ -194,7 +194,7 @@ class TestStreamResource(almasi.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_notification_visibility(cls):
-		resource = almasi.resources.Stream()
+		resource = a.resources.Stream()
 		events   = []
 		subscription = resource.subscribe(partial(cls._record, resource, events))
 

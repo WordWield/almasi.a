@@ -9,7 +9,7 @@ import statistics
 import sys
 import time
 
-import almasi
+from almasi import a
 
 
 # Measure one case without retaining data between runs.
@@ -42,7 +42,7 @@ def measure(stream_type, size, count, retention, operation):
 # Alternate implementations to reduce systematic timing bias.
 # ----------------------------------------------------------------------
 def run():
-	implementations = {'after': almasi.resources.Stream}
+	implementations = {'after': a.resources.Stream}
 
 	if len(sys.argv) > 1:
 		implementations = {'before': runpy.run_path(sys.argv[1])['Stream'], **implementations}

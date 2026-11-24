@@ -11,10 +11,10 @@
 
 from unittest.mock import Mock
 
-import almasi
+from almasi import a
 
 
-class TestWritable(almasi.Tester):
+class TestWritable(a.Tester):
 
 	# ======================================================================
 	# PUBLIC METHODS
@@ -24,8 +24,8 @@ class TestWritable(almasi.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_write(cls):
-		resource = almasi.resources.Writable()
-		other    = almasi.resources.Writable(7)
+		resource = a.resources.Writable()
+		other    = a.resources.Writable(7)
 		callback = Mock()
 
 		subscription = resource.subscribe(callback)
