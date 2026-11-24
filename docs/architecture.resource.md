@@ -56,6 +56,14 @@ subscription_id = resource.subscribe(print)
 resource.unsubscribe(subscription_id)
 ~~~
 
+## Writable values
+
+`almasi.resources.Writable(value=None)` stores an in-memory value. `read()`
+returns it without consuming it; `write(value)` replaces it and calls
+`update()`, including when the new value equals the old one. Subscribers
+use the inherited Resource contract. The owner decides which consumers may
+write; the resource itself does not enforce authorization.
+
 ## Streams
 
 `almasi.resources.Stream(max_bytes=None)` is a concrete byte resource backed
