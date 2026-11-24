@@ -2,12 +2,14 @@
 # RESOURCE
 # ==============================================================================
 # PURPOSE:
-# Define the source-independent read and subscription contract.
+# Provide one read and change subscription contract for resources.
 #
 # RESPONSIBILITY BOUNDARIES:
-# Owns: Direct resource subscription registrations and notification delivery.
-# Delegates: Reading and indexed observation to concrete sources.
+# Owns: Subscriber registrations and delivery.
+# Delegates: Reading and external change detection to concrete producers.
 # ==============================================================================
+
+import logging
 
 from .module       import Module
 from .subscription import Subscription
@@ -15,22 +17,16 @@ from .subscription import Subscription
 
 class Resource(Module):
 
+	_observe = None
+
 	# ======================================================================
-	# PRIVATE METHODS
+	# FRAMEWORK METHODS
 	# ======================================================================
 
-	# End one direct registration when its handle is canceled.
+	# Allow a producer to track the lifetime of a notification-only resource.
 	# ----------------------------------------------------------------------
-	def _cancel_subscription(self, subscription):
-		subscription._active = False
-		self._subscriptions.discard(subscription)
-
-	# Notify live listeners without consuming the resource's content.
-	# ----------------------------------------------------------------------
-	def _dispatch(self, changed):
-		for subscription in tuple(self.__dict__.get('_subscriptions', ())):
-			if subscription._active:
-				subscription._callback(changed)
+	def __init__(self, observe=None):
+		self._observe = observe
 
 	# ======================================================================
 	# PUBLIC METHODS
@@ -45,10 +41,46 @@ class Resource(Module):
 	):
 		raise NotImplementedError
 
-	# Give each direct listener an independent cancellable registration.
+	# Tell an external detector whether this resource needs observation.
+	# ----------------------------------------------------------------------
+	def is_subscribed(self):
+		return bool(self.__dict__.get('_subscriptions'))
+
+	# Register an independent listener and establish external observation.
 	# ----------------------------------------------------------------------
 	def subscribe(self, callback):
-		subscription = Subscription(self, None, callback)
-		self.__dict__.setdefault('_subscriptions', set()).add(subscription)
+		if callable(callback):
+			subscription = Subscription(self, callback)
+			listeners    = self.__dict__.setdefault('_subscriptions', {})
+			listeners[subscription] = True
+
+			if self._observe is not None:
+				try:
+					self._observe(self)
+				except BaseException:
+					listeners.pop(subscription, None)
+					raise
+		else:
+			raise TypeError('Subscription callback must be callable')
 
 		return subscription
+
+	# Remove one listener and release observation after the last listener.
+	# ----------------------------------------------------------------------
+	def unsubscribe(self, subscription):
+		if self.__dict__.get('_subscriptions', {}).pop(subscription, None):
+			if self._observe is not None:
+				self._observe(self)
+
+	# Notify live listeners in registration order without consuming content.
+	# ----------------------------------------------------------------------
+	def update(self, changed=None, *args):
+		for subscription in tuple(self.__dict__.get('_subscriptions', ())):
+			if subscription in self._subscriptions:
+				try:
+					subscription.callback(changed, *args)
+				except Exception:
+					if self._observe is None:
+						raise
+
+					logging.exception('Subscription callback failed')

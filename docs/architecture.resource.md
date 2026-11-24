@@ -1,79 +1,53 @@
-# Architecture: generic Resource and filesystem specialization
+# Architecture: Resource
 
-**Status:** implemented by the corresponding Almasi resource PR; verify the CI and dependent O/Web integrations before declaring the cross-repository migration complete.
+## Contract and ownership
 
-## Common contract
+`almasi.Resource` owns independently cancellable subscriptions. Every
+`resource.subscribe(callback)` registers one callable and returns a distinct
+`Subscription` with a resource and callback. `subscription.cancel()` calls
+`resource.unsubscribe(subscription)`; cancellation is idempotent. There is no
+identifier scope on a listener. `resource.is_subscribed()` reports whether
+external observation is needed.
 
-`a.Resource(a.Module)` provides a single shared Module ancestry for all
-resource specializations, including filesystem and computed resources. It
-remains source-independent. Its `read(position=None, length=None)` raises
-`NotImplementedError` until implemented by a concrete resource.
-Its default `subscribe(callback)` registers a callable on that resource and
-returns a distinct cancellable `a.Subscription` handle. The resource creates
-its registration set only when first subscribed. A concrete producer calls
-`self._dispatch(changed)` after publishing a change. Callbacks receive the
-producer's notification (normally None), synchronously; callback exceptions
-propagate. Canceling a handle is idempotent. Direct subscriptions have no
-identifier scope to update.
+`resource.update(changed=None)` delivers the producer's change notification to
+live subscribers in registration order. Notifications do not consume content.
+Callbacks run synchronously in the producer's execution context. A canceled
+listener is skipped if it has not started; cancellation does not wait for a
+running callback. Direct callback exceptions propagate, while externally
+observed resources log callback failures and deliver to the other listeners.
 
-Indexed producers such as Filesystem and O Sync retain their existing
-`a.Subscribable` registries and override `subscribe(callback)` to delegate
-directly. Their resources do not create a second subscription registry.
-No new lock, worker, cache or notification transport is introduced.
+An external producer observes resource identity, not subscriptions. Resource
+calls its optional observation callable when registration changes; the
+producer reconciles the resource's current subscription state under its
+existing source lock. No new worker or lock belongs to Resource. Inherited
+filesystem and computed resources supply their source's observation callable.
 
 ## Filesystem specialization
 
-`a.FilesystemResource(a.Resource)` owns the existing filesystem carrier
-identity: canonical real path, library/source, logical route, namespace face and
-`get_path()`, `get_route()`, `get_lib()` and `get_name()`. It delegates
-`subscribe(callback)` to its effective library's `a.services.Filesystem`.
+`FilesystemResource` provides carrier identity and delegates detection to the
+effective namespace's Filesystem service. `read(*args, **kwargs)` delegates
+to `load`. File loads and memoizes content, including None. Directory.load()
+returns its namespace; Directory.load(name) loads an exact validated filename
+through the existing format plugin. The inherited Directory.read(name)
+preserves that contract without a second implementation.
 
-`File(FilesystemResource)` and `Directory(FilesystemResource)` retain their
-distinct behavior, plugins and namespace resolution.
+Filesystem owns watcher roots and effective paths. It observes a resource
+once regardless of listener count, invalidates file and namespace caches before
+calling resource.update({path: status}), and releases unused OS watchers.
+Inherited overrides and fork-local observer identity remain unchanged.
 
-- `File.read()` reuses `File.load()` and its existing memoization;
-  `None` is still a valid cached file result.
-- `Directory.read()` returns the directory namespace itself.
-  `Directory.read(name)` retains the historical validated file lookup and
-  plugin load behavior. Existing `load()`, `write()`, `mkdir()`, `copy()`,
-  `link()` and namespace access contracts remain available.
-- The existing `a.services.Filesystem(a.Subscribable)` watcher indexes only
-  `FilesystemResource` instances; it does not accept unrelated Resource
-  specializations. It continues to observe effective inherited sources,
-  invalidate cache before notifying, and emit file status dictionaries with
-  `created` / `modified` / `deleted` entries.
+## Streams
 
-The generic base does **not** mandate a cache. Files continue to use the
-existing plugin/module cache; computed resources in O may store their own value.
+`StreamResource` inherits subscriptions and implements range validation for
+`read(position=None, length=None)`. A concrete source implements
+`_read(position, length)` and calls `self.update()` after making bytes
+available. Positions and lengths are non-negative integers or None, not
+booleans. Omitted position is zero; omitted length means the available end.
+A zero length requests no bytes. Consumers own their cursors; reads never
+consume shared state. The source owns retained history and storage.
 
-## Verification and compatibility
+## Verification
 
-`root/tests/test_resource_subscriptions.py` covers the hierarchy, abstract
-contract, uniform `read()`, existing `Directory.read(name)`, direct subscription
-delivery and source-specific
-registration and existing watcher notification/inheritance/cleanup behaviors.
-Other filesystem, plugin, fork and reload tests must remain green.
-
-This document covers Almasi only. O's `ComputedResource` implementation and
-Web's MCP resource subscriptions belong to their respective repositories.
-
-## Stream specialization
-
-`almasi.StreamResource(almasi.Resource)` is a source-independent byte-stream
-base. A concrete subclass implements `_read(position, length)` using its source
-and inherits direct subscriptions from Resource. After making new bytes
-available, the producer calls `self._dispatch(None)`. The source owns storage
-and retained history. The base does not allocate a buffer or track subscriber cursors.
-
-`read(position=None, length=None)` returns finite bytes available at the requested
-absolute zero-based byte position. Omitted position means zero; omitted length
-means through the currently available end. Both coordinates must be non-negative
-integers (not booleans) or None; invalid coordinates raise ValueError. Length zero
-requests no bytes. The source returns fewer bytes at the current end and reports
-unavailable retained history rather than silently shifting the starting position.
-Each consumer owns its next position, calculated as the requested position plus
-the number of bytes received. Reads do not consume shared state.
-
-For example, a concrete stream resource read at position 100 with length 50
-returns at most bytes 100 through 149. Ordinary non-stream resources retain
-whole-value reads; range support is not implied for them.
+Native resource, stream and filesystem tests cover separate handles, source
+isolation, cancellation, watcher lifetime, inherited overrides, range
+validation and cache invalidation. O owns its dependency-index tests.

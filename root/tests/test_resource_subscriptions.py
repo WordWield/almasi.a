@@ -38,10 +38,10 @@ class TestResourceSubscriptions(almasi.Tester):
 		assert not issubclass(almasi.Directory, almasi.File)
 		assert almasi.File.is_directory(almasi.File(almasi, __file__, 'almasi.file')) is False
 		assert almasi.Directory(almasi, os.path.dirname(__file__), 'almasi.tests').is_directory() is True
-		assert almasi.File.subscribe is almasi.FilesystemResource.subscribe
-		assert almasi.Directory.subscribe is almasi.FilesystemResource.subscribe
+		assert almasi.File.subscribe is almasi.Resource.subscribe
+		assert almasi.Directory.subscribe is almasi.Resource.subscribe
 		assert almasi.File.read is almasi.FilesystemResource.read
-		assert almasi.Directory.read is not almasi.FilesystemResource.read
+		assert almasi.Directory.read is almasi.FilesystemResource.read
 
 	# Base resources have no dependency on filesystem APIs or runtime services.
 	# --------------------------------------------------------------------------
@@ -61,11 +61,11 @@ class TestResourceSubscriptions(almasi.Tester):
 		callback = Mock()
 		handle   = resource.subscribe(callback)
 
-		resource._dispatch(None)
+		resource.update()
 		callback.assert_called_once_with(None)
 		handle.cancel()
 
-		resource._dispatch(None)
+		resource.update()
 		callback.assert_called_once_with(None)
 
 	# Keep the generic read route compatible with file and directory APIs.
@@ -89,7 +89,7 @@ class TestResourceSubscriptions(almasi.Tester):
 		service = almasi.services.Filesystem
 
 		try:
-			service.subscribe({almasi.Resource()}, lambda changed: None)
+			service.observe(almasi.Resource())
 		except TypeError:
 			error = True
 		else:
@@ -208,10 +208,10 @@ class TestResourceSubscriptions(almasi.Tester):
 
 				handle.cancel()
 
-	# Updating a subscription moves its watched scope without leaking observers.
+	# Moving interest between resources releases the previous OS observation.
 	# --------------------------------------------------------------------------
 	@classmethod
-	def test_update_and_cancel_subscription(cls):
+	def test_move_and_cancel_subscription(cls):
 		with tempfile.TemporaryDirectory() as root:
 			one_path = os.path.join(root, 'one.txt')
 			two_path = os.path.join(root, 'two.txt')
@@ -226,8 +226,9 @@ class TestResourceSubscriptions(almasi.Tester):
 			events  = []
 
 			with patch.object(type(service), '_watch', return_value=None):
-				handle = service.subscribe({one}, events.append)
-				handle.update({two})
+				handle = one.subscribe(events.append)
+				handle.cancel()
+				handle = two.subscribe(events.append)
 				assert one not in service._resources
 				assert two in service._resources
 
@@ -399,8 +400,8 @@ class TestResourceSubscriptions(almasi.Tester):
 			with patch.object(type(one), '_watch', return_value=None):
 				file   = almasi.File(first, os.path.join(root, 'item.txt'), 'almasi.item')
 				handle = file.subscribe(lambda changed: None)
-				assert handle in one._subscriptions
-				assert not two._subscriptions
+				assert file in one._resources
+				assert not two._resources
 				handle.cancel()
 				assert not one._watchers
 
@@ -417,11 +418,11 @@ class TestResourceSubscriptions(almasi.Tester):
 				events.append(resources)
 
 				if resources['nested.txt'] == 'created':
-					service._dispatch({file: {'nested.txt': 'deleted'}})
+					file.update({'nested.txt': 'deleted'})
 
 			with patch.object(type(service), '_watch', return_value=None):
 				handle = file.subscribe(callback)
-				service._dispatch({file: {'nested.txt': 'created'}})
+				file.update({'nested.txt': 'created'})
 
 				assert events == [
 					{'nested.txt': 'created'},
@@ -447,8 +448,8 @@ class TestResourceSubscriptions(almasi.Tester):
 				handle  = file.subscribe(callback)
 				threads = [
 					threading.Thread(
-						target = service._dispatch,
-						args   = ({file: {'parallel.txt': change}},)
+						target = file.update,
+						args   = ({'parallel.txt': change},)
 					)
 					for change in ('modified', 'deleted')
 				]

@@ -1,7 +1,12 @@
 # ==============================================================================
 # FILESYSTEM SERVICE
 # ==============================================================================
+# PURPOSE:
 # Observe effective Almasi resources and invalidate cached namespace faces.
+#
+# RESPONSIBILITY BOUNDARIES:
+# Owns: Filesystem watching, effective paths and cache invalidation.
+# Delegates: Subscriber registrations and delivery to the observed resources.
 # ==============================================================================
 
 import logging
@@ -13,7 +18,7 @@ from watchfiles import Change, watch
 import almasi
 
 
-class Filesystem(almasi.Subscribable):
+class Filesystem(almasi.Singleton):
 
 	# ==========================================================================
 	# FRAMEWORK METHODS
@@ -25,24 +30,15 @@ class Filesystem(almasi.Subscribable):
 		instance = super().__new__(cls)
 
 		if '_resources' not in instance.__dict__:
-			instance._resources = {}
-			instance._watchers  = {}
+			instance._subscription_lock = threading.RLock()
+			instance._resources         = {}
+			instance._watchers          = {}
 
 		return instance
 
 	# ==========================================================================
 	# PRIVATE METHODS
 	# ==========================================================================
-
-	# Validate that each subscription identifies concrete Almasi resources.
-	# --------------------------------------------------------------------------
-	def _resources_in(self, identifiers):
-		resources = {identifiers} if isinstance(identifiers, almasi.FilesystemResource) else self._scope(identifiers)
-
-		if resources is None or any(not isinstance(item, almasi.FilesystemResource) for item in resources):
-			raise TypeError('Filesystem subscriptions require a set of FilesystemResources')
-
-		return resources
 
 	# Find the physical source layer and its path relative to that layer.
 	# --------------------------------------------------------------------------
@@ -139,21 +135,9 @@ class Filesystem(almasi.Subscribable):
 
 		return changes
 
-	# Derive OS watchers from Subscribable's existing active identifier index.
-	# No second reference-counting system is needed for registered resources.
-	# --------------------------------------------------------------------------
+	# Reconcile OS watchers with the current set of observed resources.
+	# ----------------------------------------------------------------------
 	def _reconcile(self):
-		active = set(self._by_id)
-
-		for resource in active - self._resources.keys():
-			self._resources[resource] = {
-				'roots': self._roots_for(resource),
-				'path' : self._effective(resource) if isinstance(resource, almasi.File) else None
-			}
-
-		for resource in self._resources.keys() - active:
-			del self._resources[resource]
-
 		roots = {root for entry in self._resources.values() for root in entry['roots']}
 
 		for root in roots - self._watchers.keys():
@@ -164,29 +148,6 @@ class Filesystem(almasi.Subscribable):
 
 		for root in self._watchers.keys() - roots:
 			self._watchers.pop(root)['stop'].set()
-
-	# Replace the scope in the common registry, then reconcile OS observers.
-	# --------------------------------------------------------------------------
-	def _update_subscription(self, subscription, identifiers):
-		resources = self._resources_in(identifiers)
-
-		with self._subscription_lock:
-			before = subscription._identifiers
-			super()._update_subscription(subscription, resources)
-
-			try:
-				self._reconcile()
-			except BaseException:
-				super()._update_subscription(subscription, before)
-				self._reconcile()
-				raise
-
-	# The common registry already knows whether the subscription is active.
-	# --------------------------------------------------------------------------
-	def _cancel_subscription(self, subscription):
-		with self._subscription_lock:
-			super()._cancel_subscription(subscription)
-			self._reconcile()
 
 	# Ignore shadowed changes, while notifying when an override disappears.
 	# --------------------------------------------------------------------------
@@ -269,44 +230,33 @@ class Filesystem(almasi.Subscribable):
 					if entry is not None:
 						entry['path'] = current
 
-		if changed:
-			self._dispatch(changed)
+		for resource, notification in changed.items():
+			resource.update(notification)
 
-	# Match resource changes and build subscriber-specific event dictionaries.
-	# Keep each batch local for nested and concurrent notifications.
-	# --------------------------------------------------------------------------
-	def _matches_generator(self, changed):
-		for subscription, identifiers in self._snapshot:
-			matching = changed.keys() & identifiers
-
-			if matching:
-				resources = {}
-
-				for resource in matching:
-					resources.update(changed[resource])
-
-				yield subscription, resources
-
-	# ==========================================================================
+	# ======================================================================
 	# PUBLIC METHODS
-	# ==========================================================================
+	# ======================================================================
 
-	# Register interest in one or more resources with no eager watcher at import.
-	# --------------------------------------------------------------------------
-	def subscribe(self, identifiers=None, callback=None):
-		resources = self._resources_in(identifiers)
+	# Track a resource only while it has listeners; share its OS watchers.
+	# ----------------------------------------------------------------------
+	def observe(self, resource):
+		if isinstance(resource, almasi.FilesystemResource):
+			with self._subscription_lock:
+				if resource.is_subscribed():
+					if resource not in self._resources:
+						self._resources[resource] = {
+							'roots': self._roots_for(resource),
+							'path' : self._effective(resource) if isinstance(resource, almasi.File) else None
+						}
 
-		if not callable(callback):
-			raise TypeError('Subscription callback must be callable')
-
-		with self._subscription_lock:
-			subscription = super().subscribe(resources, callback)
-
-			try:
-				self._reconcile()
-			except BaseException:
-				super()._cancel_subscription(subscription)
-				self._reconcile()
-				raise
-
-		return subscription
+						try:
+							self._reconcile()
+						except BaseException:
+							del self._resources[resource]
+							self._reconcile()
+							raise
+				elif resource in self._resources:
+					del self._resources[resource]
+					self._reconcile()
+		else:
+			raise TypeError('Filesystem observation requires a FilesystemResource')

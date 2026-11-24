@@ -66,25 +66,25 @@ class TestStreamResource(almasi.Tester):
 		other    = almasi.StreamResource()
 		callback = Mock()
 
-		resource._dispatch(None)
+		resource.update()
 		first  = resource.subscribe(callback)
 		second = resource.subscribe(callback)
 		third  = other.subscribe(callback)
 
 		try:
-			resource._dispatch(None)
+			resource.update()
 			assert callback.call_count == 2
 
 			first.cancel()
 			first.cancel()
-			resource._dispatch(None)
+			resource.update()
 			assert callback.call_count == 3
 
-			other._dispatch(None)
+			other.update()
 			assert callback.call_count == 4
 
 			second.cancel()
-			resource._dispatch(None)
+			resource.update()
 			assert callback.call_count == 4
 		finally:
 			first.cancel()

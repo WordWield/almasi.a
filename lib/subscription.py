@@ -1,34 +1,32 @@
 # ==============================================================================
 # SUBSCRIPTION
 # ==============================================================================
-# Own one cancellable registration and its replaceable identifier scope.
+# PURPOSE:
+# Represent one independently cancellable resource listener.
+#
+# RESPONSIBILITY BOUNDARIES:
+# Owns: The resource and callback of this registration.
+# Delegates: Registration lifetime to Resource.
 # ==============================================================================
 
 
 class Subscription:
 
-	# ==========================================================================
+	# ======================================================================
 	# FRAMEWORK METHODS
-	# ==========================================================================
+	# ======================================================================
 
-	# Retain the source and a snapshot of the initial observation scope.
+	# Bind one callback to its resource.
 	# ----------------------------------------------------------------------
-	def __init__(self, source, identifiers, callback):
-		self._source      = source
-		self._identifiers = identifiers
-		self._callback    = callback
-		self._active      = True
+	def __init__(self, resource, callback):
+		self.resource = resource
+		self.callback = callback
 
-	# ==========================================================================
+	# ======================================================================
 	# PUBLIC METHODS
-	# ==========================================================================
-
-	# Replace only this registration's identifiers, preserving its callback.
-	# ----------------------------------------------------------------------
-	def update(self, identifiers):
-		self._source._update_subscription(self, identifiers)
+	# ======================================================================
 
 	# Stop future deliveries without waiting for a running callback.
 	# ----------------------------------------------------------------------
 	def cancel(self):
-		self._source._cancel_subscription(self)
+		self.resource.unsubscribe(self)

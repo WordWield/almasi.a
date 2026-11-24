@@ -325,26 +325,6 @@ class Directory(FilesystemResource):
 
 		return result
 
-	# Read one exact filename through its registered format plugin.
-	# ----------------------------------------------------------------------
-	def read(self, name=None):
-		result = self.load()
-
-		if name is not None:
-			self._destination(name)
-			self._plugin(name)
-			file = self.__resolve__(name)
-
-			if file is None:
-				raise FileNotFoundError(self.join(name))
-			if isinstance(file, Directory):
-				raise IsADirectoryError(file.get_path())
-
-			result = file.load()
-
-		return result
-
-
 	# Serialize through the format owner and atomically replace the destination.
 	# ----------------------------------------------------------------------
 	def write(self, name, value=''):
@@ -400,7 +380,21 @@ class Directory(FilesystemResource):
 
 		return modules
 
-	# Realize a directory as its native namespace face.
+	# Realize the directory or load one exact filename through its plugin.
 	# ----------------------------------------------------------------------
-	def load(self):
-		return self
+	def load(self, name=None):
+		result = self
+
+		if name is not None:
+			self._destination(name)
+			self._plugin(name)
+			file = self.__resolve__(name)
+
+			if file is None:
+				raise FileNotFoundError(self.join(name))
+			if isinstance(file, Directory):
+				raise IsADirectoryError(file.get_path())
+
+			result = file.load()
+
+		return result

@@ -28,6 +28,16 @@ class FilesystemResource(Resource):
 	def __repr__(self):
 		return f'<{type(self).__name__} `{self.get_route()}` path=`{self.get_path()}`>'
 
+	# ======================================================================
+	# PRIVATE METHODS
+	# ======================================================================
+
+	# Observe this carrier in its effective namespace.
+	# ----------------------------------------------------------------------
+	@property
+	def _observe(self):
+		return self._namespace_lib.services.Filesystem.observe
+
 	# ==========================================================================
 	# PUBLIC METHODS
 	# ==========================================================================
@@ -59,10 +69,5 @@ class FilesystemResource(Resource):
 
 	# Read through the existing format plugin or directory loader.
 	# --------------------------------------------------------------------------
-	def read(self):
-		return self.load()
-
-	# Observe the effective resource without owning a filesystem watcher.
-	# --------------------------------------------------------------------------
-	def subscribe(self, callback):
-		return self._namespace_lib.services.Filesystem.subscribe({self}, callback)
+	def read(self, *args, **kwargs):
+		return self.load(*args, **kwargs)
