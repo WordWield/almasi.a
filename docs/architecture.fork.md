@@ -93,6 +93,8 @@ Filesystem lookup and inherited library resolution still use the existing librar
 
 Services are singletons per loaded service class. Fork-specific class loading therefore gives each fork its own service instance.
 
+Filesystem observation is process-wide: filesystem resources explicitly use the canonical Almasi Filesystem service. Their supplying and effective namespace identities remain separate, so sharing physical watchers does not merge fork-owned resources or change inherited visibility.
+
 However, a function or method already bound to a canonical service is intentionally excluded from fork configuration copying. If a library exposes shortcuts such as:
 
 ```python

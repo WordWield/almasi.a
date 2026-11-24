@@ -24,7 +24,7 @@ class Filesystem(almasi.Singleton):
 	# FRAMEWORK METHODS
 	# ==========================================================================
 
-	# Keep OS observers on the existing fork-local service singleton.
+	# Share OS observers in the canonical service across resource namespaces.
 	# --------------------------------------------------------------------------
 	def __new__(cls):
 		instance = super().__new__(cls)
