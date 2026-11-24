@@ -1,9 +1,9 @@
 import os
 
-import almasi
+from almasi import a
 
 
-class Py(almasi.Plugin):
+class Py(a.Plugin):
 
 	EXTENSIONS = ['py']
 

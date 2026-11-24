@@ -6,28 +6,29 @@
 
 import builtins
 import copy
-import keyword
 import os, sys
 
 from types import SimpleNamespace
 
-from lib.imports             import Imports
-from lib.module              import Module, ModuleMeta
-from lib.singleton           import Singleton
-from lib.reloadable          import Reloadable, ReloadableModule, ReloadableSingleton
-from lib.logger              import Logger
-from lib.string              import String
-from lib.resource            import Resource
-from lib.process             import Process
-from lib.filesystem_resource import FilesystemResource
-from lib.file                import File
-from lib.directory           import Directory
-from lib.plugin              import Plugin
-from lib.undefined           import Undefined
-from lib.dual                import DualMethod, DualProperty
-from lib.timer               import Timer
-from lib.progress            import Progress
-from lib.tester              import Tester
+from almasi import Libraries
+
+from .lib.imports             import Imports
+from .lib.module              import Module, ModuleMeta
+from .lib.singleton           import Singleton
+from .lib.reloadable          import Reloadable, ReloadableModule, ReloadableSingleton
+from .lib.logger              import Logger
+from .lib.string              import String
+from .lib.resource            import Resource
+from .lib.process             import Process
+from .lib.filesystem_resource import FilesystemResource
+from .lib.file                import File
+from .lib.directory           import Directory
+from .lib.plugin              import Plugin
+from .lib.undefined           import Undefined
+from .lib.dual                import DualMethod, DualProperty
+from .lib.timer               import Timer
+from .lib.progress            import Progress
+from .lib.tester              import Tester
 
 
 class AMeta(type):
@@ -50,8 +51,8 @@ class AMeta(type):
 
 		# Only the bootstrap A class may be declared directly.
 		# ----------------------------------------------------------------------
-		if not is_created_using_extend and (name, module_name) != ('A', 'almasi'):
-			raise TypeError('Declare libraries with almasi.extend(), not a class declaration')
+		if not is_created_using_extend and (name, module_name) != ('A', 'almasi.a'):
+			raise TypeError('Declare libraries with a.extend(), not a class declaration')
 
 		if not os.path.exists(path):
 			raise ValueError(f'Could not define class `{name}`. Path `{path}` does not exist')
@@ -150,10 +151,8 @@ class A(metaclass=AMeta, plugins=['Py', 'Json', 'Text', 'Bytes']):
 			if value is not None:
 				break
 
-		is_library_import = self is A.__instance__ and self._is_valid_library_name(name)
-
-		if value is not None or is_library_import:
-			result = value.read() if value is not None else self.services.Libraries.imp(name)
+		if value is not None:
+			result = value.read()
 			self.__dict__[name] = result
 			self.__cached_names__.add(name)
 		elif self.__fallback__ is not None and not name.startswith('_'):
@@ -267,16 +266,6 @@ class A(metaclass=AMeta, plugins=['Py', 'Json', 'Text', 'Bytes']):
 	def _is_main(self):
 		return sys._getframe(2).f_globals['__name__'] == '__main__'
 
-	# Accept canonical snake_case library names.
-	# ----------------------------------------------------------------------
-	def _is_valid_library_name(self, name):
-		return (
-			isinstance(name, str)
-			and name.isidentifier()
-			and not keyword.iskeyword(name)
-			and name == self.String.camel_to_snake(self.String.snake_to_camel(name))
-		)
-
 	# ======================================================================
 	# PUBLIC METHODS
 	# ======================================================================
@@ -294,7 +283,7 @@ class A(metaclass=AMeta, plugins=['Py', 'Json', 'Text', 'Bytes']):
 		if is_main:
 			source_name = os.path.splitext(os.path.basename(module.__file__))[0]
 
-		if not self._is_valid_library_name(name):
+		if not Libraries.is_valid_name(name):
 			raise ValueError(f'Invalid library name: `{name}`')
 
 		if source_name != name:

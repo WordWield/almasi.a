@@ -9,10 +9,10 @@
 # Delegates: Subscription registrations and notification delivery to Resource.
 # ==============================================================================
 
-import almasi
+from almasi import a
 
 
-class Writable(almasi.Resource):
+class Writable(a.Resource):
 
 	# ======================================================================
 	# FRAMEWORK METHODS

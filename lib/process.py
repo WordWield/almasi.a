@@ -33,7 +33,7 @@ class Process:
 		env       : dict[str, str] | None = None,
 		max_bytes : int | None            = None
 	):
-		resources = sys.modules['almasi'].resources
+		resources = sys.modules['almasi.a'].resources
 
 		self._command = command
 		self._cwd     = cwd

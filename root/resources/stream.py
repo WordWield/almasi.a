@@ -12,10 +12,10 @@
 import tempfile
 from threading import Lock
 
-import almasi
+from almasi import a
 
 
-class Stream(almasi.Resource):
+class Stream(a.Resource):
 
 	# ======================================================================
 	# FRAMEWORK METHODS

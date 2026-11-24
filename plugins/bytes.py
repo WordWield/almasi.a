@@ -2,10 +2,10 @@ import os
 
 from functools import partial
 
-import almasi
+from almasi import a
 
 
-class Bytes(almasi.Plugin):
+class Bytes(a.Plugin):
 
 	EXTENSIONS = ('bin', 'webm', 'mp4', 'wav', 'mp3', 'png', 'jpg', 'jpeg', 'webp', 'gif', 'ico', 'svg', 'bmp', 'avif', 'apng', 'tif', 'tiff', 'mov', 'm4v', 'ogv', 'ogg')
 

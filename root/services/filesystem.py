@@ -15,10 +15,10 @@ import threading
 
 from watchfiles import Change, watch
 
-import almasi
+from almasi import a
 
 
-class Filesystem(almasi.Singleton):
+class Filesystem(a.Singleton):
 
 	# ==========================================================================
 	# FRAMEWORK METHODS
@@ -62,7 +62,7 @@ class Filesystem(almasi.Singleton):
 	def _resolve(self, namespace, relative):
 		parent = os.path.dirname(relative)
 		route  = namespace.__name__ + ('.' + parent.replace(os.sep, '.') if parent else '')
-		face   = almasi.Directory(namespace, os.path.join(namespace.__path__, parent), route)
+		face   = a.Directory(namespace, os.path.join(namespace.__path__, parent), route)
 		found  = face.__resolve__(os.path.basename(relative))
 		result = found.get_path() if found is not None else None
 
@@ -182,7 +182,7 @@ class Filesystem(almasi.Singleton):
 			for namespace in namespaces:
 				index, relative = self._source(namespace, path)
 				layer = tuple(namespace.__instances__())[index] if index is not None else namespace
-				almasi.Directory(layer, os.path.dirname(path), layer.__name__)._invalidate_children(path)
+				a.Directory(layer, os.path.dirname(path), layer.__name__)._invalidate_children(path)
 				sources[namespace, path] = (index, relative)
 
 		changed = {}
@@ -191,7 +191,7 @@ class Filesystem(almasi.Singleton):
 			namespace   = resource._namespace_lib
 			base        = os.path.realpath(resource.get_path())
 			_, relative = self._source(namespace, base)
-			is_file     = isinstance(resource, almasi.File)
+			is_file     = isinstance(resource, a.File)
 			current     = self._effective(resource) if is_file else None
 
 			for path, status in paths.items():
@@ -240,13 +240,13 @@ class Filesystem(almasi.Singleton):
 	# Track a resource only while it has listeners; share its OS watchers.
 	# ----------------------------------------------------------------------
 	def observe(self, resource):
-		if isinstance(resource, almasi.FilesystemResource):
+		if isinstance(resource, a.FilesystemResource):
 			with self._observation_lock:
 				if resource.is_subscribed():
 					if resource not in self._resources:
 						self._resources[resource] = {
 							'roots': self._roots_for(resource),
-							'path' : self._effective(resource) if isinstance(resource, almasi.File) else None
+							'path' : self._effective(resource) if isinstance(resource, a.File) else None
 						}
 
 						try:

@@ -42,7 +42,7 @@ class FilesystemResource(Resource):
 	# ----------------------------------------------------------------------
 	@property
 	def _observe(self):
-		return import_module('almasi').services.Filesystem.observe
+		return import_module('almasi.a').services.Filesystem.observe
 
 	# ==========================================================================
 	# PUBLIC METHODS

@@ -3,10 +3,10 @@ import json
 
 from functools import partial
 
-import almasi
+from almasi import a
 
 
-class Json(almasi.Plugin):
+class Json(a.Plugin):
 
 	EXTENSIONS = ('json',)
 
