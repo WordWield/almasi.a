@@ -23,10 +23,9 @@ class Progress:
 	# Keep redirected streams free of animation and terminal control codes.
 	# ----------------------------------------------------------------------
 	def __init__(self, text: str, stream=None):
-		self._stream = sys.stderr if stream is None else stream
-		self._text   = text
-		self._status = None
-
+		self._stream  = sys.stderr if stream is None else stream
+		self._text    = text
+		self._status  = None
 		self._spinner = yaspin(text=text, stream=self._stream) if self._stream.isatty() else None
 
 	# Expose the progress object rather than the animation implementation.
