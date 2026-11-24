@@ -9,6 +9,8 @@
 # Delegates: OS execution to subprocess; history and notifications to resources.
 # ==============================================================================
 
+import os
+import signal
 import subprocess
 import sys
 from functools import partial
@@ -129,12 +131,13 @@ class Process:
 			if self._process is None:
 				self._process = subprocess.Popen(
 					self._command,
-					cwd     = self._cwd,
-					env     = self._env,
-					stdin   = subprocess.PIPE,
-					stdout  = subprocess.PIPE,
-					stderr  = subprocess.PIPE,
-					bufsize = 0
+					cwd               = self._cwd,
+					env               = self._env,
+					stdin             = subprocess.PIPE,
+					stdout            = subprocess.PIPE,
+					stderr            = subprocess.PIPE,
+					bufsize           = 0,
+					start_new_session = os.name == 'posix'
 				)
 
 				self._readers = (
@@ -153,11 +156,11 @@ class Process:
 
 			self._monitor.start()
 
-	# Request termination without blocking the calling thread.
+	# Request the child's own shutdown without blocking the caller.
 	# ----------------------------------------------------------------------
-	def stop(self) -> None:
+	def stop(self, sig: int = signal.SIGTERM) -> None:
 		if self._process is not None:
-			self._process.terminate()
+			self._process.send_signal(sig)
 
 	# Wait for exit, drained output and final state notification.
 	# ----------------------------------------------------------------------

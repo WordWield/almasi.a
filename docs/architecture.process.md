@@ -24,11 +24,16 @@ process.stdout.unsubscribe(subscription)
   supplied, and optional byte retention limit per output stream. Shell
   expansion is not performed.
 - `start() -> None`: launch once; OS launch errors propagate and leave the
-  instance unstarted. A successful launch cannot be repeated.
-- `stop() -> None`: request termination using the OS subprocess terminate
-  operation, without waiting. No effect before launch or after exit.
-  A child can ignore termination; callers must use an appropriate timeout
-  when waiting.
+  instance unstarted. A successful launch cannot be repeated. On POSIX,
+  each child starts in its own session, so terminal Ctrl+C reaches its
+  supervisor rather than interrupting the child independently.
+- `stop(sig=signal.SIGTERM) -> None`: send the selected OS signal to the
+  direct child, without waiting. No effect before launch or after exit.
+  The default remains SIGTERM; a supervisor of Python children can select
+  `signal.SIGINT` to request their ordinary interrupt shutdown. Signal
+  support is platform-dependent. The child owns its cleanup; this method
+  cannot guarantee it. A child can ignore a signal, so callers must use
+  an appropriate timeout when waiting. Descendants are not signaled.
 - `wait(timeout=None) -> int`: block until the child exits, both output pipes
   have drained and the final state notification has finished. Timeout raises
   subprocess.TimeoutExpired. A capture or background notification error is

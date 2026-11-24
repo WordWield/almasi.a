@@ -9,6 +9,8 @@
 # Delegates: Process execution and resource ownership to Process.
 # ==============================================================================
 
+import os
+import signal
 import subprocess
 import sys
 from functools import partial
@@ -118,6 +120,43 @@ class TestProcess(a.Tester):
 		finally:
 			process.stop()
 			process.stdout.unsubscribe(subscription)
+
+	# A supervised child handles one explicit interrupt and executes cleanup.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_graceful_interrupt(cls):
+		if os.name == 'posix':
+			process = a.Process([sys.executable, '-u', '-c', '''
+import asyncio
+import os
+
+async def main():
+	try:
+		print(os.getsid(0) == os.getpid())
+		await asyncio.Event().wait()
+	finally:
+		print('cleaned up')
+
+try:
+	asyncio.run(main())
+except KeyboardInterrupt:
+	print('stopped')
+'''])
+			event = Event()
+
+			subscription = process.stdout.subscribe(partial(cls._signal, event))
+
+			try:
+				process.start()
+				assert event.wait(10)
+				assert process.stdout.read() == b'True\\n'
+
+				process.stop(signal.SIGINT)
+				assert process.wait(timeout=10) == 0
+				assert process.stdout.read() == b'True\\ncleaned up\\nstopped\\n'
+			finally:
+				process.stop()
+				process.stdout.unsubscribe(subscription)
 
 	# Reuse the same retention policy independently for both child outputs.
 	# ----------------------------------------------------------------------
