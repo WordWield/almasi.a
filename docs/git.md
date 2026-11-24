@@ -1,7 +1,8 @@
 # Git service
 
 `a.services.Git` provides Git checkout operations and authenticated GitHub
-repository management. It does not require initialization. Core is independent of the installer's
+repository management. It is a stateless Almasi Singleton service, ready to use
+without explicit initialization. Core is independent of the installer's
 private Git implementation.
 
 ```python

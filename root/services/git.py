@@ -17,7 +17,7 @@ import tempfile
 from almasi import a
 
 
-class Git(a.Module):
+class Git(a.Singleton):
 
 	_HOST = 'github.com'
 
@@ -27,9 +27,8 @@ class Git(a.Module):
 
 	# Execute Git directly, preserving diagnostics and native failure types.
 	# ----------------------------------------------------------------------
-	@classmethod
 	def _run(
-		cls,
+		self,
 		arguments,
 		timeout = None,
 		check   = True
@@ -44,8 +43,7 @@ class Git(a.Module):
 
 	# Validate an explicit GitHub owner/name, never a URL or shell option.
 	# ----------------------------------------------------------------------
-	@staticmethod
-	def _validate_repository(repo):
+	def _validate_repository(self, repo):
 		is_valid = (
 			isinstance(repo, str)
 			and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+', repo)
@@ -61,9 +59,8 @@ class Git(a.Module):
 
 	# Use the authenticated GitHub CLI without interactive prompts.
 	# ----------------------------------------------------------------------
-	@classmethod
-	def _gh(cls, arguments, check=True):
-		environment = dict(os.environ, GH_HOST=cls._HOST, GH_PROMPT_DISABLED='1')
+	def _gh(self, arguments, check=True):
+		environment = dict(os.environ, GH_HOST=self._HOST, GH_PROMPT_DISABLED='1')
 
 		return subprocess.run(
 			['gh', *arguments],
@@ -79,29 +76,26 @@ class Git(a.Module):
 
 	# Clone a trusted remote into an explicitly selected local directory.
 	# ----------------------------------------------------------------------
-	@classmethod
-	def clone(cls, url: str, directory: str, timeout: float | None = None) -> str:
-		cls._run(['clone', '--quiet', '--', url, directory], timeout=timeout)
+	def clone(self, url: str, directory: str, timeout: float | None = None) -> str:
+		self._run(['clone', '--quiet', '--', url, directory], timeout=timeout)
 
 		return directory
 
 	# Update this checkout without merging or implicitly using a parent repo.
 	# ----------------------------------------------------------------------
-	@classmethod
-	def pull(cls, directory: str, timeout: float | None = None) -> None:
-		cls._run(
+	def pull(self, directory: str, timeout: float | None = None) -> None:
+		self._run(
 			['-C', directory, '--git-dir=.git', '--work-tree=.', 'pull', '--ff-only', '--quiet'],
 			timeout=timeout
 		)
 
 	# Recognize working checkout roots, including linked Git worktrees.
 	# ----------------------------------------------------------------------
-	@classmethod
-	def is_repository(cls, directory: str) -> bool:
+	def is_repository(self, directory: str) -> bool:
 		result = False
 
 		if os.path.exists(os.path.join(directory, '.git')):
-			probe = cls._run(
+			probe = self._run(
 				['-C', directory, '--git-dir=.git', '--work-tree=.', 'rev-parse', '--is-inside-work-tree'],
 				check=False
 			)
@@ -111,10 +105,9 @@ class Git(a.Module):
 
 	# Check repository visibility to the authenticated GitHub identity.
 	# ----------------------------------------------------------------------
-	@classmethod
-	def exists(cls, repo: str) -> bool:
-		repo  = cls._validate_repository(repo)
-		probe = cls._gh(['api', '--hostname', cls._HOST, '--include', f'repos/{repo}'], check=False)
+	def exists(self, repo: str) -> bool:
+		repo  = self._validate_repository(repo)
+		probe = self._gh(['api', '--hostname', self._HOST, '--include', f'repos/{repo}'], check=False)
 
 		if probe.returncode == 0:
 			result = True
@@ -127,24 +120,23 @@ class Git(a.Module):
 
 	# Create an independent repository, optionally with the source branch.
 	# ----------------------------------------------------------------------
-	@classmethod
 	def create(
-		cls,
+		self,
 		new_repo  : str,
 		from_repo : str | None = None,
 		private   : bool       = True
 	) -> str:
-		new_repo   = cls._validate_repository(new_repo)
+		new_repo   = self._validate_repository(new_repo)
 		visibility = '--private' if private else '--public'
 		arguments  = ['repo', 'create', new_repo, visibility]
 
 		if from_repo is None:
-			cls._gh(arguments)
+			self._gh(arguments)
 		else:
-			from_repo = cls._validate_repository(from_repo)
+			from_repo = self._validate_repository(from_repo)
 
 			with tempfile.TemporaryDirectory(prefix='almasi_git_') as directory:
-				cls.clone(f'https://{cls._HOST}/{from_repo}.git', directory)
-				cls._gh([*arguments, '--source', directory, '--remote', 'destination', '--push'])
+				self.clone(f'https://{self._HOST}/{from_repo}.git', directory)
+				self._gh([*arguments, '--source', directory, '--remote', 'destination', '--push'])
 
-		return f'https://{cls._HOST}/{new_repo}.git'
+		return f'https://{self._HOST}/{new_repo}.git'

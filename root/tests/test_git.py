@@ -24,6 +24,16 @@ class TestGit(a.Tester):
 	# PUBLIC METHODS
 	# ======================================================================
 
+	# Resolve the shared Git service without explicit initialization.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_service_identity(cls):
+		git = a.services.Git
+
+		assert isinstance(git, a.Singleton)
+		assert git is a.services.Git
+		assert git is type(git)()
+
 	# Exercise clone, fast-forward pull and checkout recognition with real Git.
 	# ----------------------------------------------------------------------
 	@classmethod
