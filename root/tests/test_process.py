@@ -132,7 +132,7 @@ import os
 
 async def main():
 	try:
-		print(os.getsid(0) == os.getpid())
+		os.write(1, b'True\\n' if os.getsid(0) == os.getpid() else b'False\\n')
 		await asyncio.Event().wait()
 	finally:
 		print('cleaned up')
