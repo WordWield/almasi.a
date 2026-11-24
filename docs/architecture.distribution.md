@@ -16,7 +16,8 @@ A single `pip install almasi` provides the small, stable Almasi core. The rest o
 | --- | --- | --- |
 | Core distribution | PyPI package `almasi` | Installs the runtime, filesystem resolution machinery, and core dependencies into the active Python environment |
 | Library source | `almasi.<name>` Git repository | Independently versioned source, fetched on first use |
-| Library acquisition | `a.services.Libraries` | Resolve source path, clone or update, prepare dependencies |
+| Library acquisition | `almasi.services.Libraries` | Resolve source path, select clone/update policy, prepare dependencies |
+| Git operations | `almasi.services.Git` | Clone and fast-forward working checkouts, recognize local repositories |
 | Python identity | `almasi.Imports` and `A` | Load and publish the canonical `almasi.<name>` library; preserve in-process identity |
 | Library internals | Its own `root/` tree | Resolve filesystem-backed components lazily through the existing Almasi namespace |
 | Application workspace | Application owner/developer | Own a working checkout; an application is not a library silently cloned into the shared cache |
@@ -36,7 +37,7 @@ For a library not yet resolved in this process:
 1. The root Almasi namespace receives attribute access through `A.__getattr__`.
 2. The existing `a.services.Libraries.imp(name)` service checks `sys.modules['almasi.' + name]`.
 3. If the library is not loaded, `Libraries` reuses its existing checkout or clones a missing one.
-4. If an existing checkout has `.git`, `Libraries` attempts `git pull --ff-only` before loading.
+4. If an existing checkout is recognized by `Git.is_repository()`, `Libraries` attempts `Git.pull()` (fast-forward only) before loading.
 5. If the checkout contains `requirements.txt`, its requirements are installed with `sys.executable -m pip install -r ...` into the **active environment**.
 6. `Imports.load_module(..., module_name='almasi.' + name)` loads the entry point with its canonical module name.
 7. The entry point uses `almasi.extend(name)` to publish the library instance. `Libraries.imp` checks that this is an Almasi library and returns it.
@@ -163,7 +164,8 @@ This verifies that scenario, not all network, permissions, concurrency, offline,
 
 - `pyproject.toml` — installed core and direct dependencies
 - `almasi.py` — canonical library identity and `A.__getattr__`
-- `root/services/libraries.py` — Git acquisition, cache paths, dependency preparation
+- `root/services/libraries.py` — acquisition policy, cache paths, dependency preparation
+- `root/services/git.py` — shared Git operations; see [Git contract](architecture.git.md)
 - `lib/imports.py` — explicit Python module loading
 - `.github/workflows/publish.yml` — PyPI Trusted Publishing
 - `README.md` — supported installation and user-facing constraints

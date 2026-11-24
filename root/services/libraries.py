@@ -5,45 +5,37 @@
 # Acquire and prepare Almasi libraries before publishing their Python identities.
 #
 # RESPONSIBILITY BOUNDARIES:
-# Owns: Git source acquisition, dependency preparation and loading readiness.
-# Delegates: Python module publication to Imports and dependencies to pip.
+# Owns: Library source selection, cache policy and loading readiness.
+# Delegates: Git operations to Git, publication to Imports, dependencies to pip.
 # ==============================================================================
 
 import os
 import subprocess
 import sys
+from functools import partial
 
 import almasi
 
 
+
 class Libraries(almasi.Singleton):
+
+	_DEFAULT_GIT_BASE = 'https://github.com/WordWield'
+	_DEFAULT_CACHE    = '~/.cache/almasi/libraries'
+	_PULL_TIMEOUT     = 15
 
 	# ======================================================================
 	# PRIVATE METHODS
 	# ======================================================================
 
-	# Show native Almasi progress while executing a subprocess.
+	# Report acquisition progress without coupling Git to library policy.
 	# ----------------------------------------------------------------------
-	def _run(
-		self,
-		name,
-		operation,
-		command,
-		cwd     = None,
-		timeout = None
-	):
+	def _run(self, name, operation, action):
 		label = f'almasi.{name}: {operation}'
 
 		try:
 			with almasi.Spinner(text=label, stream=sys.stderr, failure_label=f'❌ {label}'):
-				subprocess.run(
-					command,
-					cwd            = cwd,
-					capture_output = True,
-					text           = True,
-					timeout        = timeout,
-					check          = True
-				)
+				action()
 		except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
 			details = getattr(error, 'stderr', None) or str(error)
 			raise RuntimeError(f'{label} failed: {str(details).strip()}') from error
@@ -55,8 +47,7 @@ class Libraries(almasi.Singleton):
 			self._run(
 				name,
 				'Checking for updates',
-				['git', '-C', self.get_path(name), 'pull', '--ff-only', '--quiet'],
-				timeout = 15
+				partial(almasi.services.Git.pull, self.get_path(name), timeout=self._PULL_TIMEOUT)
 			)
 		except RuntimeError as error:
 			print(f'⚠️ almasi.{name}: using local version ({error.__cause__})', file=sys.stderr)
@@ -70,8 +61,14 @@ class Libraries(almasi.Singleton):
 			self._run(
 				name,
 				'Installing dependencies',
-				[sys.executable, '-m', 'pip', 'install', '-r', requirements],
-				cwd = self.get_path(name)
+				partial(
+					subprocess.run,
+					[sys.executable, '-m', 'pip', 'install', '-r', requirements],
+					cwd            = self.get_path(name),
+					capture_output = True,
+					text           = True,
+					check          = True
+				)
 			)
 
 	# ======================================================================
@@ -81,19 +78,18 @@ class Libraries(almasi.Singleton):
 	# Resolve a shared source directory, with an optional environment override.
 	# ----------------------------------------------------------------------
 	def get_path(self, name):
-		if not almasi._is_valid_library_name(name):
+		if almasi._is_valid_library_name(name):
+			directory = os.environ.get('ALMASI_PATH') or os.path.expanduser(self._DEFAULT_CACHE)
+			result    = os.path.join(os.path.abspath(directory), 'almasi.' + name)
+		else:
 			raise ValueError(f'Invalid library name: {name!r}')
 
-		directory = os.environ.get('ALMASI_PATH') or os.path.join(
-			os.path.expanduser('~'), '.cache', 'almasi', 'libraries'
-		)
-		result = os.path.join(os.path.abspath(directory), 'almasi.' + name)
 		return result
 
 	# Resolve the trusted organization source; Git handles authentication.
 	# ----------------------------------------------------------------------
 	def get_url(self, name):
-		base   = os.environ.get('ALMASI_GIT_BASE', 'https://github.com/WordWield').rstrip('/')
+		base   = os.environ.get('ALMASI_GIT_BASE', self._DEFAULT_GIT_BASE).rstrip('/')
 		result = f'{base}/almasi.{name}.git'
 		return result
 
@@ -108,11 +104,10 @@ class Libraries(almasi.Singleton):
 		destination = self.get_path(name)
 
 		if not self.is_cloned(name):
-			os.makedirs(os.path.dirname(destination), exist_ok=True)
 			self._run(
 				name,
 				'Cloning library',
-				['git', 'clone', '--quiet', '--', self.get_url(name), destination]
+				partial(almasi.services.Git.clone, self.get_url(name), destination)
 			)
 
 		return destination
@@ -127,7 +122,7 @@ class Libraries(almasi.Singleton):
 			path = self.get_path(name)
 
 			if self.is_cloned(name):
-				if os.path.exists(os.path.join(path, '.git')):
+				if almasi.services.Git.is_repository(path):
 					self._pull(name)
 			else:
 				path = self.clone(name)
