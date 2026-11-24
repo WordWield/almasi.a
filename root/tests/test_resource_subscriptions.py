@@ -41,7 +41,7 @@ class TestResourceSubscriptions(almasi.Tester):
 		assert almasi.File.subscribe is almasi.FilesystemResource.subscribe
 		assert almasi.Directory.subscribe is almasi.FilesystemResource.subscribe
 		assert almasi.File.read is almasi.FilesystemResource.read
-		assert almasi.Directory.read is almasi.FilesystemResource.read
+		assert almasi.Directory.read is not almasi.FilesystemResource.read
 
 	# Base resources have no dependency on filesystem APIs or runtime services.
 	# --------------------------------------------------------------------------
@@ -80,6 +80,7 @@ class TestResourceSubscriptions(almasi.Tester):
 			assert isinstance(file, almasi.Resource)
 			assert file.read() == 'text'
 			assert directory.read() is directory
+			assert directory.read('notes.txt') == 'text'
 
 	# Reject computed or unrelated resources at the filesystem boundary.
 	# --------------------------------------------------------------------------
