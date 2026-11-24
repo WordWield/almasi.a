@@ -17,7 +17,6 @@ from functools import partial
 import almasi
 
 
-
 class Libraries(almasi.Singleton):
 
 	_DEFAULT_GIT_BASE = 'https://github.com/WordWield'
@@ -44,13 +43,14 @@ class Libraries(almasi.Singleton):
 	# ----------------------------------------------------------------------
 	def _pull(self, name):
 		try:
-			self._run(
-				name,
-				'Checking for updates',
-				partial(almasi.services.Git.pull, self.get_path(name), timeout=self._PULL_TIMEOUT)
-			)
-		except RuntimeError as error:
-			print(f'⚠️ almasi.{name}: using local version ({error.__cause__})', file=sys.stderr)
+			if almasi.services.Git.is_repository(self.get_path(name)):
+				self._run(
+					name,
+					'Checking for updates',
+					partial(almasi.services.Git.pull, self.get_path(name), timeout=self._PULL_TIMEOUT)
+				)
+		except (RuntimeError, OSError) as error:
+			print(f'⚠️ almasi.{name}: using local version ({error.__cause__ or error})', file=sys.stderr)
 
 	# Install requirements using the library's working directory.
 	# ----------------------------------------------------------------------
@@ -122,8 +122,7 @@ class Libraries(almasi.Singleton):
 			path = self.get_path(name)
 
 			if self.is_cloned(name):
-				if almasi.services.Git.is_repository(path):
-					self._pull(name)
+				self._pull(name)
 			else:
 				path = self.clone(name)
 

@@ -294,6 +294,36 @@ class Item(fork_sample.Module):
 			almasi.Imports.__lib__, almasi.Tester.__lib__, almasi.Undefined.__lib__ = ownership
 			almasi.__dict__.pop('offline_lib', None)
 
+	# A previously acquired checkout remains usable without a Git executable.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_import_uses_local_source_without_git(cls):
+		ownership = cls._ownership()
+
+		try:
+			with tempfile.TemporaryDirectory() as home:
+				cls._git_origin(home, 'no_git_lib')
+				cache = os.path.join(home, 'cache')
+
+				with patch.dict(os.environ, {
+					'ALMASI_PATH'     : cache,
+					'ALMASI_GIT_BASE' : home
+				}):
+					almasi.services.Libraries.clone('no_git_lib')
+					empty_path = os.path.join(home, 'empty')
+					os.mkdir(empty_path)
+					log = StringIO()
+
+					with patch.dict(os.environ, {'PATH': empty_path}):
+						with redirect_stderr(log), patch.dict(sys.modules):
+							library = almasi.services.Libraries.imp('no_git_lib')
+							assert library.__name__ == 'almasi.no_git_lib'
+
+					assert 'using local version' in log.getvalue()
+		finally:
+			almasi.Imports.__lib__, almasi.Tester.__lib__, almasi.Undefined.__lib__ = ownership
+			almasi.__dict__.pop('no_git_lib', None)
+
 	# Recheck requirements for each new process, but not each repeated import.
 	# ----------------------------------------------------------------------
 	@classmethod
