@@ -10,7 +10,7 @@ import os, sys
 
 from types import SimpleNamespace
 
-from almasi import Libraries
+from almasi import _libraries
 
 from .lib.imports             import Imports
 from .lib.module              import Module, ModuleMeta
@@ -29,6 +29,9 @@ from .lib.dual                import DualMethod, DualProperty
 from .lib.timer               import Timer
 from .lib.progress            import Progress
 from .lib.tester              import Tester
+
+
+_Libraries = getattr(_libraries, '_Libraries', None) or _libraries.Libraries
 
 
 class AMeta(type):
@@ -283,7 +286,7 @@ class A(metaclass=AMeta, plugins=['Py', 'Json', 'Text', 'Bytes']):
 		if is_main:
 			source_name = os.path.splitext(os.path.basename(module.__file__))[0]
 
-		if not Libraries.is_valid_name(name):
+		if not _Libraries.is_valid_name(name):
 			raise ValueError(f'Invalid library name: `{name}`')
 
 		if source_name != name:
