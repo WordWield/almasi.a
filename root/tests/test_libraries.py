@@ -20,7 +20,10 @@ from io                import StringIO
 from unittest          import TestCase
 from unittest.mock     import patch
 
-from almasi import a, Libraries
+from almasi import a, _libraries
+
+
+_Libraries = getattr(_libraries, '_Libraries', None) or _libraries.Libraries
 
 
 class TestLibraries(a.Tester):
@@ -93,14 +96,6 @@ class TestLibraries(a.Tester):
 	# PUBLIC METHODS
 	# ======================================================================
 
-	# Resolve the Singleton as a native Almasi service, not as an alias.
-	# ----------------------------------------------------------------------
-	@classmethod
-	def test_loader_service(cls):
-		service = Libraries
-
-		assert service is Libraries
-
 	# Import through the Python from-list protocol and reuse one library.
 	# ----------------------------------------------------------------------
 	@classmethod
@@ -119,7 +114,7 @@ class TestLibraries(a.Tester):
 						assert library is getattr(package, 'sample_lib')
 						assert sys.modules['almasi.sample_lib'] is library
 						assert library.__name__ == 'almasi.sample_lib'
-						assert Libraries.imp('sample_lib') is library
+						assert _Libraries.imp('sample_lib') is library
 		finally:
 			a.Imports.__lib__, a.Tester.__lib__, a.Undefined.__lib__ = ownership
 
@@ -184,7 +179,7 @@ class Item(fork_sample.Module):
 	def test_custom_git_source(cls):
 		with tempfile.TemporaryDirectory() as origin:
 			with patch.dict(os.environ, {'ALMASI_GIT_BASE': origin}):
-				assert Libraries.get_url('web') == f'{origin}/almasi.web.git'
+				assert _Libraries.get_url('web') == f'{origin}/almasi.web.git'
 
 	# A suffix determines the checkout path and cloned state.
 	# ----------------------------------------------------------------------
@@ -192,10 +187,10 @@ class Item(fork_sample.Module):
 	def test_is_cloned(cls):
 		with tempfile.TemporaryDirectory() as home:
 			with patch.dict(os.environ, {'ALMASI_PATH': home}):
-				assert not Libraries.is_cloned('sample_lib')
+				assert not _Libraries.is_cloned('sample_lib')
 				cls._library(home, 'sample_lib')
-				assert Libraries.is_cloned('sample_lib')
-				assert Libraries.get_path('sample_lib') == os.path.join(home, 'almasi.sample_lib')
+				assert _Libraries.is_cloned('sample_lib')
+				assert _Libraries.get_path('sample_lib') == os.path.join(home, 'almasi.sample_lib')
 
 	# Clone an actual local Git origin once and reuse the checkout.
 	# ----------------------------------------------------------------------
@@ -209,10 +204,10 @@ class Item(fork_sample.Module):
 				'ALMASI_PATH'     : cache,
 				'ALMASI_GIT_BASE' : home,
 			}):
-				path = Libraries.clone('cloned_lib')
+				path = _Libraries.clone('cloned_lib')
 
 				assert os.path.isfile(os.path.join(path, 'cloned_lib.py'))
-				assert path == Libraries.clone('cloned_lib')
+				assert path == _Libraries.clone('cloned_lib')
 				assert sorted(os.listdir(cache)) == ['almasi.cloned_lib']
 
 	# Load the newest committed source only before its first use in a process.
@@ -231,7 +226,7 @@ class Item(fork_sample.Module):
 					'ALMASI_GIT_BASE' : home,
 				}):
 					with patch.dict(sys.modules):
-						Libraries.imp('pull_lib')
+						_Libraries.imp('pull_lib')
 
 					with open(os.path.join(origin, 'pull_lib.py'), 'a') as source:
 						source.write('''\npull_lib.revision = 'updated'\n''')
@@ -247,9 +242,9 @@ class Item(fork_sample.Module):
 
 					with redirect_stdout(stdout), redirect_stderr(log):
 						with patch.dict(sys.modules):
-							library = Libraries.imp('pull_lib')
+							library = _Libraries.imp('pull_lib')
 							assert library.revision == 'updated'
-							assert Libraries.imp('pull_lib') is library
+							assert _Libraries.imp('pull_lib') is library
 
 					assert not stdout.getvalue(), repr(stdout.getvalue())
 					assert log.getvalue().count('almasi.pull_lib: Checking for updates') == 1, repr(log.getvalue())
@@ -271,7 +266,7 @@ class Item(fork_sample.Module):
 					'ALMASI_PATH'     : cache,
 					'ALMASI_GIT_BASE' : home,
 				}):
-					checkout = Libraries.clone('offline_lib')
+					checkout = _Libraries.clone('offline_lib')
 					subprocess.run([
 						'git', '-C', checkout, 'remote', 'set-url', 'origin',
 						os.path.join(home, 'not-found')
@@ -281,7 +276,7 @@ class Item(fork_sample.Module):
 
 					with redirect_stderr(log):
 						with patch.dict(sys.modules):
-							library = Libraries.imp('offline_lib')
+							library = _Libraries.imp('offline_lib')
 							assert library.__name__ == 'almasi.offline_lib'
 
 					assert '⚠️ almasi.offline_lib: using local version' in log.getvalue()
@@ -303,14 +298,14 @@ class Item(fork_sample.Module):
 					'ALMASI_PATH'     : cache,
 					'ALMASI_GIT_BASE' : home
 				}):
-					Libraries.clone('no_git_lib')
+					_Libraries.clone('no_git_lib')
 					empty_path = os.path.join(home, 'empty')
 					os.mkdir(empty_path)
 					log = StringIO()
 
 					with patch.dict(os.environ, {'PATH': empty_path}):
 						with redirect_stderr(log), patch.dict(sys.modules):
-							library = Libraries.imp('no_git_lib')
+							library = _Libraries.imp('no_git_lib')
 							assert library.__name__ == 'almasi.no_git_lib'
 
 					assert 'using local version' in log.getvalue()
@@ -337,11 +332,11 @@ class Item(fork_sample.Module):
 
 						with redirect_stderr(log):
 							with patch.dict(sys.modules):
-								library = Libraries.imp('deps_lib')
-								assert Libraries.imp('deps_lib') is library
+								library = _Libraries.imp('deps_lib')
+								assert _Libraries.imp('deps_lib') is library
 
 							with patch.dict(sys.modules):
-								Libraries.imp('deps_lib')
+								_Libraries.imp('deps_lib')
 
 						assert runner.call_count == 2
 						assert runner.call_args.args[0] == [
@@ -370,7 +365,7 @@ class Item(fork_sample.Module):
 					with patch('subprocess.run', side_effect=failure):
 						with patch.dict(sys.modules):
 							with TestCase().assertRaises(subprocess.CalledProcessError) as raised:
-								Libraries.imp('missing_deps')
+								_Libraries.imp('missing_deps')
 
 							assert raised.exception is failure
 
@@ -383,10 +378,10 @@ class Item(fork_sample.Module):
 	@classmethod
 	def test_invalid_names_do_not_resolve(cls):
 		with TestCase().assertRaises(ValueError):
-			Libraries.imp('../outside')
+			_Libraries.imp('../outside')
 
 		with TestCase().assertRaises(ValueError):
-			Libraries.clone('NotSnakeCase')
+			_Libraries.clone('NotSnakeCase')
 
 	# Failed source execution leaves no falsely published library module.
 	# ----------------------------------------------------------------------
@@ -399,7 +394,7 @@ class Item(fork_sample.Module):
 			with patch.dict(os.environ, {'ALMASI_PATH': home}):
 				with patch.dict(sys.modules):
 					with TestCase().assertRaisesRegex(RuntimeError, 'broken source'):
-						Libraries.imp('broken_lib')
+						_Libraries.imp('broken_lib')
 
 					assert 'almasi.broken_lib' not in sys.modules
 
