@@ -2,15 +2,15 @@ import os
 import shutil
 import sys
 
-import almasi
+from almasi import a
 
 
-class TestModule(almasi.Tester):
+class TestModule(a.Tester):
 
 	# ----------------------------------------------------------------------
 	@classmethod
 	def _source_root(cls):
-		path = os.path.join(almasi.__path__, 'tests_runtime')
+		path = os.path.join(a.__path__, 'tests_runtime')
 		os.makedirs(path, exist_ok=True)
 		return path
 
@@ -32,7 +32,7 @@ class TestModule(almasi.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def _remove_runtime(cls):
-		path = os.path.join(almasi.__path__, 'tests_runtime')
+		path = os.path.join(a.__path__, 'tests_runtime')
 
 		if os.path.isdir(path):
 			for module_name in list(sys.modules):
@@ -41,9 +41,9 @@ class TestModule(almasi.Tester):
 
 			shutil.rmtree(path)
 
-		almasi.__children__.pop('tests_runtime', None)
-		almasi.__dict__.pop('tests_runtime', None)
-		almasi.__cached_names__.discard('tests_runtime')
+		a.__children__.pop('tests_runtime', None)
+		a.__dict__.pop('tests_runtime', None)
+		a.__cached_names__.discard('tests_runtime')
 
 	# ----------------------------------------------------------------------
 	@classmethod
@@ -54,21 +54,21 @@ class TestModule(almasi.Tester):
 			path = cls._write_source(
 				'source_carrier.py',
 				(
-					'import almasi\n\n'
-					'class SourceCarrier(almasi.Module):\n'
+					'from almasi import a\n\n'
+					'class SourceCarrier(a.Module):\n'
 					'\tvalue = 7\n'
 				)
 			)
-			SourceCarrier = almasi.tests_runtime.SourceCarrier
+			SourceCarrier = a.tests_runtime.SourceCarrier
 			module        = sys.modules[os.path.realpath(path)]
 
-			assert module.__lib__ is almasi
-			assert module.__route__ == 'almasi.tests_runtime.SourceCarrier'
-			assert SourceCarrier.__route__ == 'almasi.tests_runtime.SourceCarrier'
+			assert module.__lib__ is a
+			assert module.__route__ == 'almasi.a.tests_runtime.SourceCarrier'
+			assert SourceCarrier.__route__ == 'almasi.a.tests_runtime.SourceCarrier'
 			assert SourceCarrier.__has_own_module__ == True
 			assert '__original_module__' not in SourceCarrier.__dict__
 			assert SourceCarrier.value == 7
-			assert repr(SourceCarrier) == '<class \'almasi.tests_runtime.SourceCarrier\'>'
+			assert repr(SourceCarrier) == '<class \'almasi.a.tests_runtime.SourceCarrier\'>'
 		finally:
 			cls._remove_runtime()
 
@@ -82,14 +82,14 @@ class TestModule(almasi.Tester):
 			cls._write_source(
 				'wrong_name.py',
 				(
-					'import almasi\n\n'
-					'class NotWrongName(almasi.Module):\n'
+					'from almasi import a\n\n'
+					'class NotWrongName(a.Module):\n'
 					'\tpass\n'
 				)
 			)
 
 			try:
-				almasi.tests_runtime.WrongName
+				a.tests_runtime.WrongName
 			except AttributeError as e:
 				error = e
 
@@ -114,7 +114,7 @@ class TestModule(almasi.Tester):
 			)
 
 			try:
-				almasi.tests_runtime.PlainCarrier
+				a.tests_runtime.PlainCarrier
 			except Exception as e:
 				error = e
 
@@ -126,7 +126,7 @@ class TestModule(almasi.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_runtime_class_without_route_is_not_own_module(cls):
-		RuntimeOnly = type('RuntimeOnly', (almasi.Module,), {'value' : 1})
+		RuntimeOnly = type('RuntimeOnly', (a.Module,), {'value' : 1})
 
 		assert RuntimeOnly.__has_own_module__ == False
 		assert '__route__' not in RuntimeOnly.__dict__

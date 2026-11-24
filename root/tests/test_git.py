@@ -14,10 +14,10 @@ import subprocess
 import tempfile
 from unittest import TestCase
 
-import almasi
+from almasi import a, Git
 
 
-class TestGit(almasi.Tester):
+class TestGit(a.Tester):
 
 	# ======================================================================
 	# PRIVATE METHODS
@@ -61,9 +61,8 @@ class TestGit(almasi.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_clone_and_pull(cls):
-		git = almasi.services.Git
-		assert git is almasi.services.Git
-		assert isinstance(git, almasi.Singleton)
+		git = Git
+		assert git is Git
 
 		with tempfile.TemporaryDirectory() as home:
 			origin   = os.path.join(home, 'origin')
@@ -87,7 +86,7 @@ class TestGit(almasi.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_repository_identity(cls):
-		git = almasi.services.Git
+		git = Git
 
 		with tempfile.TemporaryDirectory() as home:
 			origin   = os.path.join(home, 'origin')
@@ -115,7 +114,7 @@ class TestGit(almasi.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_divergence(cls):
-		git = almasi.services.Git
+		git = Git
 
 		with tempfile.TemporaryDirectory() as home:
 			origin   = os.path.join(home, 'origin')
@@ -137,7 +136,7 @@ class TestGit(almasi.Tester):
 	@classmethod
 	def test_failed_clone(cls):
 		with tempfile.TemporaryDirectory() as home:
-			git      = almasi.services.Git
+			git      = Git
 			checkout = os.path.join(home, 'checkout')
 
 			with TestCase().assertRaises(subprocess.CalledProcessError):

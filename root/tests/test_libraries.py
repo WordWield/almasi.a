@@ -20,10 +20,10 @@ from io                import StringIO
 from unittest          import TestCase
 from unittest.mock     import patch
 
-import almasi
+from almasi import a, Libraries
 
 
-class TestLibraries(almasi.Tester):
+class TestLibraries(a.Tester):
 
 	# ======================================================================
 	# PRIVATE METHODS
@@ -37,9 +37,9 @@ class TestLibraries(almasi.Tester):
 		os.makedirs(os.path.join(path, 'root'), exist_ok=True)
 
 		if source is None:
-			source = f'''import almasi
+			source = f'''from almasi import a
 
-{name} = almasi.extend('{name}')
+{name} = a.extend('{name}')
 '''
 
 		with open(os.path.join(path, name + '.py'), 'w') as file:
@@ -54,7 +54,7 @@ class TestLibraries(almasi.Tester):
 	# ----------------------------------------------------------------------
 	@staticmethod
 	def _ownership():
-		return almasi.Imports.__lib__, almasi.Tester.__lib__, almasi.Undefined.__lib__
+		return a.Imports.__lib__, a.Tester.__lib__, a.Undefined.__lib__
 
 	# Commit test fixtures without invoking user Git hooks or signing.
 	# ----------------------------------------------------------------------
@@ -96,11 +96,10 @@ class TestLibraries(almasi.Tester):
 	# Resolve the Singleton as a native Almasi service, not as an alias.
 	# ----------------------------------------------------------------------
 	@classmethod
-	def test_native_service(cls):
-		service = almasi.services.Libraries
+	def test_loader_service(cls):
+		service = Libraries
 
-		assert isinstance(service, almasi.Singleton)
-		assert service is almasi.services.Libraries
+		assert service is Libraries
 
 	# Import through the Python from-list protocol and reuse one library.
 	# ----------------------------------------------------------------------
@@ -120,10 +119,9 @@ class TestLibraries(almasi.Tester):
 						assert library is getattr(package, 'sample_lib')
 						assert sys.modules['almasi.sample_lib'] is library
 						assert library.__name__ == 'almasi.sample_lib'
-						assert almasi.services.Libraries.imp('sample_lib') is library
+						assert Libraries.imp('sample_lib') is library
 		finally:
-			almasi.Imports.__lib__, almasi.Tester.__lib__, almasi.Undefined.__lib__ = ownership
-			almasi.__dict__.pop('sample_lib', None)
+			a.Imports.__lib__, a.Tester.__lib__, a.Undefined.__lib__ = ownership
 
 	# Bind qualified Almasi imports to a fork without changing the published library.
 	# ----------------------------------------------------------------------
@@ -156,8 +154,7 @@ class Item(fork_sample.Module):
 						assert bob.Item().owner() is bob
 						assert sys.modules['almasi.fork_sample'] is library
 		finally:
-			almasi.Imports.__lib__, almasi.Tester.__lib__, almasi.Undefined.__lib__ = ownership
-			almasi.__dict__.pop('fork_sample', None)
+			a.Imports.__lib__, a.Tester.__lib__, a.Undefined.__lib__ = ownership
 
 	# Preserve the official MCP SDK's independent Python module identity.
 	# ----------------------------------------------------------------------
@@ -179,8 +176,7 @@ class Item(fork_sample.Module):
 						assert library is not sdk
 						assert sys.modules['almasi.mcp'] is library
 		finally:
-			almasi.Imports.__lib__, almasi.Tester.__lib__, almasi.Undefined.__lib__ = ownership
-			almasi.__dict__.pop('mcp', None)
+			a.Imports.__lib__, a.Tester.__lib__, a.Undefined.__lib__ = ownership
 
 	# Build Git origins from the configured source base.
 	# ----------------------------------------------------------------------
@@ -188,7 +184,7 @@ class Item(fork_sample.Module):
 	def test_custom_git_source(cls):
 		with tempfile.TemporaryDirectory() as origin:
 			with patch.dict(os.environ, {'ALMASI_GIT_BASE': origin}):
-				assert almasi.services.Libraries.get_url('web') == f'{origin}/almasi.web.git'
+				assert Libraries.get_url('web') == f'{origin}/a.web.git'
 
 	# A suffix determines the checkout path and cloned state.
 	# ----------------------------------------------------------------------
@@ -196,10 +192,10 @@ class Item(fork_sample.Module):
 	def test_is_cloned(cls):
 		with tempfile.TemporaryDirectory() as home:
 			with patch.dict(os.environ, {'ALMASI_PATH': home}):
-				assert not almasi.services.Libraries.is_cloned('sample_lib')
+				assert not Libraries.is_cloned('sample_lib')
 				cls._library(home, 'sample_lib')
-				assert almasi.services.Libraries.is_cloned('sample_lib')
-				assert almasi.services.Libraries.get_path('sample_lib') == os.path.join(home, 'almasi.sample_lib')
+				assert Libraries.is_cloned('sample_lib')
+				assert Libraries.get_path('sample_lib') == os.path.join(home, 'almasi.sample_lib')
 
 	# Clone an actual local Git origin once and reuse the checkout.
 	# ----------------------------------------------------------------------
@@ -213,10 +209,10 @@ class Item(fork_sample.Module):
 				'ALMASI_PATH'     : cache,
 				'ALMASI_GIT_BASE' : home,
 			}):
-				path = almasi.services.Libraries.clone('cloned_lib')
+				path = Libraries.clone('cloned_lib')
 
 				assert os.path.isfile(os.path.join(path, 'cloned_lib.py'))
-				assert path == almasi.services.Libraries.clone('cloned_lib')
+				assert path == Libraries.clone('cloned_lib')
 				assert sorted(os.listdir(cache)) == ['almasi.cloned_lib']
 
 	# Load the newest committed source only before its first use in a process.
@@ -235,7 +231,7 @@ class Item(fork_sample.Module):
 					'ALMASI_GIT_BASE' : home,
 				}):
 					with patch.dict(sys.modules):
-						almasi.services.Libraries.imp('pull_lib')
+						Libraries.imp('pull_lib')
 
 					with open(os.path.join(origin, 'pull_lib.py'), 'a') as source:
 						source.write('''\npull_lib.revision = 'updated'\n''')
@@ -251,15 +247,14 @@ class Item(fork_sample.Module):
 
 					with redirect_stdout(stdout), redirect_stderr(log):
 						with patch.dict(sys.modules):
-							library = almasi.services.Libraries.imp('pull_lib')
+							library = Libraries.imp('pull_lib')
 							assert library.revision == 'updated'
-							assert almasi.services.Libraries.imp('pull_lib') is library
+							assert Libraries.imp('pull_lib') is library
 
 					assert not stdout.getvalue(), repr(stdout.getvalue())
-					assert log.getvalue().count('✔ almasi.pull_lib: Checking for updates') == 1, repr(log.getvalue())
+					assert log.getvalue().count('almasi.pull_lib: Checking for updates') == 1, repr(log.getvalue())
 		finally:
-			almasi.Imports.__lib__, almasi.Tester.__lib__, almasi.Undefined.__lib__ = ownership
-			almasi.__dict__.pop('pull_lib', None)
+			a.Imports.__lib__, a.Tester.__lib__, a.Undefined.__lib__ = ownership
 
 	# Continue with committed local source when a remote Git update fails.
 	# ----------------------------------------------------------------------
@@ -276,7 +271,7 @@ class Item(fork_sample.Module):
 					'ALMASI_PATH'     : cache,
 					'ALMASI_GIT_BASE' : home,
 				}):
-					checkout = almasi.services.Libraries.clone('offline_lib')
+					checkout = Libraries.clone('offline_lib')
 					subprocess.run([
 						'git', '-C', checkout, 'remote', 'set-url', 'origin',
 						os.path.join(home, 'not-found')
@@ -286,13 +281,12 @@ class Item(fork_sample.Module):
 
 					with redirect_stderr(log):
 						with patch.dict(sys.modules):
-							library = almasi.services.Libraries.imp('offline_lib')
+							library = Libraries.imp('offline_lib')
 							assert library.__name__ == 'almasi.offline_lib'
 
 					assert '⚠️ almasi.offline_lib: using local version' in log.getvalue()
 		finally:
-			almasi.Imports.__lib__, almasi.Tester.__lib__, almasi.Undefined.__lib__ = ownership
-			almasi.__dict__.pop('offline_lib', None)
+			a.Imports.__lib__, a.Tester.__lib__, a.Undefined.__lib__ = ownership
 
 	# A previously acquired checkout remains usable without a Git executable.
 	# ----------------------------------------------------------------------
@@ -309,20 +303,19 @@ class Item(fork_sample.Module):
 					'ALMASI_PATH'     : cache,
 					'ALMASI_GIT_BASE' : home
 				}):
-					almasi.services.Libraries.clone('no_git_lib')
+					Libraries.clone('no_git_lib')
 					empty_path = os.path.join(home, 'empty')
 					os.mkdir(empty_path)
 					log = StringIO()
 
 					with patch.dict(os.environ, {'PATH': empty_path}):
 						with redirect_stderr(log), patch.dict(sys.modules):
-							library = almasi.services.Libraries.imp('no_git_lib')
+							library = Libraries.imp('no_git_lib')
 							assert library.__name__ == 'almasi.no_git_lib'
 
 					assert 'using local version' in log.getvalue()
 		finally:
-			almasi.Imports.__lib__, almasi.Tester.__lib__, almasi.Undefined.__lib__ = ownership
-			almasi.__dict__.pop('no_git_lib', None)
+			a.Imports.__lib__, a.Tester.__lib__, a.Undefined.__lib__ = ownership
 
 	# Recheck requirements for each new process, but not each repeated import.
 	# ----------------------------------------------------------------------
@@ -344,21 +337,20 @@ class Item(fork_sample.Module):
 
 						with redirect_stderr(log):
 							with patch.dict(sys.modules):
-								library = almasi.services.Libraries.imp('deps_lib')
-								assert almasi.services.Libraries.imp('deps_lib') is library
+								library = Libraries.imp('deps_lib')
+								assert Libraries.imp('deps_lib') is library
 
 							with patch.dict(sys.modules):
-								almasi.services.Libraries.imp('deps_lib')
+								Libraries.imp('deps_lib')
 
 						assert runner.call_count == 2
 						assert runner.call_args.args[0] == [
 							sys.executable, '-m', 'pip', 'install', '-r', requirements
 						]
 						assert runner.call_args.kwargs['cwd'] == source
-						assert log.getvalue().count('✔ almasi.deps_lib: Installing dependencies') == 2, repr(log.getvalue())
+						assert log.getvalue().count('almasi.deps_lib: Installing dependencies') == 2, repr(log.getvalue())
 		finally:
-			almasi.Imports.__lib__, almasi.Tester.__lib__, almasi.Undefined.__lib__ = ownership
-			almasi.__dict__.pop('deps_lib', None)
+			a.Imports.__lib__, a.Tester.__lib__, a.Undefined.__lib__ = ownership
 
 	# Do not publish a library whose dependencies could not be prepared.
 	# ----------------------------------------------------------------------
@@ -378,23 +370,23 @@ class Item(fork_sample.Module):
 					with patch('subprocess.run', side_effect=failure):
 						with patch.dict(sys.modules):
 							with TestCase().assertRaises(subprocess.CalledProcessError) as raised:
-								almasi.services.Libraries.imp('missing_deps')
+								Libraries.imp('missing_deps')
 
 							assert raised.exception is failure
 
 							assert 'almasi.missing_deps' not in sys.modules
 
-			assert '❌ almasi.missing_deps: Installing dependencies' in log.getvalue()
+			assert 'almasi.missing_deps: Installing dependencies' in log.getvalue()
 
 	# Reject invalid names before constructing a Git command or a module.
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_invalid_names_do_not_resolve(cls):
 		with TestCase().assertRaises(ValueError):
-			almasi.services.Libraries.imp('../outside')
+			Libraries.imp('../outside')
 
 		with TestCase().assertRaises(ValueError):
-			almasi.services.Libraries.clone('NotSnakeCase')
+			Libraries.clone('NotSnakeCase')
 
 	# Failed source execution leaves no falsely published library module.
 	# ----------------------------------------------------------------------
@@ -407,7 +399,7 @@ class Item(fork_sample.Module):
 			with patch.dict(os.environ, {'ALMASI_PATH': home}):
 				with patch.dict(sys.modules):
 					with TestCase().assertRaisesRegex(RuntimeError, 'broken source'):
-						almasi.services.Libraries.imp('broken_lib')
+						Libraries.imp('broken_lib')
 
 					assert 'almasi.broken_lib' not in sys.modules
 

@@ -1,12 +1,12 @@
-import almasi
+from almasi import a
 
 
-class TestPlugins(almasi.Tester):
+class TestPlugins(a.Tester):
 
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_data_plugin_loads_json_fixture(cls):
-		value = almasi.tests.fixtures.Fixture
+		value = a.tests.fixtures.Fixture
 
 		assert isinstance(value, dict)
 		assert value['name'] == 'fixture'
@@ -16,7 +16,7 @@ class TestPlugins(almasi.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_text_plugin_loads_txt_fixture(cls):
-		value = almasi.tests.fixtures.FixtureText
+		value = a.tests.fixtures.FixtureText
 
 		assert isinstance(value, str)
 		assert value == 'fixture text body\n'
@@ -24,7 +24,7 @@ class TestPlugins(almasi.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_text_plugin_loads_markdown_fixture(cls):
-		value = almasi.tests.fixtures.FixtureMarkdown
+		value = a.tests.fixtures.FixtureMarkdown
 
 		assert isinstance(value, str)
 		assert value.startswith('# Fixture Markdown')

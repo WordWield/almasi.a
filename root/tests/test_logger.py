@@ -11,10 +11,10 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from unittest.mock      import patch
 
-import almasi
+from almasi import a
 
 
-class TestLogger(almasi.Tester):
+class TestLogger(a.Tester):
 
 	# ======================================================================
 	# PRIVATE METHODS
@@ -25,7 +25,7 @@ class TestLogger(almasi.Tester):
 	@staticmethod
 	async def _concurrent(directory):
 		async def emit(name):
-			with almasi.Logger().logging(directory.mkdir(name)):
+			with a.Logger().logging(directory.mkdir(name)):
 				logging.info('%s before', name)
 				await asyncio.sleep(0)
 				logging.warning('%s after', name)
@@ -44,12 +44,12 @@ class TestLogger(almasi.Tester):
 		handlers = tuple(root.handlers)
 		level    = root.level
 		with tempfile.TemporaryDirectory() as path:
-			directory = almasi.Directory(almasi, path, 'logger_test')
-			logger    = almasi.Logger()
+			directory = a.Directory(a, path, 'logger_test')
+			logger    = a.Logger()
 			with logger.logging(directory):
 				logging.getLogger('third_party').info('outer message')
 				logging.debug('ignored debug')
-				with almasi.Logger().logging(almasi.Directory(almasi, directory.join('nested'), 'reopened')):
+				with a.Logger().logging(a.Directory(a, directory.join('nested'), 'reopened')):
 					logging.info('nested message')
 					logging.info('input', extra={
 						'artifact_name' : 'input_Storyteller.txt',
@@ -65,7 +65,7 @@ class TestLogger(almasi.Tester):
 					'artifact_data' : 'direct prompt',
 				})
 
-			with almasi.Logger().logging(almasi.Directory(almasi, directory.join('nested'), 'reopened')):
+			with a.Logger().logging(a.Directory(a, directory.join('nested'), 'reopened')):
 				logging.info('input', extra={
 					'artifact_name' : 'input_Storyteller.txt',
 					'artifact_data' : 'another prompt',
@@ -86,7 +86,7 @@ class TestLogger(almasi.Tester):
 
 		try:
 			with tempfile.TemporaryDirectory() as path:
-				with almasi.Logger().logging(almasi.Directory(almasi, path, 'failure')):
+				with a.Logger().logging(a.Directory(a, path, 'failure')):
 					int('expected failure')
 		except ValueError:
 			pass
@@ -97,7 +97,7 @@ class TestLogger(almasi.Tester):
 	@classmethod
 	def test_concurrent_isolation(cls):
 		with tempfile.TemporaryDirectory() as path:
-			directory = almasi.Directory(almasi, path, 'logger_concurrent')
+			directory = a.Directory(a, path, 'logger_concurrent')
 			asyncio.run(cls._concurrent(directory))
 			assert 'beta' not in directory.alpha.read('log.txt')
 			assert 'alpha' not in directory.beta.read('log.txt')
@@ -113,16 +113,16 @@ class TestLogger(almasi.Tester):
 		third.setLevel(logging.WARNING)
 		try:
 			with tempfile.TemporaryDirectory() as path:
-				directory = almasi.Directory(almasi, path, 'policy')
-				with almasi.Logger().logging(directory):
+				directory = a.Directory(a, path, 'policy')
+				with a.Logger().logging(directory):
 					assert third.level == logging.WARNING
 					root.setLevel(logging.ERROR)
 					third.setLevel(logging.ERROR)
 				assert root.level == logging.ERROR and third.level == logging.ERROR
 
 			with tempfile.TemporaryDirectory() as path:
-				directory = almasi.Directory(almasi, path, 'artifact_failure')
-				with almasi.Logger().logging(directory), patch.object(almasi.Logger, '_artifact', side_effect=OSError('disk full')):
+				directory = a.Directory(a, path, 'artifact_failure')
+				with a.Logger().logging(directory), patch.object(a.Logger, '_artifact', side_effect=OSError('disk full')):
 					try:
 						logging.warning('artifact', extra={'artifact_name': 'input.txt', 'artifact_data': 'text'})
 					except OSError:
@@ -141,9 +141,9 @@ class TestLogger(almasi.Tester):
 		level  = logger.level
 		try:
 			with tempfile.TemporaryDirectory() as path:
-				directory = almasi.Directory(almasi, path, 'level_contract')
+				directory = a.Directory(a, path, 'level_contract')
 				logger.setLevel(logging.WARNING)
-				with almasi.Logger().logging(directory):
+				with a.Logger().logging(directory):
 					logger.info('suppressed')
 					logger.warning('visible warning')
 					logger.setLevel(logging.INFO)
@@ -159,7 +159,7 @@ class TestLogger(almasi.Tester):
 	@classmethod
 	def test_threaded_artifact_numbering(cls):
 		with tempfile.TemporaryDirectory() as path:
-			directory = almasi.Directory(almasi, path, 'threaded_artifacts')
+			directory = a.Directory(a, path, 'threaded_artifacts')
 			barrier   = threading.Barrier(8)
 
 			def emit(index):
@@ -169,7 +169,7 @@ class TestLogger(almasi.Tester):
 					'artifact_data' : str(index),
 				})
 
-			with almasi.Logger().logging(directory), ThreadPoolExecutor(max_workers=8) as pool:
+			with a.Logger().logging(directory), ThreadPoolExecutor(max_workers=8) as pool:
 				futures = [pool.submit(contextvars.copy_context().run, emit, index) for index in range(8)]
 				for future in futures:
 					future.result(timeout=10)

@@ -1,66 +1,66 @@
 import os
 import sys
 
-import almasi
+from almasi import a
 
 
-class TestLibrary(almasi.Tester):
+class TestLibrary(a.Tester):
 
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_published_face_is_canonical_instance(cls):
-		import almasi as imported
+		from almasi import a as imported
 
-		assert imported is almasi
-		assert sys.modules['almasi'] is almasi
-		assert type(almasi).__name__ == 'A'
-		assert type(almasi).__instance__ is almasi
-		assert almasi.A is type(almasi)
+		assert imported is a
+		assert sys.modules['almasi.a'] is a
+		assert type(a).__name__ == 'A'
+		assert type(a).__instance__ is a
+		assert a.A is type(a)
 
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_library_paths_are_separate(cls):
-		lib_path  = os.path.dirname(os.path.realpath(almasi.__lib_file__))
+		lib_path  = os.path.dirname(os.path.realpath(a.__lib_file__))
 		root_path = os.path.join(lib_path, 'root')
 
-		assert os.path.realpath(almasi.__path__) == root_path
-		assert os.path.realpath(almasi.__lib_path__) == lib_path
-		assert os.path.basename(almasi.__lib_file__) == 'almasi.py'
-		assert almasi.__path__ != almasi.__lib_path__
+		assert os.path.realpath(a.__path__) == root_path
+		assert os.path.realpath(a.__lib_path__) == lib_path
+		assert os.path.basename(a.__lib_file__) == 'a.py'
+		assert a.__path__ != a.__lib_path__
 
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_kernel_names_are_intrinsic(cls):
-		assert almasi.Module is almasi.A.Module
-		assert almasi.ModuleMeta is almasi.A.ModuleMeta
-		assert almasi.File is almasi.A.File
-		assert almasi.Directory is almasi.A.Directory
-		assert almasi.Plugin is almasi.A.Plugin
-		assert almasi.Singleton is almasi.A.Singleton
-		assert almasi.Imports is almasi.A.Imports
-		assert almasi.Undefined is almasi.A.Undefined
-		assert almasi.String is almasi.A.String
-		assert almasi.Timer is almasi.A.Timer
-		assert almasi.Tester is almasi.A.Tester
-		assert almasi.tester is almasi.Tester
+		assert a.Module is a.A.Module
+		assert a.ModuleMeta is a.A.ModuleMeta
+		assert a.File is a.A.File
+		assert a.Directory is a.A.Directory
+		assert a.Plugin is a.A.Plugin
+		assert a.Singleton is a.A.Singleton
+		assert a.Imports is a.A.Imports
+		assert a.Undefined is a.A.Undefined
+		assert a.String is a.A.String
+		assert a.Timer is a.A.Timer
+		assert a.Tester is a.A.Tester
+		assert a.tester is a.Tester
 
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_shared_lib_contract_points_to_instance(cls):
-		instance = almasi.Tester.__lib__
+		instance = a.Tester.__lib__
 
-		assert almasi.Imports.__lib__ is instance
-		assert almasi.Tester.__lib__ is instance
-		assert almasi.Undefined.__lib__ is instance
+		assert a.Imports.__lib__ is instance
+		assert a.Tester.__lib__ is instance
+		assert a.Undefined.__lib__ is instance
 		assert instance in list(instance.__instances__())
 
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_instances_iterate_lineage_heads(cls):
-		instances = list(almasi.__instances__())
+		instances = list(a.__instances__())
 
-		assert instances == [almasi]
-		assert instances[0].__name__ == 'almasi'
+		assert instances == [a]
+		assert instances[0].__name__ == 'almasi.a'
 		assert instances[0].__spec__ is None
 		assert isinstance(instances[0].__children__, dict)
 
@@ -69,15 +69,15 @@ class TestLibrary(almasi.Tester):
 	def test_repr_and_missing_attribute(cls):
 		error = None
 
-		assert repr(almasi) == '<Library `almasi`>'
+		assert repr(a) == '<Library `almasi.a`>'
 
 		try:
-			almasi.NoSuchAlmasiThing
+			a.NoSuchAlmasiThing
 		except AttributeError as e:
 			error = e
 
 		assert error is not None
-		assert str(error) == 'Library `almasi` has no attribute `NoSuchAlmasiThing`'
+		assert str(error) == 'Library `almasi.a` has no attribute `NoSuchAlmasiThing`'
 
 
 
