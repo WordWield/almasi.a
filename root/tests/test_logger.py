@@ -4,14 +4,12 @@
 
 import asyncio
 import contextvars
-import io
 import logging
 import tempfile
 import threading
 
 from concurrent.futures import ThreadPoolExecutor
-from contextlib         import redirect_stdout
-from unittest.mock      import MagicMock, patch
+from unittest.mock      import patch
 
 import almasi
 
@@ -179,24 +177,3 @@ class TestLogger(almasi.Tester):
 			filenames = sorted(child.get_name() for child in directory if child.get_name().startswith('input_Thread_'))
 			assert filenames == [f'input_Thread_{index:03d}.txt' for index in range(1, 9)]
 			assert {directory.read(name) for name in filenames} == {str(index) for index in range(8)}
-
-	# Check dynamic labels and terminal outcomes using the existing renderer.
-	# ----------------------------------------------------------------------
-	@classmethod
-	def test_spinner_status(cls):
-		output = io.StringIO()
-		render = MagicMock()
-		with patch('yaspin.yaspin', return_value=render), redirect_stdout(output):
-			spinner = almasi.Spinner(text='checkpoint', done_label='✔ checkpoint — complete', failure_label='✘ checkpoint — failed')
-			with spinner:
-				spinner.update('checkpoint → Agent → Model')
-				assert render.text == 'checkpoint → Agent → Model'
-			almasi.Spinner.skipped('saved')
-			try:
-				with spinner:
-					int('expected failure')
-			except ValueError:
-				pass
-		assert '✔ checkpoint — complete' in output.getvalue()
-		assert '✘ checkpoint — failed' in output.getvalue()
-		assert '\033[90m✔ saved — skipped' in output.getvalue()

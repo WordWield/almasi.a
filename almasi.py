@@ -26,7 +26,7 @@ from lib.plugin              import Plugin
 from lib.undefined           import Undefined
 from lib.dual                import DualMethod, DualProperty
 from lib.timer               import Timer
-from lib.spinner             import Spinner
+from lib.progress            import Progress
 from lib.tester              import Tester
 
 
@@ -120,7 +120,7 @@ class A(metaclass=AMeta, plugins=['Py', 'Json', 'Text', 'Bytes']):
 	Undefined     = Undefined
 	String        = String
 	Timer         = Timer
-	Spinner       = Spinner
+	Progress      = Progress
 
 	__app__       = None
 

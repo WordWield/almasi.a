@@ -256,7 +256,7 @@ class Item(fork_sample.Module):
 							assert almasi.services.Libraries.imp('pull_lib') is library
 
 					assert not stdout.getvalue(), repr(stdout.getvalue())
-					assert log.getvalue().count('✔\033[0m almasi.pull_lib: Checking for updates') == 1, repr(log.getvalue())
+					assert log.getvalue().count('✔ almasi.pull_lib: Checking for updates') == 1, repr(log.getvalue())
 		finally:
 			almasi.Imports.__lib__, almasi.Tester.__lib__, almasi.Undefined.__lib__ = ownership
 			almasi.__dict__.pop('pull_lib', None)
@@ -294,6 +294,36 @@ class Item(fork_sample.Module):
 			almasi.Imports.__lib__, almasi.Tester.__lib__, almasi.Undefined.__lib__ = ownership
 			almasi.__dict__.pop('offline_lib', None)
 
+	# A previously acquired checkout remains usable without a Git executable.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_import_uses_local_source_without_git(cls):
+		ownership = cls._ownership()
+
+		try:
+			with tempfile.TemporaryDirectory() as home:
+				cls._git_origin(home, 'no_git_lib')
+				cache = os.path.join(home, 'cache')
+
+				with patch.dict(os.environ, {
+					'ALMASI_PATH'     : cache,
+					'ALMASI_GIT_BASE' : home
+				}):
+					almasi.services.Libraries.clone('no_git_lib')
+					empty_path = os.path.join(home, 'empty')
+					os.mkdir(empty_path)
+					log = StringIO()
+
+					with patch.dict(os.environ, {'PATH': empty_path}):
+						with redirect_stderr(log), patch.dict(sys.modules):
+							library = almasi.services.Libraries.imp('no_git_lib')
+							assert library.__name__ == 'almasi.no_git_lib'
+
+					assert 'using local version' in log.getvalue()
+		finally:
+			almasi.Imports.__lib__, almasi.Tester.__lib__, almasi.Undefined.__lib__ = ownership
+			almasi.__dict__.pop('no_git_lib', None)
+
 	# Recheck requirements for each new process, but not each repeated import.
 	# ----------------------------------------------------------------------
 	@classmethod
@@ -325,7 +355,7 @@ class Item(fork_sample.Module):
 							sys.executable, '-m', 'pip', 'install', '-r', requirements
 						]
 						assert runner.call_args.kwargs['cwd'] == source
-						assert log.getvalue().count('✔\033[0m almasi.deps_lib: Installing dependencies') == 2, repr(log.getvalue())
+						assert log.getvalue().count('✔ almasi.deps_lib: Installing dependencies') == 2, repr(log.getvalue())
 		finally:
 			almasi.Imports.__lib__, almasi.Tester.__lib__, almasi.Undefined.__lib__ = ownership
 			almasi.__dict__.pop('deps_lib', None)
@@ -347,8 +377,10 @@ class Item(fork_sample.Module):
 				with patch.dict(os.environ, {'ALMASI_PATH': home}):
 					with patch('subprocess.run', side_effect=failure):
 						with patch.dict(sys.modules):
-							with TestCase().assertRaisesRegex(RuntimeError, 'dependency unavailable'):
+							with TestCase().assertRaises(subprocess.CalledProcessError) as raised:
 								almasi.services.Libraries.imp('missing_deps')
+
+							assert raised.exception is failure
 
 							assert 'almasi.missing_deps' not in sys.modules
 
