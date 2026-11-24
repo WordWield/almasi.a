@@ -76,18 +76,16 @@ class Resource(Module):
 
 	# Notify live listeners in registration order without consuming content.
 	# ----------------------------------------------------------------------
-	def update(self, changed=None, *args):
+	def update(self, changed=None):
 		subscriptions = self._subscriptions
 
 		if subscriptions:
-			args = (changed, *args)
-
 			for subscription_id in tuple(subscriptions):
 				callback = subscriptions.get(subscription_id)
 
 				if callback is not None:
 					try:
-						callback(*args)
+						callback(changed)
 					except Exception:
 						if self._observe is not None:
 							logging.exception('Subscription callback failed')

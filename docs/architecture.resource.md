@@ -9,7 +9,7 @@ that registration; cancellation is idempotent. There is no
 identifier scope on a listener. `resource.is_subscribed()` reports whether
 external observation is needed.
 
-`resource.update(changed=None, *args)` delivers the producer's change notification to
+`resource.update(changed=None)` delivers the producer's change notification to
 live subscribers in registration order. Notifications do not consume content.
 Callbacks run synchronously in the producer's execution context. A canceled
 listener is skipped if it has not started; cancellation does not wait for a
