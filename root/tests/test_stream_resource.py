@@ -9,7 +9,7 @@
 # Delegates: Source storage to a mock byte source.
 # ==============================================================================
 
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import almasi
 
@@ -24,7 +24,7 @@ class TestStreamResource(almasi.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_ranges(cls):
-		resource = almasi.StreamResource()
+		resource = almasi.resources.Stream()
 		data     = b'abcdef'
 
 		assert isinstance(resource, almasi.Resource)
@@ -43,7 +43,7 @@ class TestStreamResource(almasi.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_invalid_ranges(cls):
-		resource = almasi.StreamResource()
+		resource = almasi.resources.Stream()
 
 		with patch.object(resource, '_read') as source:
 			for position, length in ((-1, None), (0, -1), ('1', None), (True, None), (0, 1.5)):
@@ -57,6 +57,39 @@ class TestStreamResource(almasi.Tester):
 				assert rejected
 
 			source.assert_not_called()
+
+	# Independent registrations remain on their own stream and can be canceled.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_subscriptions(cls):
+		resource = almasi.resources.Stream()
+		other    = almasi.resources.Stream()
+		callback = Mock()
+
+		resource.update()
+		first  = resource.subscribe(callback)
+		second = resource.subscribe(callback)
+		third  = other.subscribe(callback)
+
+		try:
+			resource.update()
+			assert callback.call_count == 2
+
+			resource.unsubscribe(first)
+			resource.unsubscribe(first)
+			resource.update()
+			assert callback.call_count == 3
+
+			other.update()
+			assert callback.call_count == 4
+
+			resource.unsubscribe(second)
+			resource.update()
+			assert callback.call_count == 4
+		finally:
+			resource.unsubscribe(first)
+			resource.unsubscribe(second)
+			other.unsubscribe(third)
 
 
 if __name__ == '__main__':

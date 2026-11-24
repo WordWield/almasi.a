@@ -15,12 +15,9 @@ from lib.imports             import Imports
 from lib.module              import Module, ModuleMeta
 from lib.singleton           import Singleton
 from lib.reloadable          import Reloadable, ReloadableModule, ReloadableSingleton
-from lib.subscribable        import Subscribable
-from lib.subscription        import Subscription
 from lib.logger              import Logger
 from lib.string              import String
 from lib.resource            import Resource
-from lib.stream_resource     import StreamResource
 from lib.filesystem_resource import FilesystemResource
 from lib.file                import File
 from lib.directory           import Directory
@@ -107,7 +104,6 @@ class A(metaclass=AMeta, plugins=['Py', 'Json', 'Text', 'Bytes']):
 	Module        = Module
 	Logger        = Logger
 	Resource           = Resource
-	StreamResource     = StreamResource
 	FilesystemResource = FilesystemResource
 	File          = File
 	Directory     = Directory
@@ -116,8 +112,6 @@ class A(metaclass=AMeta, plugins=['Py', 'Json', 'Text', 'Bytes']):
 	Reloadable          = Reloadable
 	ReloadableModule    = ReloadableModule
 	ReloadableSingleton = ReloadableSingleton
-	Subscribable  = Subscribable
-	Subscription = Subscription
 	Imports       = Imports
 	Undefined     = Undefined
 	String        = String
@@ -156,7 +150,7 @@ class A(metaclass=AMeta, plugins=['Py', 'Json', 'Text', 'Bytes']):
 				raise AttributeError(f'Library `{self.__name__}` has no attribute `{name}`')
 			result = self.services.Libraries.imp(name)
 		else:
-			result = value.load()
+			result = value.read()
 		self.__dict__[name] = result
 		self.__cached_names__.add(name)
 		return result

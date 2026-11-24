@@ -1,10 +1,16 @@
 # ==============================================================================
 # FILESYSTEM RESOURCE
 # ==============================================================================
-# Represent a filesystem carrier with its library namespace and watcher.
+# PURPOSE:
+# Represent a filesystem carrier in its effective library namespace.
+#
+# RESPONSIBILITY BOUNDARIES:
+# Owns: Carrier identity in its supplying and effective namespaces.
+# Delegates: Reading to concrete carriers and observation to Filesystem.
 # ==============================================================================
 
 import os
+from importlib import import_module
 
 from .resource import Resource
 
@@ -21,12 +27,22 @@ class FilesystemResource(Resource):
 		self.__lib__         = lib
 		self.__path__        = os.path.realpath(path)
 		self.__route__       = route
-		self._namespace_lib = lib
+		self._namespace_lib  = lib
 
 	# Describe the carrier without realizing its content.
 	# --------------------------------------------------------------------------
 	def __repr__(self):
 		return f'<{type(self).__name__} `{self.get_route()}` path=`{self.get_path()}`>'
+
+	# ======================================================================
+	# PRIVATE METHODS
+	# ======================================================================
+
+	# Import the published Almasi instance, not its entry module during startup.
+	# ----------------------------------------------------------------------
+	@property
+	def _observe(self):
+		return import_module('almasi').services.Filesystem.observe
 
 	# ==========================================================================
 	# PUBLIC METHODS
@@ -56,13 +72,3 @@ class FilesystemResource(Resource):
 	# --------------------------------------------------------------------------
 	def get_stem(self):
 		return os.path.splitext(self.get_name())[0]
-
-	# Read through the existing format plugin or directory loader.
-	# --------------------------------------------------------------------------
-	def read(self):
-		return self.load()
-
-	# Observe the effective resource without owning a filesystem watcher.
-	# --------------------------------------------------------------------------
-	def subscribe(self, callback):
-		return self._namespace_lib.services.Filesystem.subscribe({self}, callback)

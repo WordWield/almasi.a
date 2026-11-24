@@ -87,8 +87,8 @@ class Counter(a.ReloadableSingleton):
 		return self.value
 ```
 
-The loaded source class owns one `a.File` subscription. A successful reload
-transfers that subscription to its replacement class, without a global registry
+The loaded source class retains its exact `a.File` and opaque subscription ID.
+A successful reload transfers these to its replacement class, without a global registry
 of observed source paths. When the source changes, it invokes the existing
 `__reload__()` behavior, preserving live instances and state.
 If replacement fails, the current published class remains in place and the

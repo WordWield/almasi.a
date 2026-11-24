@@ -39,7 +39,7 @@ class Directory(FilesystemResource):
 		if value is None:
 			raise AttributeError(f'Module `{self.get_route()}.{name}` does not exist or no loading method is provided')
 
-		result = value.load()
+		result = value.read()
 		self.__dict__[name] = result
 		self.__cached_names__.add(name)
 		return result
@@ -274,7 +274,7 @@ class Directory(FilesystemResource):
 			if child is not None and child.get_path() != path:
 				directory._invalidate_children(path)
 
-			directory = directory.__resolve__(name).load()
+			directory = directory.__resolve__(name).read()
 			if not isinstance(directory, Directory):
 				raise TypeError(f'Not a directory: {path}')
 
@@ -380,7 +380,22 @@ class Directory(FilesystemResource):
 
 		return modules
 
-	# Realize a directory as its native namespace face.
+	# Read the namespace or resolve one exact child filename.
 	# ----------------------------------------------------------------------
-	def load(self):
-		return self
+	def read(self, name=None):
+		result = self
+
+		if name is not None:
+			self._destination(name)
+			self._plugin(name)
+			file = self.__resolve__(name)
+
+			if file is not None:
+				if isinstance(file, File):
+					result = file.read()
+				else:
+					raise IsADirectoryError(file.get_path())
+			else:
+				raise FileNotFoundError(self.join(name))
+
+		return result
