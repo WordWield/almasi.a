@@ -43,9 +43,11 @@ process.stdout.unsubscribe(subscription)
 - `stdin`: the native unbuffered binary subprocess pipe, available after
   launch. `write(data)` returns the number of bytes accepted; callers must
   handle partial writes and broken pipes. `close()` sends EOF.
-- `stdout`, `stderr`: stable `almasi.resources.Stream` instances. Read and
+- `stdout`, `stderr`: stable `almasi.resources.Log` instances (Stream subclasses). Read and
   subscribe before or after launch. Only the process producer writes or
-  closes them. History remains readable after completion.
+  closes them. History remains readable after completion. Use ordinary byte
+  reads or `read(since=timestamp)` for timestamped capture chunks; explicit
+  `since=None` selects all retained entries. See architecture.resource.md.
 - `state`: stable `almasi.resources.Writable` containing a mapping with
   `status` ('created', 'running', 'exited', or 'failed') and `returncode`
   (None before exit, integer afterward). A nonzero child exit is still

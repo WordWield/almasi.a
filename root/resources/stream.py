@@ -51,26 +51,43 @@ class Stream(a.Resource):
 
 		return length
 
-	# Read retained bytes without exposing or consuming the file cursor.
+	# Read retained bytes while the caller holds the storage lock.
 	# ----------------------------------------------------------------------
 	def _read(self, position: int, length: int | None) -> bytes:
-		with self._lock:
-			if position >= self.start_position:
-				available = max(0, self._end_position - position)
-				size      = available if length is None else min(available, length)
-				result    = b''
+		if position >= self.start_position:
+			available = max(0, self._end_position - position)
+			size      = available if length is None else min(available, length)
+			result    = b''
 
-				if size:
-					first  = self._seek(position, size)
-					result = self._file.read(first)
+			if size:
+				first  = self._seek(position, size)
+				result = self._file.read(first)
 
-					if first < size:
-						self._file.seek(0)
-						result += self._file.read(size - first)
-			else:
-				raise ValueError('Stream position is no longer retained')
+				if first < size:
+					self._file.seek(0)
+					result += self._file.read(size - first)
+		else:
+			raise ValueError('Stream position is no longer retained')
 
 		return result
+
+	# Append bytes while the caller holds the storage lock.
+	# ----------------------------------------------------------------------
+	def _append(self, data: bytes):
+		end = self._end_position + len(data)
+
+		if self._max_bytes is not None:
+			data = memoryview(data)[-self._max_bytes:]
+
+		first = self._seek(end - len(data), len(data))
+		self._file.write(data[:first])
+
+		if first < len(data):
+			self._file.seek(0)
+			self._file.write(data[first:])
+
+		self._file.flush()
+		self._end_position = end
 
 	# ======================================================================
 	# PUBLIC METHODS
@@ -106,7 +123,8 @@ class Stream(a.Resource):
 
 		if type(position) is int and position >= 0:
 			if length is None or (type(length) is int and length >= 0):
-				result = self._read(position, length)
+				with self._lock:
+					result = self._read(position, length)
 			else:
 				raise ValueError('length must be a non-negative integer or None')
 		else:
@@ -121,20 +139,7 @@ class Stream(a.Resource):
 			if not self._closed:
 				if isinstance(data, bytes):
 					if data:
-						end = self._end_position + len(data)
-
-						if self._max_bytes is not None:
-							data = memoryview(data)[-self._max_bytes:]
-
-						first = self._seek(end - len(data), len(data))
-						self._file.write(data[:first])
-
-						if first < len(data):
-							self._file.seek(0)
-							self._file.write(data[first:])
-
-						self._file.flush()
-						self._end_position = end
+						self._append(data)
 				else:
 					raise TypeError('Stream data must be bytes')
 			else:

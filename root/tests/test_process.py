@@ -65,6 +65,10 @@ class TestProcess(a.Tester):
 			assert process.stdout is stdout
 			assert process.stderr is stderr
 			assert process.state is state
+			assert isinstance(stdout, a.resources.Log)
+			assert isinstance(stderr, a.resources.Log)
+			assert b''.join(entry['data'] for entry in stdout.read(since=None)['log']) == b'input'
+			assert b''.join(entry['data'] for entry in stderr.read(since=None)['log']) == b'error'
 			assert stdout.read() == b'input'
 			assert stderr.read() == b'error'
 			assert stdout.closed and stderr.closed

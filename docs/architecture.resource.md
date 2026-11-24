@@ -112,6 +112,51 @@ assert stream.closed
 stream.unsubscribe(subscription_id)
 ~~~
 
+## Logs
+
+`almasi.resources.Log(max_bytes=None)` specializes Stream without changing
+its byte-oriented reads, writes, retention or subscriptions. Each nonempty
+write adds one timestamp and exclusive byte-end position to a second temporary
+file. A binary search locates the first selected entry in O(log N) index
+reads; the selected data is read once. A bounded stream also bounds the index
+to at most one 16-byte record per retained byte. No reader state is stored.
+
+- `read(position=None, length=None)` returns bytes exactly as for Stream.
+- `read(since=None)` returns all retained timestamped entries. Pass a finite
+  Unix timestamp to select entries at or after that time (inclusive).
+  Byte and timestamp coordinates cannot be combined.
+- The result is `{'log': [{'timestamp': float, 'data': bytes}, ...],
+  'last_timestamp': float | None}`. With no matching entries, last_timestamp
+  is the supplied since (or None). Pass it as since on the next read; equal
+  timestamps can repeat intentionally. Core preserves bytes; text decoding
+  and JSON serialization belong to consumers.
+- Timestamps use the producer's capture time in Unix seconds, not the time
+  the child generated a message. Each write is one entry, not necessarily a
+  complete line or UTF-8 character. Timestamps are clamped to the preceding
+  entry's timestamp if the clock moves backward within this Log.
+- If bounded retention expires bytes, timestamp reads return only retained
+  entries, including a partial first entry when applicable. Byte reads keep
+  the ordinary expired-position error contract.
+- Both temporary files are released with the resource. Neither survives the
+  owning process's exit. A replacement Log does not inherit its history.
+  Writes and time reads share the Stream lock; notifications run after index
+  publication. Disk I/O failures propagate; temporary storage is not durable
+  or crash-transactional.
+
+Example:
+
+~~~python
+import almasi
+
+log = almasi.resources.Log()
+log.write(b'hello\\n')
+result = log.read(since=None)
+assert result['log'][0]['data'] == b'hello\\n'
+log.write(b'next\\n')
+new = log.read(since=result['last_timestamp'])
+assert new['log'][-1]['data'] == b'next\\n'
+~~~
+
 ## Verification
 
 Native resource, stream and filesystem tests cover separate handles, source
