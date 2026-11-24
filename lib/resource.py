@@ -52,11 +52,8 @@ class Resource(Module):
 	def subscribe(self, callback):
 		if callable(callback):
 			subscription = Subscription(self, callback)
-
-			if self._subscriptions is None:
-				self._subscriptions = {}
-
-			self._subscriptions[subscription] = True
+			listeners    = self.__dict__.setdefault('_subscriptions', {})
+			listeners[subscription] = True
 
 			if self._observe is not None:
 				try:
@@ -78,11 +75,11 @@ class Resource(Module):
 
 	# Notify live listeners in registration order without consuming content.
 	# ----------------------------------------------------------------------
-	def update(self, *args):
+	def update(self, changed=None, *args):
 		subscriptions = self._subscriptions
 
 		if subscriptions:
-			args = args or (None,)
+			args = (changed, *args)
 
 			for subscription in tuple(subscriptions):
 				if subscription in subscriptions:
