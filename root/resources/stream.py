@@ -56,7 +56,7 @@ class Stream(almasi.Resource):
 	def _read(self, position: int, length: int | None) -> bytes:
 		with self._lock:
 			if position >= self.start_position:
-				available = max(0, self.end_position - position)
+				available = max(0, self._end_position - position)
 				size      = available if length is None else min(available, length)
 				result    = b''
 
