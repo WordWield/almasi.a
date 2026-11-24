@@ -4,8 +4,8 @@
 
 `almasi.Resource` owns independently cancellable subscriptions. Every
 `resource.subscribe(callback)` registers one callable and returns a distinct
-`Subscription` with a resource and callback. `subscription.cancel()` calls
-`resource.unsubscribe(subscription)`; cancellation is idempotent. There is no
+opaque registration ID. `resource.unsubscribe(subscription_id)` cancels
+that registration; cancellation is idempotent. There is no
 identifier scope on a listener. `resource.is_subscribed()` reports whether
 external observation is needed.
 
@@ -49,8 +49,8 @@ Example:
 import almasi
 
 resource = almasi.File(almasi, '/tmp/example.txt', 'almasi.example')
-subscription = resource.subscribe(print)
-subscription.cancel()
+subscription_id = resource.subscribe(print)
+resource.unsubscribe(subscription_id)
 ~~~
 
 ## Streams

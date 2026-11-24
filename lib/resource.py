@@ -11,8 +11,7 @@
 
 import logging
 
-from .module       import Module
-from .subscription import Subscription
+from .module import Module
 
 
 class Resource(Module):
@@ -51,26 +50,28 @@ class Resource(Module):
 	# ----------------------------------------------------------------------
 	def subscribe(self, callback):
 		if callable(callback):
-			subscription = Subscription(self, callback)
-			listeners    = self.__dict__.setdefault('_subscriptions', {})
-			listeners[subscription] = True
+			subscription_id = object()
+			listeners       = self.__dict__.setdefault('_subscriptions', {})
+			listeners[subscription_id] = callback
 
 			if self._observe is not None:
 				try:
 					self._observe(self)
 				except BaseException:
-					self._subscriptions.pop(subscription, None)
+					listeners.pop(subscription_id, None)
 					raise
 		else:
 			raise TypeError('Subscription callback must be callable')
 
-		return subscription
+		return subscription_id
 
 	# Remove one listener and release observation after the last listener.
 	# ----------------------------------------------------------------------
-	def unsubscribe(self, subscription):
-		if self._subscriptions and self._subscriptions.pop(subscription, None):
-			if self._observe is not None:
+	def unsubscribe(self, subscription_id):
+		if self._subscriptions:
+			callback = self._subscriptions.pop(subscription_id, None)
+
+			if callback is not None and self._observe is not None:
 				self._observe(self)
 
 	# Notify live listeners in registration order without consuming content.
@@ -81,10 +82,12 @@ class Resource(Module):
 		if subscriptions:
 			args = (changed, *args)
 
-			for subscription in tuple(subscriptions):
-				if subscription in subscriptions:
+			for subscription_id in tuple(subscriptions):
+				callback = subscriptions.get(subscription_id)
+
+				if callback is not None:
 					try:
-						subscription.callback(*args)
+						callback(*args)
 					except Exception:
 						if self._observe is not None:
 							logging.exception('Subscription callback failed')

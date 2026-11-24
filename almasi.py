@@ -15,7 +15,6 @@ from lib.imports             import Imports
 from lib.module              import Module, ModuleMeta
 from lib.singleton           import Singleton
 from lib.reloadable          import Reloadable, ReloadableModule, ReloadableSingleton
-from lib.subscription        import Subscription
 from lib.logger              import Logger
 from lib.string              import String
 from lib.resource            import Resource
@@ -115,7 +114,6 @@ class A(metaclass=AMeta, plugins=['Py', 'Json', 'Text', 'Bytes']):
 	Reloadable          = Reloadable
 	ReloadableModule    = ReloadableModule
 	ReloadableSingleton = ReloadableSingleton
-	Subscription = Subscription
 	Imports       = Imports
 	Undefined     = Undefined
 	String        = String

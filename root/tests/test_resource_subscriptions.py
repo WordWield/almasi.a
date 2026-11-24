@@ -68,7 +68,7 @@ class TestResourceSubscriptions(almasi.Tester):
 
 		resource.update()
 		callback.assert_called_once_with(None)
-		handle.cancel()
+		resource.unsubscribe(handle)
 
 		resource.update()
 		callback.assert_called_once_with(None)
@@ -80,15 +80,16 @@ class TestResourceSubscriptions(almasi.Tester):
 		resource = almasi.Resource()
 		callback = Mock()
 
-		first  = resource.subscribe(Mock())
-		second = resource.subscribe(callback)
-		first.callback.side_effect = lambda changed: second.cancel()
+		cancel_second = Mock()
+		first         = resource.subscribe(cancel_second)
+		second        = resource.subscribe(callback)
+		cancel_second.side_effect = lambda changed: resource.unsubscribe(second)
 
 		resource.update()
 		resource.update()
 
 		assert callback.call_count == 0
-		first.cancel()
+		resource.unsubscribe(first)
 		assert not resource.is_subscribed()
 
 	# A failing externally observed listener must not suppress its neighbors.
@@ -111,8 +112,8 @@ class TestResourceSubscriptions(almasi.Tester):
 					callback.assert_called_once_with({'failure.txt': 'modified'})
 					report.assert_called_once_with('Subscription callback failed')
 				finally:
-					first.cancel()
-					second.cancel()
+					file.unsubscribe(first)
+					file.unsubscribe(second)
 
 	# An already running callback does not prevent cancellation.
 	# ----------------------------------------------------------------------
@@ -128,7 +129,7 @@ class TestResourceSubscriptions(almasi.Tester):
 
 		try:
 			assert started.wait(2)
-			handle.cancel()
+			resource.unsubscribe(handle)
 			resource.update()
 		finally:
 			release.set()
@@ -198,8 +199,8 @@ class TestResourceSubscriptions(almasi.Tester):
 				assert len(got_dir) == 1
 				assert directory.notes == 'after'
 
-				file_handle.cancel()
-				dir_handle.cancel()
+				file.unsubscribe(file_handle)
+				directory.unsubscribe(dir_handle)
 
 	# Resolve symlinked event roots to the same identity as watched roots.
 	# --------------------------------------------------------------------------
@@ -224,7 +225,7 @@ class TestResourceSubscriptions(almasi.Tester):
 				handle = file.subscribe(events.append)
 				service._changed_paths(alias, {os.path.join(alias, 'notes.txt'): 'modified'})
 				assert events == [{'notes.txt': 'modified'}]
-				handle.cancel()
+				file.unsubscribe(handle)
 
 	# Keep a directory subscribed across removal and subsequent recreation.
 	# --------------------------------------------------------------------------
@@ -249,7 +250,7 @@ class TestResourceSubscriptions(almasi.Tester):
 				service._changed_paths(parent, {root: 'created'})
 				assert events[-1] == {'foo': 'created'}
 
-				handle.cancel()
+				directory.unsubscribe(handle)
 				assert not directory.is_subscribed()
 
 	# Match recursive changes and preserve more than one thousand paths.
@@ -275,7 +276,7 @@ class TestResourceSubscriptions(almasi.Tester):
 				assert len(events[0]) == 1001
 				assert events[0]['foo/nested/item_500.js'] == 'modified'
 
-				handle.cancel()
+				directory.unsubscribe(handle)
 
 	# Moving interest between resources releases the previous OS observation.
 	# --------------------------------------------------------------------------
@@ -296,7 +297,7 @@ class TestResourceSubscriptions(almasi.Tester):
 
 			with patch.object(type(service), '_watch', return_value=None):
 				handle = one.subscribe(events.append)
-				handle.cancel()
+				one.unsubscribe(handle)
 				handle = two.subscribe(events.append)
 				assert one not in service._resources
 				assert two in service._resources
@@ -306,8 +307,8 @@ class TestResourceSubscriptions(almasi.Tester):
 				service._changed_paths(root, {two_path: 'modified'})
 				assert len(events) == 1
 
-				handle.cancel()
-				handle.cancel()
+				two.unsubscribe(handle)
+				two.unsubscribe(handle)
 				assert os.path.realpath(root) not in service._watchers
 				assert one not in service._resources
 				assert two not in service._resources
@@ -336,14 +337,14 @@ class TestResourceSubscriptions(almasi.Tester):
 				assert first == [{'shared.txt': 'modified'}]
 				assert second == [{'shared.txt': 'modified'}]
 
-				left.cancel()
+				file.unsubscribe(left)
 				assert os.path.realpath(root) in service._watchers
 
 				service._changed_paths(root, {path: 'modified'})
 				assert len(first) == 1
 				assert len(second) == 2
 
-				right.cancel()
+				file.unsubscribe(right)
 				assert os.path.realpath(root) not in service._watchers
 				assert file not in service._resources
 
@@ -405,7 +406,7 @@ class TestResourceSubscriptions(almasi.Tester):
 				source._changed_paths(child.__path__, {c_path: 'deleted'})
 				assert len(events) == 3
 
-				handle.cancel()
+				file.unsubscribe(handle)
 
 	# Resolve inherited unregistered file extensions without plugin filtering.
 	# --------------------------------------------------------------------------
@@ -451,7 +452,7 @@ class TestResourceSubscriptions(almasi.Tester):
 				source._changed_paths(child.__path__, {child_path: 'deleted'})
 				assert source._effective(file) == parent_path
 				assert len(events) == 2
-				handle.cancel()
+				file.unsubscribe(handle)
 
 	# A fork resolves its own concrete Filesystem singleton and registrations.
 	# --------------------------------------------------------------------------
@@ -471,7 +472,7 @@ class TestResourceSubscriptions(almasi.Tester):
 				handle = file.subscribe(lambda changed: None)
 				assert file in one._resources
 				assert not two._resources
-				handle.cancel()
+				file.unsubscribe(handle)
 				assert not one._watchers
 
 	# Nested filesystem notifications keep each batch's own change details.
@@ -497,7 +498,7 @@ class TestResourceSubscriptions(almasi.Tester):
 					{'nested.txt': 'created'},
 					{'nested.txt': 'deleted'}
 				]
-				handle.cancel()
+				file.unsubscribe(handle)
 
 	# Concurrent producers do not exchange or overwrite filesystem metadata.
 	# --------------------------------------------------------------------------
@@ -531,7 +532,7 @@ class TestResourceSubscriptions(almasi.Tester):
 
 				assert all(not thread.is_alive() for thread in threads)
 				assert {entry['parallel.txt'] for entry in received} == {'modified', 'deleted'}
-				handle.cancel()
+				file.unsubscribe(handle)
 
 	# The real watchfiles producer observes an external file modification.
 	# --------------------------------------------------------------------------
@@ -559,7 +560,7 @@ class TestResourceSubscriptions(almasi.Tester):
 				assert received.is_set()
 				assert any('observed.txt' in key for event in events for key in event)
 			finally:
-				handle.cancel()
+				file.unsubscribe(handle)
 
 
 if __name__ == '__main__':

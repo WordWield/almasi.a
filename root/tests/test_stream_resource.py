@@ -75,21 +75,21 @@ class TestStreamResource(almasi.Tester):
 			resource.update()
 			assert callback.call_count == 2
 
-			first.cancel()
-			first.cancel()
+			resource.unsubscribe(first)
+			resource.unsubscribe(first)
 			resource.update()
 			assert callback.call_count == 3
 
 			other.update()
 			assert callback.call_count == 4
 
-			second.cancel()
+			resource.unsubscribe(second)
 			resource.update()
 			assert callback.call_count == 4
 		finally:
-			first.cancel()
-			second.cancel()
-			third.cancel()
+			resource.unsubscribe(first)
+			resource.unsubscribe(second)
+			other.unsubscribe(third)
 
 
 if __name__ == '__main__':
