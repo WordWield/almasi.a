@@ -2,10 +2,10 @@
 # LOG
 # ==============================================================================
 # PURPOSE:
-# Add a timestamp coordinate to a live byte stream using a temporary index.
+# Expose timestamped text from a live byte stream using a temporary index.
 #
 # RESPONSIBILITY BOUNDARIES:
-# Owns: Timestamp ordering, index retention and time-based reads.
+# Owns: Timestamp ordering, index retention and time-based text reads.
 # Delegates: Byte storage, synchronization and notifications to Stream.
 # ==============================================================================
 
@@ -108,7 +108,10 @@ class Log(a.resources.Stream):
 					timestamp, end = self._entry(entry)
 					next_offset    = end - position
 
-					log.append({'timestamp': timestamp, 'data': data[offset:next_offset]})
+					log.append({
+						'timestamp' : timestamp,
+						'text'      : data[offset:next_offset].decode('utf-8', errors='replace')
+					})
 
 					offset         = next_offset
 					last_timestamp = timestamp
