@@ -28,3 +28,10 @@ jobs:
 
       - name: Test installed distribution
         run: cd "$RUNNER_TEMP" && python -c 'import almasi; almasi.tester.run()'
+
+      - name: Measure Stream performance
+        run: |
+          git fetch --depth=1 origin b8f6ee2e8fa3a9295ce4fcb242a873186b5f019f
+          git show b8f6ee2e8fa3a9295ce4fcb242a873186b5f019f:root/resources/stream.py > "$RUNNER_TEMP/stream_before.py"
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/root/tests/_benchmark_stream.py" "$RUNNER_TEMP/stream_before.py"
