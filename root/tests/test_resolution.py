@@ -104,8 +104,8 @@ class TestResolution(a.Tester):
 			routes    = sorted(child.get_route() for child in children)
 
 			assert routes == [
-				'almasi.tests_runtime.IterOne',
-				'almasi.tests_runtime.IterTwo',
+				'almasi.a.tests_runtime.IterOne',
+				'almasi.a.tests_runtime.IterTwo',
 			]
 			assert all(isinstance(child, a.File) for child in children)
 			assert all(child._data is None for child in children)
