@@ -41,8 +41,8 @@ class Process:
 		self._cwd     = cwd
 		self._env     = env
 
-		self._stdout = resources.Stream(max_bytes=max_bytes)
-		self._stderr = resources.Stream(max_bytes=max_bytes)
+		self._stdout = resources.Log(max_bytes=max_bytes)
+		self._stderr = resources.Log(max_bytes=max_bytes)
 		self._state  = resources.Writable({'status': 'created', 'returncode': None})
 
 		self._process    = None
