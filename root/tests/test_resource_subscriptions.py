@@ -68,6 +68,70 @@ class TestResourceSubscriptions(almasi.Tester):
 		resource.update()
 		callback.assert_called_once_with(None)
 
+	# Cancellation inside dispatch suppresses a listener that has not run yet.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_cancel_during_dispatch(cls):
+		resource = almasi.Resource()
+		callback = Mock()
+
+		first  = resource.subscribe(Mock())
+		second = resource.subscribe(callback)
+		first.callback.side_effect = lambda changed: second.cancel()
+
+		resource.update()
+		resource.update()
+
+		assert callback.call_count == 0
+		first.cancel()
+		assert not resource.is_subscribed()
+
+	# A failing externally observed listener must not suppress its neighbors.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_callback_failure_isolation(cls):
+		with tempfile.TemporaryDirectory() as root:
+			file     = almasi.File(almasi, os.path.join(root, 'failure.txt'), 'almasi.failure')
+			service  = almasi.services.Filesystem
+			callback = Mock()
+
+			with patch.object(type(service), '_watch', return_value=None):
+				first  = file.subscribe(Mock(side_effect=ValueError('intentional')))
+				second = file.subscribe(callback)
+
+				try:
+					with patch('lib.resource.logging.exception') as report:
+						file.update({'failure.txt': 'modified'})
+
+					callback.assert_called_once_with({'failure.txt': 'modified'})
+					report.assert_called_once_with('Subscription callback failed')
+				finally:
+					first.cancel()
+					second.cancel()
+
+	# An already running callback does not prevent cancellation.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_nonblocking_cancel(cls):
+		resource = almasi.Resource()
+		started  = threading.Event()
+		release  = threading.Event()
+		callback = Mock(side_effect=lambda changed: (started.set(), release.wait(2)))
+		handle   = resource.subscribe(callback)
+		worker   = threading.Thread(target=resource.update)
+		worker.start()
+
+		try:
+			assert started.wait(2)
+			handle.cancel()
+			resource.update()
+		finally:
+			release.set()
+			worker.join(2)
+
+		assert not worker.is_alive()
+		callback.assert_called_once_with(None)
+
 	# Keep the generic read route compatible with file and directory APIs.
 	# --------------------------------------------------------------------------
 	@classmethod
@@ -174,14 +238,14 @@ class TestResourceSubscriptions(almasi.Tester):
 				shutil.rmtree(root)
 				service._changed_paths(parent, {root: 'deleted'})
 				assert events[-1] == {'foo': 'deleted'}
-				assert handle._active
+				assert directory.is_subscribed()
 
 				os.mkdir(root)
 				service._changed_paths(parent, {root: 'created'})
 				assert events[-1] == {'foo': 'created'}
 
 				handle.cancel()
-				assert not handle._active
+				assert not directory.is_subscribed()
 
 	# Match recursive changes and preserve more than one thousand paths.
 	# --------------------------------------------------------------------------
