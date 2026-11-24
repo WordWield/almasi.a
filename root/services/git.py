@@ -45,14 +45,23 @@ class Git(a.Singleton):
 		environment[f'GIT_CONFIG_VALUE_{index}'] = os.devnull
 		environment['GIT_CONFIG_COUNT']         = str(index + 1)
 
-		return subprocess.run(
-			arguments,
-			env            = environment,
-			capture_output = True,
-			text           = True,
-			timeout        = timeout,
-			check          = check
-		)
+		try:
+			result = subprocess.run(
+				arguments,
+				env            = environment,
+				capture_output = True,
+				text           = True,
+				timeout        = timeout,
+				check          = check
+			)
+		except subprocess.CalledProcessError as error:
+			for output in (error.stdout, error.stderr):
+				if output and output.strip():
+					error.add_note(output.strip())
+
+			raise
+
+		return result
 
 	# Validate an explicit GitHub owner/name, never a URL or shell option.
 	# ----------------------------------------------------------------------

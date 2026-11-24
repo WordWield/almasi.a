@@ -11,6 +11,7 @@
 
 import os
 import subprocess
+import sys
 import tempfile
 
 from unittest.mock import patch
@@ -145,6 +146,20 @@ class TestGit(a.Tester):
 				assert environment['GIT_CONFIG_VALUE_0'] == os.devnull
 				assert environment['GIT_TERMINAL_PROMPT'] == '0'
 				assert environment['GH_PROMPT_DISABLED'] == '1'
+
+	# Retain native exceptions while exposing captured diagnostics in tracebacks.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_failure_diagnostics(cls):
+		git = a.services.Git
+
+		try:
+			git._run([sys.executable, '-c', 'import sys; print("rejected", file=sys.stderr); sys.exit(1)'])
+		except subprocess.CalledProcessError as error:
+			assert error.returncode == 1
+			assert 'rejected' in error.__notes__
+		else:
+			assert False, 'The command must fail'
 
 	# Distinguish a missing repository from authentication and network errors.
 	# ----------------------------------------------------------------------

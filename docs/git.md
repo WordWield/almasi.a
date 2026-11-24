@@ -43,3 +43,6 @@ for example with `gh auth login --hostname github.com` and
 Core Git commands disable client-side Git hooks and terminal prompts for their
 subprocesses, including Git children started by `gh`. Normal manual Git commands,
 user configuration and server-side repository checks are unchanged.
+
+Failed checked commands retain their native CalledProcessError and attach
+captured stdout and stderr as exception notes, visible in the traceback.
