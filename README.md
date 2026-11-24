@@ -1,9 +1,9 @@
-# Almasi
+# Almasi Core (`a`)
 
 **What if your codebase was already your runtime architecture?**
 Almasi is an open-source Python foundation that turns source structure into a live, composable namespace—without a separate layer of registration and wiring.
 **For developers:** fewer moving parts, lazy components, natural composition. **For ambitious products:** a common foundation for persistent state and AI agents.
-![Almasi — the winged white elephant dancing with its trunk held high](https://raw.githubusercontent.com/WordWield/almasi/master/assets/almasi-elephant.png)
+![Almasi — the winged white elephant dancing with its trunk held high](https://raw.githubusercontent.com/WordWield/almasi.a/master/assets/almasi-elephant.png)
 
 [Watch the 2-minute overview](https://www.youtube.com/watch?v=eCk6kiAriR0) · [Persistent objects: Almasi O](https://github.com/WordWield/almasi.o) · [Agents: Almasi Do](https://github.com/WordWield/almasi.do)
 
@@ -23,7 +23,7 @@ from almasi import o
 print(o)  # <Library 'almasi.o'>
 ```
 
-On first access, Almasi retrieves the library's Git source, installs its declared dependencies and publishes its canonical Python namespace. Repeated imports reuse that instance. **The core stays small; libraries arrive when needed.** Git and internet access are required for first acquisition.
+On first access, Almasi retrieves the library's Git source, installs its declared dependencies and publishes its canonical Python namespace. Repeated imports reuse that instance. **The installed loader stays small; even Core arrives when needed.** Git and internet access are required for first acquisition.
 
 Or define a filesystem-native library yourself:
 
@@ -35,9 +35,9 @@ root/
 
 ```python
 # mylib.py
-import almasi
+from almasi import a
 
-mylib = almasi.extend('mylib')
+mylib = a.extend('mylib')
 ```
 
 ```python
@@ -53,7 +53,7 @@ class Greetings(mylib.Module):
 ```python
 import mylib
 
-print(mylib.greetings().hello())
+print(mylib.Greetings().hello())
 ```
 
 A file becomes a module in the runtime namespace when it is needed. No manual registry of `greetings`, no generated integration layer.
@@ -75,7 +75,7 @@ Most frameworks describe the same system repeatedly: files, package exports, ser
 
 ### A family, not a monolith
 
-**[Almasi Core](https://github.com/WordWield/almasi)** — runtime identity, filesystem-native discovery and library composition.
+**[Almasi Core](https://github.com/WordWield/almasi.a)** — runtime identity, filesystem-native discovery and library composition.
 
 **[Almasi O](https://github.com/WordWield/almasi.o)** — a persistent Python ontology: typed entities, identity, relationships, nested collections, schemas and LMDB-backed state.
 
@@ -88,9 +88,9 @@ The larger opportunity is architectural: applications and agents can build on sh
 A library entry point declares its name through `extend()`:
 
 ```python
-import almasi
+from almasi import a
 
-mylib = almasi.extend('mylib')
+mylib = a.extend('mylib')
 ```
 
 The entry file and library name must match, and a sibling `root/` directory must exist. Components stored under `root/` are resolved by their names, loaded when accessed and cached. Python components are classes derived from `Module`; other supported files use registered plugins.
@@ -118,8 +118,8 @@ assert mylib.remote == 'external value'
 ```
 
 `__fallback__` defaults to `None` (disabled). Existing Python attributes and
-native filesystem resolution always take precedence; Core's native lazy
-library import is unchanged. If native lookup finds no component, the
+native filesystem resolution always take precedence. Library acquisition is
+independent and belongs to the installed loader. If native lookup finds no component, the
 library returns `getattr(library.__fallback__, name)` for public names
 (names not beginning with an underscore). The result is not cached as a
 filesystem component, even when it is `None`. AttributeError from the
@@ -168,12 +168,12 @@ Almasi explores a focused thesis: **complexity should emerge from necessity, not
 
 This is relevant to AI-native applications, agent infrastructure, developer tooling and software that needs persistent, inspectable structure. The three libraries demonstrate distinct layers of that thesis; there are no claimed adoption or benchmark numbers beyond published project tests.
 
-- [Source and issues](https://github.com/WordWield/almasi)
+- [Source and issues](https://github.com/WordWield/almasi.a)
 - [Architecture and invariants](docs/almasi_invariants8.md)
-- [Python CI](https://github.com/WordWield/almasi/actions/workflows/python-tests.yml)
+- [Python CI](https://github.com/WordWield/almasi.a/actions/workflows/python-tests.yml)
 
 ## Project status
 
-Python 3.11+; Apache-2.0. The core builds as a wheel and is tested in CI on Python 3.11 and 3.12. Published on [PyPI](https://pypi.org/project/almasi/); install with `pip install almasi`.
+Python 3.11+; Apache-2.0. Core is acquired from Git by the [Almasi loader](https://github.com/WordWield/almasi). Install the loader with `pip install almasi`, then use `from almasi import a`. The split requires loader 0.2.0 or later.
 
 **Created by Alexander Podgorny** — AI systems architect and researcher. [Connect on LinkedIn](https://www.linkedin.com/in/podgorny/).

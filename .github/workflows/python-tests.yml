@@ -1,4 +1,4 @@
-name: Python tests
+name: Core Python tests
 
 on:
   push:
@@ -13,25 +13,25 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: core
+      - uses: actions/checkout@v4
+        with:
+          repository: WordWield/almasi
+          ref: master
+          path: loader
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Build release artifacts
+      - name: Install loader and Core dependencies
         run: |
-          python -m pip install build
-          python -m build
-
-      - name: Install built wheel
+          python -m pip install ./loader
+          python -m pip install -r ./core/requirements.txt
+      - name: Expose Core checkout without updating it
         run: |
-          python -m pip install dist/almasi-*.whl
-          python -m pip check
-
-      - name: Test installed distribution
-        run: cd "$RUNNER_TEMP" && python -c 'import almasi; almasi.tester.run()'
-
-      - name: Measure Stream performance
-        run: |
-          git fetch --depth=1 origin b8f6ee2e8fa3a9295ce4fcb242a873186b5f019f
-          git show b8f6ee2e8fa3a9295ce4fcb242a873186b5f019f:root/resources/stream.py > "$RUNNER_TEMP/stream_before.py"
-          cd "$RUNNER_TEMP"
-          python "$GITHUB_WORKSPACE/root/tests/_benchmark_stream.py" "$RUNNER_TEMP/stream_before.py"
+          mkdir -p "$RUNNER_TEMP/almasi.a"
+          cp -a core/a.py core/lib core/root core/plugins core/requirements.txt "$RUNNER_TEMP/almasi.a/"
+      - name: Run Core tests
+        env:
+          ALMASI_PATH: ${{ runner.temp }}
+        run: cd "$RUNNER_TEMP" && python -c 'from almasi import a; a.tester.run()'

@@ -1,6 +1,6 @@
 # Architecture: Git
 
-`almasi.services.Git` is a stateless, lazily resolved Core singleton.
+`Git` is a stateless class provided by the Almasi loader.
 No initialization, GitHub API, library naming convention or credential registry
 is needed. The installed Git executable and its normal credentials/configuration
 perform the actual operations. Callers select trusted repository URLs and local
@@ -32,9 +32,9 @@ vectors, not a shell. Callers must not supply untrusted repository locations
 for execution or assume Git acquisition establishes trust.
 
 ```python
-import almasi
+from almasi import Git
 
-git = almasi.services.Git
+git = Git
 
 if not git.is_repository(directory):
 	git.clone(url, directory)
@@ -44,6 +44,6 @@ else:
 
 Libraries retains its existing naming, shared cache, dependency installation,
 offline fallback policy; it delegates Git operations to this service and
-presentation to [Progress](architecture.progress.md). Hub can use the same operations for its own independent workspaces.
+progress presentation to its own log. Hub can use the same operations for its own independent workspaces.
 Git owns no repository inventory or process supervision. Concurrent mutations
 to the same checkout must be coordinated by callers.
