@@ -16,6 +16,11 @@ if not git.exists('owner/project'):
 git.clone('https://github.com/owner/project.git', './project')
 ```
 
+- `list_repositories(owner: str) -> list[str]`: lists repository names (not
+  owner/name pairs) visible to the authenticated GitHub identity under the
+  specified owner, including accessible private repositories. Reads all pages
+  via GitHub CLI; discovery does not clone or create repositories. Invalid owners
+  and CLI failures raise errors.
 - `exists(repo: str) -> bool`: accepts an explicit GitHub `owner/name`.
   True means the repository is visible to the authenticated identity. False
   means GitHub returned HTTP 404; GitHub also uses 404 for inaccessible private

@@ -161,6 +161,39 @@ class TestGit(a.Tester):
 		else:
 			assert False, 'The command must fail'
 
+	# Read all repository names from the authenticated paginated GitHub query.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_list_repositories(cls):
+		git = a.services.Git
+
+		with patch.object(git, '_gh') as gh:
+			gh.return_value = subprocess.CompletedProcess([], 0, 'one\ntwo\n', '')
+			assert git.list_repositories('owner') == ['one', 'two']
+
+			arguments = gh.call_args.args[0]
+			assert arguments[:5] == ['api', 'graphql', '--hostname', git._HOST, '--paginate']
+			assert 'owner=owner' in arguments
+			assert 'pageInfo { hasNextPage endCursor }' in arguments[6]
+
+			gh.reset_mock()
+
+			try:
+				git.list_repositories('owner/repo')
+			except ValueError:
+				gh.assert_not_called()
+			else:
+				assert False, 'Only an owner is accepted'
+
+			gh.side_effect = subprocess.CalledProcessError(1, ['gh'])
+
+			try:
+				git.list_repositories('owner')
+			except subprocess.CalledProcessError:
+				assert gh.called
+			else:
+				assert False, 'Discovery errors must propagate'
+
 	# Distinguish a missing repository from authentication and network errors.
 	# ----------------------------------------------------------------------
 	@classmethod

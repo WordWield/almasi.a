@@ -117,6 +117,29 @@ class Git(a.Singleton):
 
 		return result
 
+	# List all repositories visible to the authenticated identity under one owner.
+	# ----------------------------------------------------------------------
+	def list_repositories(self, owner: str) -> list[str]:
+		if isinstance(owner, str) and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9-]*', owner):
+			query = '''query($owner: String!, $endCursor: String) {
+				repositoryOwner(login: $owner) {
+					repositories(first: 100, after: $endCursor, ownerAffiliations: OWNER) {
+						nodes { name }
+						pageInfo { hasNextPage endCursor }
+					}
+				}
+			}'''
+			response = self._gh([
+				'api', 'graphql', '--hostname', self._HOST, '--paginate',
+				'-f', f'query={query}', '-f', f'owner={owner}',
+				'--jq', '.data.repositoryOwner.repositories.nodes[].name'
+			])
+			result = response.stdout.splitlines()
+		else:
+			raise ValueError(f'Expected GitHub owner: {owner!r}')
+
+		return result
+
 	# Check repository visibility to the authenticated GitHub identity.
 	# ----------------------------------------------------------------------
 	def exists(self, repo: str) -> bool:
