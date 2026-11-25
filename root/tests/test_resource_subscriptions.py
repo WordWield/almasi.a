@@ -9,6 +9,7 @@
 # Delegates: Observation and dispatch to the real resource implementations.
 # ==============================================================================
 
+import asyncio
 import os
 import shutil
 import tempfile
@@ -582,3 +583,42 @@ class TestResourceSubscriptions(a.Tester):
 
 if __name__ == '__main__':
 	TestResourceSubscriptions.run()
+
+	# Verify failed deployment holds events and successful retry publishes them.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_deferred_changes(cls):
+		asyncio.run(cls._exercise_deferred_changes())
+
+	# Exercise the observer boundary without a timing-dependent OS watcher.
+	# ----------------------------------------------------------------------
+	@classmethod
+	async def _exercise_deferred_changes(cls):
+		service = a.services.Filesystem
+
+		with tempfile.TemporaryDirectory() as directory:
+			root  = os.path.realpath(directory)
+			path  = os.path.join(root, 'component.py')
+			other = os.path.dirname(root)
+
+			with patch.object(service, '_deliver_changes') as deliver:
+				try:
+					async with service.defer_changes(root):
+						service._changed_paths(root, {path: 'created'})
+						service._changed_paths(other, {other: 'modified'})
+						deliver.assert_called_once_with(other, {other: 'modified'})
+						raise RuntimeError('Dependency installation failed')
+				except RuntimeError as error:
+					assert str(error) == 'Dependency installation failed'
+
+				service._changed_paths(root, {path: 'modified'})
+				deliver.assert_called_once_with(other, {other: 'modified'})
+
+				async with service.defer_changes(root):
+					assert deliver.call_count == 1
+
+				assert deliver.call_count == 2
+				deliver.assert_called_with(root, {path: 'modified'})
+
+				service._changed_paths(root, {path: 'deleted'})
+				deliver.assert_called_with(root, {path: 'deleted'})

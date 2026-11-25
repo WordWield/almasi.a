@@ -9,9 +9,11 @@
 # Delegates: Subscriber registrations and delivery to the observed resources.
 # ==============================================================================
 
+import asyncio
 import logging
 import os
 import threading
+from contextlib import asynccontextmanager
 
 from watchfiles import Change, watch
 
@@ -33,6 +35,9 @@ class Filesystem(a.Singleton):
 			instance._observation_lock = threading.RLock()
 			instance._resources        = {}
 			instance._watchers         = {}
+			instance._dispatch_lock    = threading.RLock()
+			instance._defer_lock       = asyncio.Lock()
+			instance._deferred_changes = {}
 
 		return instance
 
@@ -161,11 +166,21 @@ class Filesystem(a.Singleton):
 
 		return visible
 
-	# Map physical changes to subscribed resources and invalidate before dispatch.
+	# Hold notifications for a deployment root until its preparation succeeds.
 	# --------------------------------------------------------------------------
 	def _changed_paths(self, root, paths):
 		root  = os.path.realpath(root)
 		paths = {os.path.realpath(path): status for path, status in paths.items()}
+
+		with self._dispatch_lock:
+			if root in self._deferred_changes:
+				self._deferred_changes[root].update(paths)
+			else:
+				self._deliver_changes(root, paths)
+
+	# Map physical changes to subscribed resources and invalidate before dispatch.
+	# --------------------------------------------------------------------------
+	def _deliver_changes(self, root, paths):
 
 		with self._observation_lock:
 			observed = tuple(
@@ -236,6 +251,27 @@ class Filesystem(a.Singleton):
 	# ======================================================================
 	# PUBLIC METHODS
 	# ======================================================================
+
+	# Defer publication of a watched root across an asynchronous operation.
+	# ----------------------------------------------------------------------
+	@asynccontextmanager
+	async def defer_changes(self, root):
+		'''Buffer notifications for this physical watched root. Publish them on
+		success; retain them after failure until a successful retry of the same
+		root. Other roots continue normally. Does not drain active requests.'''
+		root = os.path.realpath(root)
+
+		async with self._defer_lock:
+			with self._dispatch_lock:
+				self._deferred_changes.setdefault(root, {})
+
+			yield
+
+			with self._dispatch_lock:
+				paths = self._deferred_changes.pop(root)
+
+				if paths:
+					self._deliver_changes(root, paths)
 
 	# Track a resource only while it has listeners; share its OS watchers.
 	# ----------------------------------------------------------------------

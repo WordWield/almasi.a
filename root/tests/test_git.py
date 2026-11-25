@@ -9,6 +9,7 @@
 # Delegates: Actual GitHub communication to the Git service.
 # ==============================================================================
 
+import asyncio
 import os
 import subprocess
 import sys
@@ -20,6 +21,23 @@ from almasi import a
 
 
 class TestGit(a.Tester):
+
+	# ======================================================================
+	# PRIVATE METHODS
+	# ======================================================================
+
+	# Run temporary-repository commands without the user's Git hooks.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def _git(cls, directory, *arguments):
+		result = subprocess.run(
+			['git', '-c', 'core.hooksPath=/dev/null', '-C', directory, *arguments],
+			capture_output = True,
+			text           = True,
+			check          = True
+		)
+
+		return result.stdout.strip()
 
 	# ======================================================================
 	# PUBLIC METHODS
@@ -73,7 +91,7 @@ class TestGit(a.Tester):
 			subprocess.run(['git', '-C', origin, 'add', '.'], check=True)
 			subprocess.run([*commit, 'Update'], check=True)
 
-			git.pull(checkout)
+			assert asyncio.run(git.pull(checkout)) == subprocess.check_output(['git', '-C', origin, 'rev-parse', 'HEAD'], text=True).strip()
 
 			with open(os.path.join(checkout, 'example.txt')) as stream:
 				assert stream.read() == 'second'
@@ -246,7 +264,7 @@ class TestGit(a.Tester):
 		git = a.services.Git
 
 		with patch.object(git, 'clone') as clone, patch.object(git, '_gh') as gh:
-			assert git.create('owner/new', from_repo='base/old') == 'https://github.com/owner/new.git'
+			assert git.create('owner/new', from_repository='base/old') == 'https://github.com/owner/new.git'
 
 			url, directory = clone.call_args.args
 			assert url == 'https://github.com/base/old.git'
@@ -268,3 +286,55 @@ class TestGit(a.Tester):
 				assert not gh.called
 			else:
 				assert False, 'An explicit owner is required'
+
+	# Pull forward and backward without keeping any deployment history.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_pull_matches_remote_head(cls):
+		with tempfile.TemporaryDirectory() as folder:
+			remote = os.path.join(folder, 'remote.git')
+			writer = os.path.join(folder, 'writer')
+			local  = os.path.join(folder, 'local')
+			os.mkdir(writer)
+			cls._git(writer, 'init', '-q', '-b', 'master')
+			cls._git(writer, 'config', 'user.name', 'Test')
+			cls._git(writer, 'config', 'user.email', 'test@example.org')
+			file = os.path.join(writer, 'app.py')
+
+			with open(file, 'w', encoding='utf-8') as stream:
+				stream.write('version = 1\n')
+
+			cls._git(writer, 'add', '.')
+			cls._git(writer, 'commit', '-qm', 'A')
+			first = cls._git(writer, 'rev-parse', 'HEAD')
+			subprocess.run(['git', 'init', '-q', '--bare', remote], check=True)
+			cls._git(writer, 'remote', 'add', 'origin', remote)
+			cls._git(writer, 'push', '-q', '-u', 'origin', 'master')
+			subprocess.run(['git', 'clone', '-q', '-b', 'master', remote, local], check=True)
+
+			service = a.services.Git
+			assert service.get_repository_url(local) == remote
+
+			with open(file, 'w', encoding='utf-8') as stream:
+				stream.write('version = 2\n')
+
+			cls._git(writer, 'commit', '-qam', 'B')
+			b = cls._git(writer, 'rev-parse', 'HEAD')
+			cls._git(writer, 'push', '-q', 'origin', 'master')
+			assert asyncio.run(service.pull(local, exact=True)) == b
+			assert cls._git(local, 'rev-parse', 'HEAD') == b
+
+			cls._git(writer, 'reset', '--hard', first)
+			cls._git(writer, 'push', '-q', '--force', 'origin', 'master')
+			assert asyncio.run(service.pull(local, exact=True)) == first
+			assert cls._git(local, 'rev-parse', 'HEAD') == first
+
+			with open(os.path.join(local, 'app.py'), 'a', encoding='utf-8') as stream:
+				stream.write('# Uncommitted\n')
+
+			try:
+				asyncio.run(service.pull(local, exact=True))
+			except RuntimeError as error:
+				assert 'Uncommitted' in str(error)
+			else:
+				raise AssertionError('Dirty tracked files were overwritten')

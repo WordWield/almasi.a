@@ -9,30 +9,28 @@
 # Delegates: Git execution and authentication to Git and GitHub CLI.
 # ==============================================================================
 
+import asyncio
 import os
 import re
 import subprocess
 import tempfile
+from weakref import WeakValueDictionary
 
 from almasi import a
 
 
 class Git(a.Singleton):
 
-	_HOST = 'github.com'
+	_HOST       = 'github.com'
+	_pull_locks = WeakValueDictionary()
 
 	# ======================================================================
 	# PRIVATE METHODS
 	# ======================================================================
 
-	# Run commands without user hooks or interactive Git and GitHub prompts.
+	# Share noninteractive, hook-free configuration across all CLI operations.
 	# ----------------------------------------------------------------------
-	def _run(
-		self,
-		arguments,
-		timeout = None,
-		check   = True
-	):
+	def _environment(self):
 		environment = dict(
 			os.environ,
 			GH_HOST             = self._HOST,
@@ -45,37 +43,115 @@ class Git(a.Singleton):
 		environment[f'GIT_CONFIG_VALUE_{index}'] = os.devnull
 		environment['GIT_CONFIG_COUNT']         = str(index + 1)
 
+		return environment
+
+	# Preserve native failures and their captured diagnostics.
+	# ----------------------------------------------------------------------
+	def _annotate_error(self, error):
+		for output in (error.stdout, error.stderr):
+			if output and output.strip():
+				error.add_note(output.strip())
+
+	# Execute short local and synchronous remote operations without a shell.
+	# ----------------------------------------------------------------------
+	def _run(
+		self,
+		arguments,
+		timeout = None,
+		check   = True
+	):
 		try:
 			result = subprocess.run(
 				arguments,
-				env            = environment,
+				env            = self._environment(),
 				capture_output = True,
 				text           = True,
 				timeout        = timeout,
 				check          = check
 			)
 		except subprocess.CalledProcessError as error:
-			for output in (error.stdout, error.stderr):
-				if output and output.strip():
-					error.add_note(output.strip())
-
+			self._annotate_error(error)
 			raise
 
 		return result
 
+	# Await a Git operation without blocking the caller's event loop.
+	# ----------------------------------------------------------------------
+	async def _run_async(self, arguments, timeout=None):
+		process = await asyncio.create_subprocess_exec(
+			*arguments,
+			env    = self._environment(),
+			stdout = asyncio.subprocess.PIPE,
+			stderr = asyncio.subprocess.PIPE
+		)
+
+		try:
+			stdout, stderr = await asyncio.wait_for(process.communicate(), timeout)
+		except (asyncio.CancelledError, asyncio.TimeoutError):
+			if process.returncode is None:
+				process.kill()
+
+			await process.communicate()
+			raise
+
+		if process.returncode == 0:
+			result = stdout.decode('utf-8', errors='replace').strip()
+		else:
+			error = subprocess.CalledProcessError(
+				process.returncode, arguments,
+				output = stdout.decode('utf-8', errors='replace'),
+				stderr = stderr.decode('utf-8', errors='replace')
+			)
+			self._annotate_error(error)
+			raise error
+
+		return result
+
+	# Require the selected working tree itself, never a containing repository.
+	# ----------------------------------------------------------------------
+	def _checkout(self, directory):
+		path = os.path.realpath(directory)
+
+		if self.is_repository(path):
+			result = ['git', '-C', path, '--git-dir=.git', '--work-tree=.']
+		else:
+			raise ValueError(f'Expected a Git working checkout root: {directory}')
+
+		return result
+
+	# Resolve the configured upstream and its remote on each operation.
+	# ----------------------------------------------------------------------
+	def _upstream(self, command):
+		upstream = self._run([*command, 'rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}']).stdout.strip()
+		branch   = self._run([*command, 'symbolic-ref', '--short', 'HEAD']).stdout.strip()
+		remote   = self._run([*command, 'config', '--get', f'branch.{branch}.remote']).stdout.strip()
+
+		return upstream, remote
+
+	# Serialize concurrent updates to one working tree, not unrelated trees.
+	# ----------------------------------------------------------------------
+	def _pull_lock(self, directory):
+		lock = self._pull_locks.get(directory)
+
+		if lock is None:
+			lock = asyncio.Lock()
+			self._pull_locks[directory] = lock
+
+		return lock
+
 	# Validate an explicit GitHub owner/name, never a URL or shell option.
 	# ----------------------------------------------------------------------
-	def _validate_repository(self, repo):
+	def _validate_repository(self, repository):
 		is_valid = (
-			isinstance(repo, str)
-			and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+', repo)
-			and repo.rsplit('/', 1)[1] not in ('.', '..')
+			isinstance(repository, str)
+			and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+', repository)
+			and repository.rsplit('/', 1)[1] not in ('.', '..')
 		)
 
 		if is_valid:
-			result = repo
+			result = repository
 		else:
-			raise ValueError(f'Expected GitHub owner/name: {repo!r}')
+			raise ValueError(f'Expected GitHub owner/name: {repository!r}')
 
 		return result
 
@@ -95,13 +171,53 @@ class Git(a.Singleton):
 
 		return directory
 
-	# Update this checkout without merging or implicitly using a parent repo.
+	# Return the remote URL selected by the checkout's tracking configuration.
 	# ----------------------------------------------------------------------
-	def pull(self, directory: str, timeout: float | None = None) -> None:
-		self._run(
-			['git', '-C', directory, '--git-dir=.git', '--work-tree=.', 'pull', '--ff-only', '--quiet'],
-			timeout=timeout
-		)
+	def get_repository_url(self, directory: str) -> str:
+		'''Return the configured upstream remote URL of an exact checkout root.'''
+		command   = self._checkout(directory)
+		_, remote = self._upstream(command)
+
+		return self._run([*command, 'remote', 'get-url', remote]).stdout.strip()
+
+	# Update one checkout using the requested upstream synchronization policy.
+	# ----------------------------------------------------------------------
+	async def pull(
+		self,
+		directory : str,
+		*,
+		exact     : bool         = False,
+		timeout   : float | None = None
+	) -> str:
+		'''Fetch and update the selected checkout, returning its final HEAD.
+		By default allow only fast-forward updates. exact=True matches upstream
+		HEAD, including rewinds, and rejects uncommitted tracked changes.
+		Timeout is in seconds per network command; cancellation stops that
+		command. Use exact mode only for dedicated deployment checkouts.'''
+		command = self._checkout(directory)
+
+		async with self._pull_lock(command[2]):
+			if exact:
+				if not self._run([*command, 'status', '--porcelain', '--untracked-files=no']).stdout.strip():
+					upstream, remote = self._upstream(command)
+					await self._run_async([*command, 'fetch', '--quiet', '--no-tags', remote], timeout=timeout)
+
+					if not self._run([*command, 'status', '--porcelain', '--untracked-files=no']).stdout.strip():
+						commit  = self._run([*command, 'rev-parse', '--verify', upstream + '^{commit}']).stdout.strip()
+						current = self._run([*command, 'rev-parse', 'HEAD']).stdout.strip()
+
+						if current != commit:
+							self._run([*command, 'reset', '--hard', '--quiet', commit])
+					else:
+						raise RuntimeError('Uncommitted tracked files prevent Git synchronization')
+				else:
+					raise RuntimeError('Uncommitted tracked files prevent Git synchronization')
+			else:
+				await self._run_async([*command, 'pull', '--ff-only', '--quiet'], timeout=timeout)
+
+			result = self._run([*command, 'rev-parse', 'HEAD']).stdout.strip()
+
+		return result
 
 	# Recognize working checkout roots, including linked Git worktrees.
 	# ----------------------------------------------------------------------
@@ -142,16 +258,16 @@ class Git(a.Singleton):
 
 	# Check repository visibility to the authenticated GitHub identity.
 	# ----------------------------------------------------------------------
-	def exists(self, repo: str) -> bool:
-		repo  = self._validate_repository(repo)
-		probe = self._gh(['api', '--hostname', self._HOST, '--include', f'repos/{repo}'], check=False)
+	def exists(self, repository: str) -> bool:
+		repository = self._validate_repository(repository)
+		probe      = self._gh(['api', '--hostname', self._HOST, '--include', f'repos/{repository}'], check=False)
 
 		if probe.returncode == 0:
 			result = True
 		elif re.match(r'HTTP/\S+ 404\b', probe.stdout):
 			result = False
 		else:
-			raise RuntimeError(f'GitHub lookup failed for {repo}: {probe.stderr.strip()}')
+			raise RuntimeError(f'GitHub lookup failed for {repository}: {probe.stderr.strip()}')
 
 		return result
 
@@ -159,21 +275,21 @@ class Git(a.Singleton):
 	# ----------------------------------------------------------------------
 	def create(
 		self,
-		new_repo  : str,
-		from_repo : str | None = None,
-		private   : bool       = True
+		new_repository  : str,
+		from_repository : str | None = None,
+		private         : bool       = True
 	) -> str:
-		new_repo   = self._validate_repository(new_repo)
-		visibility = '--private' if private else '--public'
-		arguments  = ['repo', 'create', new_repo, visibility]
+		new_repository   = self._validate_repository(new_repository)
+		visibility     = '--private' if private else '--public'
+		arguments      = ['repo', 'create', new_repository, visibility]
 
-		if from_repo is None:
+		if from_repository is None:
 			self._gh(arguments)
 		else:
-			from_repo = self._validate_repository(from_repo)
+			from_repository = self._validate_repository(from_repository)
 
 			with tempfile.TemporaryDirectory(prefix='almasi_git_') as directory:
-				self.clone(f'https://{self._HOST}/{from_repo}.git', directory)
+				self.clone(f'https://{self._HOST}/{from_repository}.git', directory)
 				self._gh([*arguments, '--source', directory, '--remote', 'destination', '--push'])
 
-		return f'https://{self._HOST}/{new_repo}.git'
+		return f'https://{self._HOST}/{new_repository}.git'

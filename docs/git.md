@@ -1,7 +1,7 @@
 # Git service
 
 `a.services.Git` provides Git checkout operations and authenticated GitHub
-repository management. It is a stateless Almasi Singleton service, ready to use
+repository management. It is an Almasi Singleton service without repository binding, ready to use
 without explicit initialization. Core is independent of the installer's
 private Git implementation.
 
@@ -11,7 +11,7 @@ from almasi import a
 git = a.services.Git
 
 if not git.exists('owner/project'):
-	git.create('owner/project', from_repo='owner/starter')
+	git.create('owner/project', from_repository='owner/starter')
 
 git.clone('https://github.com/owner/project.git', './project')
 ```
@@ -21,12 +21,12 @@ git.clone('https://github.com/owner/project.git', './project')
   specified owner, including accessible private repositories. Reads all pages
   via GitHub CLI; discovery does not clone or create repositories. Invalid owners
   and CLI failures raise errors.
-- `exists(repo: str) -> bool`: accepts an explicit GitHub `owner/name`.
+- `exists(repository: str) -> bool`: accepts an explicit GitHub `owner/name`.
   True means the repository is visible to the authenticated identity. False
   means GitHub returned HTTP 404; GitHub also uses 404 for inaccessible private
   repositories. Other HTTP errors, connection failures and missing CLI raise
   errors. Never interpret False as proof of permission to create.
-- `create(new_repo: str, from_repo: str | None = None, private: bool = True) -> str`:
+- `create(new_repository: str, from_repository: str | None = None, private: bool = True) -> str`:
   creates a new empty repository, or clones the source's default branch into
   a temporary checkout and pushes it (including its commit history) to a new,
   independent repository. Returns its HTTPS clone URL. It does not modify the
@@ -34,10 +34,14 @@ git.clone('https://github.com/owner/project.git', './project')
   Explicit `private=False` requests public visibility; only use this for code
   authorized for public release. If creation succeeds but the push fails, the
   destination may remain empty and must be inspected before retrying.
-- `clone(url, directory, timeout=None)`, `pull(directory, timeout=None)`,
-  `is_repository(directory)`: local checkout operations implemented by Core; Git errors
-  propagate. clone returns the directory, pull returns None, and
-  is_repository returns a boolean.
+- `clone(url, directory, timeout=None) -> str`: clone and return the directory.
+- `get_repository_url(directory) -> str`: return the checkout's upstream remote URL.
+- `await pull(directory, *, exact=False, timeout=None) -> str`: return the final
+  commit SHA after a fast-forward-only update, or explicitly synchronize to
+  upstream HEAD (including rewinds) with exact=True; reject dirty tracked
+  files in exact mode. Only use exact mode on dedicated deployment checkouts.
+- `is_repository(directory) -> bool`: recognize an exact working checkout root.
+  See [Git architecture](architecture.git.md) for lifecycle and error contracts.
 
 Remote operations require GitHub CLI (`gh`) authenticated to github.com,
 permission to create repositories under the target owner, and Git credentials
