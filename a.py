@@ -358,6 +358,16 @@ class A(metaclass=AMeta, plugins=['Py', 'Json', 'Text', 'Bytes']):
 
 		return fork
 
+	# Derive the deployment name from the library's checkout directory.
+	# ----------------------------------------------------------------------
+	def get_deployment_name(self) -> str:
+		'''Return the suffix of almasi.<library>.<deployment>, or the library name.'''
+		name       = self.__name__.rsplit('.', 1)[-1]
+		repository = os.path.basename(os.path.dirname(self.__path__))
+		prefix     = f'almasi.{name}.'
+
+		return repository.removeprefix(prefix) if repository.startswith(prefix) else name
+
 	# Join relative paths without mutating the library root.
 	# ----------------------------------------------------------------------
 	def join(self, *parts):
