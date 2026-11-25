@@ -10,6 +10,7 @@
 # ==============================================================================
 
 import asyncio
+import errno
 import os
 from contextlib import redirect_stderr
 from io         import StringIO
@@ -81,11 +82,25 @@ class TestProgress(a.Tester):
 					progress.update('Completed')
 
 				progress.update('Verified')
-				os.set_blocking(master, False)
-				output = os.read(master, 65536).decode('utf-8')
 
-				assert '\033[1;32m✔\033[0m Completed' in output
-				assert '\033[1A\r\033[2K\033[1;32m✔\033[0m Verified' in output
+			# Drain the entire PTY after closing its slave, including split writes.
+			# Linux reports EIO at PTY EOF; other systems return empty bytes.
+			# ----------------------------------------------------------------------
+			chunks = []
+
+			try:
+				chunk = os.read(master, 65536)
+
+				while chunk:
+					chunks.append(chunk)
+					chunk = os.read(master, 65536)
+			except OSError as error:
+				if error.errno != errno.EIO:
+					raise
+
+			output = b''.join(chunks).decode('utf-8')
+			assert '\033[1;32m✔\033[0m Completed' in output, repr(output)
+			assert '\033[1A\r\033[2K\033[1;32m✔\033[0m Verified' in output, repr(output)
 		finally:
 			os.close(master)
 
