@@ -23,7 +23,7 @@ pip.uninstall('beautifulsoup4')
 
 Operations are synchronous; use asyncio.to_thread for long calls on an event loop. Each process binds only its own file. Operations within that service are serialized. The environment is shared with other Entities: package upgrades, downgrades and removals may affect them. No cross-process transaction or dependency conflict isolation is promised. An already imported module may require restart after a version change.
 
-Only simple direct package declarations are edited by install/uninstall; complex declarations (markers, extras, direct URLs) require manual editing. Do not use these mutation methods for requirements containing included files, hashes, continuation lines or editable installs; sync delegates standard requirements syntax to pip. File publication is atomic, but cannot roll back successful pip changes if publication fails. Pip errors propagate, and a failed pip command leaves the declaration unchanged. Use only trusted requirements and package sources.
+Install/uninstall edit the file as lines, removing all lines starting with the matching normalized distribution name at a name boundary. Install appends the replacement line. Use these methods only with simple direct declarations; edit markers, extras, URLs, included files, hashes, continuation lines and editable installs manually. Sync delegates standard requirements syntax to pip. File publication is atomic, but cannot roll back successful pip changes if publication fails. Pip errors propagate, and a failed pip command leaves the declaration unchanged. Use only trusted requirements and package sources.
 
 Git, Hub and Pip do not depend on one another. The Entity owns initialization and deployment sequencing.
 

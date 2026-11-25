@@ -45,7 +45,7 @@ class TestPip(a.Tester):
 				run.assert_not_called()
 
 				with open(path, 'w', encoding='utf-8') as stream:
-					stream.write('# Direct dependencies\nother>=1\nMy_Package==1\n')
+					stream.write('# Direct dependencies\nother>=1\nmy-package-extra>=1\nMy_Package==1\nmy-package >= 1\nmy-package\n')
 
 				pip.sync()
 				assert run.call_args.args[0][-3:] == ['install', '-r', path]
@@ -55,13 +55,13 @@ class TestPip(a.Tester):
 				assert run.call_args.args[0][-2:] == ['install', 'my-package>=2,<=3']
 
 				with open(path, encoding='utf-8') as stream:
-					assert stream.read() == '# Direct dependencies\nother>=1\nmy-package>=2,<=3\n'
+					assert stream.read() == '# Direct dependencies\nother>=1\nmy-package-extra>=1\nmy-package>=2,<=3\n'
 
 				pip.uninstall('MY_PACKAGE')
 				assert run.call_args.args[0][-3:] == ['uninstall', '-y', 'my-package']
 
 				with open(path, encoding='utf-8') as stream:
-					assert stream.read() == '# Direct dependencies\nother>=1\n'
+					assert stream.read() == '# Direct dependencies\nother>=1\nmy-package-extra>=1\n'
 
 				run.return_value = subprocess.CompletedProcess([], 0, '[{"name":"other","version":"1.2"}]', '')
 				assert pip.list() == {'other': '1.2'}
@@ -69,7 +69,7 @@ class TestPip(a.Tester):
 				assert pip.freeze() == 'other==1.2\n'
 
 				with open(path, encoding='utf-8') as stream:
-					assert stream.read() == '# Direct dependencies\nother>=1\n'
+					assert stream.read() == '# Direct dependencies\nother>=1\nmy-package-extra>=1\n'
 
 				run.side_effect = subprocess.CalledProcessError(1, ['pip'], stderr='Failed')
 
@@ -78,7 +78,7 @@ class TestPip(a.Tester):
 						method(*arguments)
 
 					with open(path, encoding='utf-8') as stream:
-						assert stream.read() == '# Direct dependencies\nother>=1\n'
+						assert stream.read() == '# Direct dependencies\nother>=1\nmy-package-extra>=1\n'
 
 				run.reset_mock()
 				with TestCase().assertRaises(ValueError):

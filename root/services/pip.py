@@ -17,9 +17,8 @@ import subprocess
 import sys
 import threading
 
-from packaging.requirements import InvalidRequirement, Requirement
-from packaging.utils        import canonicalize_name
-from packaging.version      import Version
+from packaging.utils   import canonicalize_name
+from packaging.version import Version
 
 from almasi import a
 
@@ -81,54 +80,34 @@ class Pip(a.Singleton):
 
 		return result
 
-	# Read the live file, not a cached namespace snapshot after a Git update.
+	# Read the current declaration after external changes.
 	# ----------------------------------------------------------------------
-	def _read(self):
-		path = os.path.join(self._directory.get_path(), self._filename)
+	def _load(self):
+		with open(self._path, 'r', encoding='utf-8') as file:
+			self.requirements = file.read().splitlines()
 
-		if not os.path.islink(path) and os.path.isfile(path):
-			with open(path, encoding='utf-8') as stream:
-				result = stream.read()
-		else:
-			raise ValueError(f'Expected a regular requirements file: {path}')
-
-		return result
-
-	# Preserve unrelated declarations and replace matching simple package lines.
+	# Append one direct requirement.
 	# ----------------------------------------------------------------------
-	def _edit(self, name, requirement):
-		lines   = []
-		matched = False
+	def _add_line(self, line):
+		self.requirements.append(line)
 
-		for line in self._read().splitlines(keepends=True):
-			declaration = re.split(r'\s+#', line, maxsplit=1)[0].strip()
+	# Remove matching distribution names, not longer names sharing a prefix.
+	# ----------------------------------------------------------------------
+	def _remove_line(self, prefix):
+		self.requirements = [
+			line for line in self.requirements
+			if canonicalize_name(re.split(r'[\s<>=!~;\[@]', line.lstrip(), maxsplit=1)[0]) != prefix
+		]
 
-			if declaration and not declaration.startswith('#'):
-				try:
-					parsed = Requirement(declaration)
-				except InvalidRequirement as error:
-					raise ValueError(f'Edit complex requirements file manually: {line.strip()}') from error
-			else:
-				parsed = None
+	# Publish the declaration through the existing atomic file operation.
+	# ----------------------------------------------------------------------
+	def _save(self):
+		content = '\n'.join(self.requirements)
 
-			if parsed is not None and canonicalize_name(parsed.name) == name:
-				if not parsed.extras and parsed.marker is None and parsed.url is None:
-					if not matched and requirement is not None:
-						lines.append(requirement + '\n')
+		if self.requirements:
+			content += '\n'
 
-					matched = True
-				else:
-					raise ValueError(f'Edit complex declaration manually: {line.strip()}')
-			else:
-				lines.append(line)
-
-		if not matched and requirement is not None:
-			if lines and not lines[-1].endswith('\n'):
-				lines[-1] += '\n'
-
-			lines.append(requirement + '\n')
-
-		return ''.join(lines)
+		self._directory.write(os.path.basename(self._path), content)
 
 	# ======================================================================
 	# PUBLIC METHODS
@@ -137,12 +116,11 @@ class Pip(a.Singleton):
 	# Bind the entity's declaration and ensure its initial dependencies.
 	# ----------------------------------------------------------------------
 	def initialize(self, requirements_path: str) -> None:
-		path            = os.path.abspath(requirements_path)
-		self._directory = a.Directory(a, os.path.dirname(path), 'almasi.requirements')
-		self._filename  = os.path.basename(path)
+		self._path      = os.path.abspath(requirements_path)
+		self._directory = a.Directory(a, os.path.dirname(self._path), 'almasi.requirements')
 		self._lock      = threading.RLock()
 
-		if self._filename.endswith('.txt') and not os.path.islink(path):
+		if self._path.endswith('.txt') and not os.path.islink(self._path):
 			self.sync()
 		else:
 			raise ValueError('Expected a regular requirements text file, not a symlink')
@@ -152,15 +130,15 @@ class Pip(a.Singleton):
 	def sync(self) -> None:
 		'''Install the current requirements file without freezing the environment.'''
 		with self._lock:
-			path = os.path.join(self._directory.get_path(), self._filename)
-
-			if not os.path.lexists(path):
-				self._directory.write(self._filename, '')
-			elif not os.path.islink(path) and os.path.isfile(path):
-				self._run('install', '-r', path)
+			if not os.path.lexists(self._path):
+				self.requirements = []
+				self._save()
+			elif not os.path.islink(self._path) and os.path.isfile(self._path):
+				self._load()
+				self._run('install', '-r', self._path)
 				importlib.invalidate_caches()
 			else:
-				raise ValueError(f'Expected a regular requirements file: {path}')
+				raise ValueError(f'Expected a regular requirements file: {self._path}')
 
 	# Install a distribution and publish its declaration only after success.
 	# ----------------------------------------------------------------------
@@ -174,10 +152,12 @@ class Pip(a.Singleton):
 		requirement = self._requirement(name, min_version, max_version)
 
 		with self._lock:
-			content = self._edit(self._package_name(name), requirement)
+			self._load()
 			self._run('install', requirement)
 			importlib.invalidate_caches()
-			self._directory.write(self._filename, content)
+			self._remove_line(self._package_name(name))
+			self._add_line(requirement)
+			self._save()
 
 	# Remove a distribution from the environment and its direct declaration.
 	# ----------------------------------------------------------------------
@@ -186,10 +166,11 @@ class Pip(a.Singleton):
 		name = self._package_name(name)
 
 		with self._lock:
-			content = self._edit(name, None)
+			self._load()
 			self._run('uninstall', '-y', name)
 			importlib.invalidate_caches()
-			self._directory.write(self._filename, content)
+			self._remove_line(name)
+			self._save()
 
 	# Read installed distribution versions without touching the declaration.
 	# ----------------------------------------------------------------------
