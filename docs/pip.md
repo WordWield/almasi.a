@@ -26,3 +26,5 @@ Operations are synchronous; use asyncio.to_thread for long calls on an event loo
 Only simple direct package declarations are edited by install/uninstall; complex declarations (markers, extras, direct URLs) require manual editing. Do not use these mutation methods for requirements containing included files, hashes, continuation lines or editable installs; sync delegates standard requirements syntax to pip. File publication is atomic, but cannot roll back successful pip changes if publication fails. Pip errors propagate, and a failed pip command leaves the declaration unchanged. Use only trusted requirements and package sources.
 
 Git, Hub and Pip do not depend on one another. The Entity owns initialization and deployment sequencing.
+
+For live deployment, the Entity uses `async with a.services.Filesystem.defer_changes(entity.__path__)` around its Git pull and Pip sync. Filesystem defers observer notifications for that watched root, including after a failed sync until the next successful retry. This does not stop active calls, prevent explicit reads from disk, or provide a transaction over the Python environment.

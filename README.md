@@ -158,6 +158,7 @@ The runtime also provides `join()`, `mkdir()`, `read()`, `write()`, `copy()` and
 ## Git repository management
 
 Core provides [Git checkout and GitHub repository operations](docs/git.md) through `a.services.Git`.
+For Python dependencies, use the [Pip service](docs/pip.md), `a.services.Pip`.
 
 ## Acquisition and security
 

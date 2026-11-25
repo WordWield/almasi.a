@@ -84,8 +84,13 @@ class Pip(a.Singleton):
 	# Read the live file, not a cached namespace snapshot after a Git update.
 	# ----------------------------------------------------------------------
 	def _read(self):
-		with open(self._directory.join(self._filename), encoding='utf-8') as stream:
-			result = stream.read()
+		path = os.path.join(self._directory.get_path(), self._filename)
+
+		if not os.path.islink(path) and os.path.isfile(path):
+			with open(path, encoding='utf-8') as stream:
+				result = stream.read()
+		else:
+			raise ValueError(f'Expected a regular requirements file: {path}')
 
 		return result
 
@@ -96,9 +101,14 @@ class Pip(a.Singleton):
 		matched = False
 
 		for line in self._read().splitlines(keepends=True):
-			try:
-				parsed = Requirement(line.split(' #', 1)[0].strip())
-			except InvalidRequirement:
+			declaration = re.split(r'\s+#', line, maxsplit=1)[0].strip()
+
+			if declaration and not declaration.startswith('#'):
+				try:
+					parsed = Requirement(declaration)
+				except InvalidRequirement as error:
+					raise ValueError(f'Edit complex requirements file manually: {line.strip()}') from error
+			else:
 				parsed = None
 
 			if parsed is not None and canonicalize_name(parsed.name) == name:
@@ -142,7 +152,7 @@ class Pip(a.Singleton):
 	def sync(self) -> None:
 		'''Install the current requirements file without freezing the environment.'''
 		with self._lock:
-			path = self._directory.join(self._filename)
+			path = os.path.join(self._directory.get_path(), self._filename)
 
 			if not os.path.lexists(path):
 				self._directory.write(self._filename, '')
