@@ -264,7 +264,7 @@ class TestGit(a.Tester):
 		git = a.services.Git
 
 		with patch.object(git, 'clone') as clone, patch.object(git, '_gh') as gh:
-			assert git.create('owner/new', from_repo='base/old') == 'https://github.com/owner/new.git'
+			assert git.create('owner/new', from_repository='base/old') == 'https://github.com/owner/new.git'
 
 			url, directory = clone.call_args.args
 			assert url == 'https://github.com/base/old.git'
@@ -313,7 +313,7 @@ class TestGit(a.Tester):
 			subprocess.run(['git', 'clone', '-q', '-b', 'master', remote, local], check=True)
 
 			service = a.services.Git
-			assert service.get_repo(local) == remote
+			assert service.get_repository_url(local) == remote
 
 			with open(file, 'w', encoding='utf-8') as stream:
 				stream.write('version = 2\n')

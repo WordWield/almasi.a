@@ -14,7 +14,7 @@ working directories.
   Git creates necessary parent directories. Return the supplied directory
   after success; existing nonempty destinations are rejected by Git.
   Reuse decisions belong to the caller.
-- `get_repo(directory: str) -> str`: return the configured upstream remote URL.
+- `get_repository_url(directory: str) -> str`: return the configured upstream remote URL.
 - `await pull(directory: str, *, exact=False, timeout=None) -> str`: update the
   specified checkout and return its final HEAD. By default use `--ff-only`;
   do not merge divergent histories or discard changes. Explicit `exact=True`

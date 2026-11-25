@@ -43,7 +43,6 @@ class Git(a.Singleton):
 		environment[f'GIT_CONFIG_VALUE_{index}'] = os.devnull
 		environment['GIT_CONFIG_COUNT']         = str(index + 1)
 
-
 		return environment
 
 	# Preserve native failures and their captured diagnostics.
@@ -142,17 +141,17 @@ class Git(a.Singleton):
 
 	# Validate an explicit GitHub owner/name, never a URL or shell option.
 	# ----------------------------------------------------------------------
-	def _validate_repository(self, repo):
+	def _validate_repository(self, repository):
 		is_valid = (
-			isinstance(repo, str)
-			and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+', repo)
-			and repo.rsplit('/', 1)[1] not in ('.', '..')
+			isinstance(repository, str)
+			and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+', repository)
+			and repository.rsplit('/', 1)[1] not in ('.', '..')
 		)
 
 		if is_valid:
-			result = repo
+			result = repository
 		else:
-			raise ValueError(f'Expected GitHub owner/name: {repo!r}')
+			raise ValueError(f'Expected GitHub owner/name: {repository!r}')
 
 		return result
 
@@ -174,7 +173,7 @@ class Git(a.Singleton):
 
 	# Return the remote URL selected by the checkout's tracking configuration.
 	# ----------------------------------------------------------------------
-	def get_repo(self, directory: str) -> str:
+	def get_repository_url(self, directory: str) -> str:
 		'''Return the configured upstream remote URL of an exact checkout root.'''
 		command   = self._checkout(directory)
 		_, remote = self._upstream(command)
@@ -259,16 +258,16 @@ class Git(a.Singleton):
 
 	# Check repository visibility to the authenticated GitHub identity.
 	# ----------------------------------------------------------------------
-	def exists(self, repo: str) -> bool:
-		repo  = self._validate_repository(repo)
-		probe = self._gh(['api', '--hostname', self._HOST, '--include', f'repos/{repo}'], check=False)
+	def exists(self, repository: str) -> bool:
+		repository = self._validate_repository(repository)
+		probe      = self._gh(['api', '--hostname', self._HOST, '--include', f'repos/{repository}'], check=False)
 
 		if probe.returncode == 0:
 			result = True
 		elif re.match(r'HTTP/\S+ 404\b', probe.stdout):
 			result = False
 		else:
-			raise RuntimeError(f'GitHub lookup failed for {repo}: {probe.stderr.strip()}')
+			raise RuntimeError(f'GitHub lookup failed for {repository}: {probe.stderr.strip()}')
 
 		return result
 
@@ -276,21 +275,21 @@ class Git(a.Singleton):
 	# ----------------------------------------------------------------------
 	def create(
 		self,
-		new_repo  : str,
-		from_repo : str | None = None,
-		private   : bool       = True
+		new_repository  : str,
+		from_repository : str | None = None,
+		private         : bool       = True
 	) -> str:
-		new_repo   = self._validate_repository(new_repo)
-		visibility = '--private' if private else '--public'
-		arguments  = ['repo', 'create', new_repo, visibility]
+		new_repository   = self._validate_repository(new_repository)
+		visibility     = '--private' if private else '--public'
+		arguments      = ['repo', 'create', new_repository, visibility]
 
-		if from_repo is None:
+		if from_repository is None:
 			self._gh(arguments)
 		else:
-			from_repo = self._validate_repository(from_repo)
+			from_repository = self._validate_repository(from_repository)
 
 			with tempfile.TemporaryDirectory(prefix='almasi_git_') as directory:
-				self.clone(f'https://{self._HOST}/{from_repo}.git', directory)
+				self.clone(f'https://{self._HOST}/{from_repository}.git', directory)
 				self._gh([*arguments, '--source', directory, '--remote', 'destination', '--push'])
 
-		return f'https://{self._HOST}/{new_repo}.git'
+		return f'https://{self._HOST}/{new_repository}.git'

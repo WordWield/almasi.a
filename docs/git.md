@@ -11,7 +11,7 @@ from almasi import a
 git = a.services.Git
 
 if not git.exists('owner/project'):
-	git.create('owner/project', from_repo='owner/starter')
+	git.create('owner/project', from_repository='owner/starter')
 
 git.clone('https://github.com/owner/project.git', './project')
 ```
@@ -21,12 +21,12 @@ git.clone('https://github.com/owner/project.git', './project')
   specified owner, including accessible private repositories. Reads all pages
   via GitHub CLI; discovery does not clone or create repositories. Invalid owners
   and CLI failures raise errors.
-- `exists(repo: str) -> bool`: accepts an explicit GitHub `owner/name`.
+- `exists(repository: str) -> bool`: accepts an explicit GitHub `owner/name`.
   True means the repository is visible to the authenticated identity. False
   means GitHub returned HTTP 404; GitHub also uses 404 for inaccessible private
   repositories. Other HTTP errors, connection failures and missing CLI raise
   errors. Never interpret False as proof of permission to create.
-- `create(new_repo: str, from_repo: str | None = None, private: bool = True) -> str`:
+- `create(new_repository: str, from_repository: str | None = None, private: bool = True) -> str`:
   creates a new empty repository, or clones the source's default branch into
   a temporary checkout and pushes it (including its commit history) to a new,
   independent repository. Returns its HTTPS clone URL. It does not modify the
@@ -35,7 +35,7 @@ git.clone('https://github.com/owner/project.git', './project')
   authorized for public release. If creation succeeds but the push fails, the
   destination may remain empty and must be inspected before retrying.
 - `clone(url, directory, timeout=None) -> str`: clone and return the directory.
-- `get_repo(directory) -> str`: return the checkout's upstream remote URL.
+- `get_repository_url(directory) -> str`: return the checkout's upstream remote URL.
 - `await pull(directory, *, exact=False, timeout=None) -> str`: return the final
   commit SHA after a fast-forward-only update, or explicitly synchronize to
   upstream HEAD (including rewinds) with exact=True; reject dirty tracked
