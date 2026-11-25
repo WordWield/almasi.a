@@ -1,7 +1,7 @@
 # Git service
 
 `a.services.Git` provides Git checkout operations and authenticated GitHub
-repository management. It is a stateless Almasi Singleton service, ready to use
+repository management. It is an Almasi Singleton service without repository binding, ready to use
 without explicit initialization. Core is independent of the installer's
 private Git implementation.
 
@@ -34,10 +34,14 @@ git.clone('https://github.com/owner/project.git', './project')
   Explicit `private=False` requests public visibility; only use this for code
   authorized for public release. If creation succeeds but the push fails, the
   destination may remain empty and must be inspected before retrying.
-- `clone(url, directory, timeout=None)`, `pull(directory, timeout=None)`,
-  `is_repository(directory)`: local checkout operations implemented by Core; Git errors
-  propagate. clone returns the directory, pull returns None, and
-  is_repository returns a boolean.
+- `clone(url, directory, timeout=None) -> str`: clone and return the directory.
+- `get_repo(directory) -> str`: return the checkout's upstream remote URL.
+- `await pull(directory, *, exact=False, timeout=None) -> str`: return the final
+  commit SHA after a fast-forward-only update, or explicitly synchronize to
+  upstream HEAD (including rewinds) with exact=True; reject dirty tracked
+  files in exact mode. Only use exact mode on dedicated deployment checkouts.
+- `is_repository(directory) -> bool`: recognize an exact working checkout root.
+  See [Git architecture](architecture.git.md) for lifecycle and error contracts.
 
 Remote operations require GitHub CLI (`gh`) authenticated to github.com,
 permission to create repositories under the target owner, and Git credentials
