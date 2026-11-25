@@ -106,6 +106,16 @@ from almasi import o
 
 When a library is extended from `__main__`, Almasi also selects it as the active application. Application selection is process-wide; services do not implicitly initialize merely because a library is extended.
 
+### Deployment name
+
+After `extend()`, `library.get_deployment_name()` returns the suffix of the
+physical checkout directory named `almasi.<library>.<deployment>`, or the
+library's short name when that prefix is absent. For example, a Source
+library in `almasi.source.weather` returns `weather`; the standalone
+`almasi.source` returns `source`. The name is derived without Git access
+or extra initialization; it does not change the Python library identity.
+Hub validates its managed names separately.
+
 ### Namespace fallback
 
 A library can delegate missing public attributes to an ordinary Python object:

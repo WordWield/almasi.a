@@ -157,6 +157,28 @@ if __name__ == '__main__':
 			assert app.started is True
 			assert app.__name__ == 'extend_app'
 
+	# Resolve deployment identity without changing the library's Python identity.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_deployment_name(cls):
+		for checkout, expected in (
+			('almasi.extend_deployment', 'extend_deployment'),
+			('almasi.extend_deployment.source_alpha', 'source_alpha'),
+			('renamed', 'extend_deployment')
+		):
+			with cls._runtime() as root:
+				directory = cls._source(root, 'extend_deployment', '''from almasi import a
+
+extend_deployment = a.extend('extend_deployment')
+''')
+				checkout_path = os.path.join(root, checkout)
+				os.rename(directory, checkout_path)
+				sys.path.insert(0, checkout_path)
+				library = importlib.import_module('extend_deployment')
+
+				assert library.get_deployment_name() == expected
+				assert library.__name__ == 'extend_deployment'
+
 	# Reject names unrelated to the source module.
 	# ----------------------------------------------------------------------
 	@classmethod
