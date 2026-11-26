@@ -112,13 +112,18 @@ class Filesystem(a.Singleton):
 		except Exception:
 			logging.exception('Filesystem observer failed: %s', root)
 
+	# Exclude intermediate files created by atomic writes.
+	# ----------------------------------------------------------------------
+	def _is_temporary(self, path):
+		return os.path.basename(path).startswith('.almasi-')
+
 	# Collapse unordered OS events to one final observed status per path.
 	# --------------------------------------------------------------------------
 	def _changes(self, events):
 		changes = {}
 
 		for change, path in events:
-			if not os.path.basename(path).startswith('.almasi-'):
+			if not self._is_temporary(path):
 				path   = os.path.abspath(path)
 				status = 'created' if change == Change.added else 'deleted' if change == Change.deleted else 'modified'
 
@@ -281,7 +286,7 @@ class Filesystem(a.Singleton):
 			for base in bases
 			for directory, _, files in os.walk(base)
 			for name in files
-			if not name.startswith('.almasi-')
+			if not self._is_temporary(name)
 		}
 
 	# Track a resource only while it has listeners; share its OS watchers.
