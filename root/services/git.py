@@ -81,12 +81,11 @@ class Git(a.Singleton):
 		retry = False
 
 		if remaining and result.returncode != 0:
-			stderr = result.stderr or ''
+			stderr        = result.stderr or ''
+			is_rate_limit = re.search(r'rate limit|abuse detection', stderr, re.IGNORECASE)
 
-			if result.args[0] == 'gh':
-				is_rate_limit = re.search(r'rate limit|abuse detection', stderr, re.IGNORECASE)
-
-				if not is_rate_limit:
+			if not is_rate_limit:
+				if result.args[0] == 'gh':
 					retry = bool(
 						re.search(r'^gh: .*\(HTTP (?:401|403|404)\)\s*$', stderr, re.MULTILINE)
 						or (
@@ -95,12 +94,12 @@ class Git(a.Singleton):
 						)
 						or re.search(r'^GraphQL: Resource not accessible by (?:personal access token|integration) \(createRepository\)\s*$', stderr, re.MULTILINE)
 					)
-			elif result.args[0] == 'git':
-				retry = bool(re.search(
-					r'^fatal: Authentication failed for |^remote: Repository not found\.\s*$|'
-					r'^fatal: unable to access .+: The requested URL returned error: (?:401|403|404)\s*$',
-					stderr, re.MULTILINE
-				))
+				elif result.args[0] == 'git':
+					retry = bool(re.search(
+						r'^fatal: Authentication failed for |^remote: Repository not found\.\s*$|'
+						r'^fatal: unable to access .+: The requested URL returned error: (?:401|403|404)\s*$',
+						stderr, re.MULTILINE
+					))
 
 		return retry
 

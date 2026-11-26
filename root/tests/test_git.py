@@ -288,6 +288,37 @@ class TestGit(a.Tester):
 			else:
 				assert False, 'Timeout must not cause another attempt'
 
+	# Stop both execution paths on a Git HTTPS rate-limit response.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_git_rate_limit(cls):
+		git     = a.services.Git
+		tokens  = ['first-test-token', 'second-test-token']
+		args    = ['git', 'fetch']
+		message = (
+			'remote: API rate limit exceeded. Please retry later.\n'
+			'fatal: unable to access https://github.com/owner/repo.git/: The requested URL returned error: 403\n'
+		)
+		failed  = subprocess.CompletedProcess(args, 128, '', message)
+
+		with patch('subprocess.run', return_value=failed) as run:
+			try:
+				git._run(args, token=tokens)
+			except subprocess.CalledProcessError as error:
+				run.assert_called_once()
+				assert error.stderr == message
+			else:
+				assert False, 'Git rate limit must stop credential retries'
+
+		with patch.object(git, '_execute_async', new_callable=AsyncMock, return_value=failed) as execute:
+			try:
+				asyncio.run(git._run_async(args, token=tokens))
+			except subprocess.CalledProcessError as error:
+				execute.assert_awaited_once()
+				assert error.stderr == message
+			else:
+				assert False, 'Async Git rate limit must stop credential retries'
+
 	# Keep source authentication separate from destination administration.
 	# ----------------------------------------------------------------------
 	@classmethod
