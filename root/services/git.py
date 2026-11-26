@@ -182,7 +182,7 @@ class Git(a.Singleton):
 
 	# Change the URL of the remote selected by the checkout's tracking configuration.
 	# ----------------------------------------------------------------------
-	def set_repository_url(self, directory: str, url: str):
+	def set_repository_url(self, directory: str, url: str) -> None:
 		'''Set the upstream remote fetch URL without changing the branch or files.
 		An explicitly configured push URL is not changed.'''
 		command   = self._checkout(directory)
@@ -306,7 +306,7 @@ class Git(a.Singleton):
 
 	# Delete exactly one explicitly named remote repository.
 	# ----------------------------------------------------------------------
-	def delete(self, repository: str):
+	def delete(self, repository: str) -> None:
 		'''Permanently delete a GitHub owner/name using the active credential.
 		Requires repository administration permission; errors propagate.'''
 		repository = self._validate_repository(repository)
