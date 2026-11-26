@@ -99,8 +99,14 @@ remain memoized and do not probe the filesystem for freshness.
 subscriptions cover the entire descendant tree; deletion does not cancel a
 subscription, so recreation can be observed. The callback receives a
 `{relative_path: change}` dictionary, with changes `'created'`,
-`'modified'` or `'deleted'`, not replacement file contents.
-Subscription handles support `update()` and `cancel()`.
+`'modified'` or `'deleted'`, not replacement file contents. A `Directory`
+subscription synchronously delivers one initial dictionary of existing files
+as `'created'`, including inherited paths, to the new callback only (an empty
+dictionary for an empty directory). Subsequent notifications use the same
+relative paths. File subscriptions remain change-only. Initial delivery and
+OS observation are not an atomic snapshot; concurrent edits may race.
+`subscribe(callback)` returns a subscription identity; pass it to
+`unsubscribe(subscription_id)` to cancel.
 
 The source `get_lib()` identifies the supplying library, while the
 observing namespace can be a different inheriting library/fork.
