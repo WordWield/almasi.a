@@ -224,6 +224,20 @@ class Directory(FilesystemResource):
 	def is_directory(self):
 		return True
 
+	# Deliver existing filenames only to the newly registered subscriber.
+	# ----------------------------------------------------------------------
+	def subscribe(self, callback):
+		'''Register for changes and synchronously deliver existing filenames as created.'''
+		subscription_id = super().subscribe(callback)
+
+		try:
+			callback(self._filesystem.snapshot(self))
+		except BaseException:
+			self.unsubscribe(subscription_id)
+			raise
+
+		return subscription_id
+
 	# List direct resources matching a filename mask without loading them.
 	# ----------------------------------------------------------------------
 	def list(self, mask='*'):
