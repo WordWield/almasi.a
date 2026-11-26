@@ -42,7 +42,9 @@ event loop are serialized; other mutations and separate processes must be
 coordinated by callers.
 
 Optional per-operation tokens override authentication in the child process
-only; the service stores no credentials. GitHub HTTPS uses a process-local
+only; the service stores no credentials. Ordered alternatives share one
+access-denial policy across synchronous and asynchronous execution. Each
+command stops at its first success; ambiguous failures are never retried. GitHub HTTPS uses a process-local
 credential helper override, while gh receives GH_TOKEN. Source acquisition
 in create_remote uses ordinary authentication; the token applies to the
 destination. See the API documentation for exact contracts.

@@ -26,8 +26,8 @@ else:
   visible under the specified GitHub owner, including accessible private
   repositories. Reads all pages; no checkout or remote mutation.
 - `exists_remote(owner: str, name: str, *, token=None) -> bool`: True means the remote is
-  visible; False means GitHub returned HTTP 404, which can also indicate
-  insufficient visibility. Other failures propagate.
+  visible; False means the final lookup returned HTTP 404, which can also
+  indicate insufficient visibility. Other failures propagate.
 - `create_remote(owner, name, from_owner=None, from_name=None, private=True, *, token=None) -> None`:
   create an empty repository when both source coordinates are omitted.
   When both are supplied, clone the source's default branch into a temporary
@@ -37,8 +37,7 @@ else:
   Explicit private=False requests public visibility. If the initial push
   fails after creation, inspect the destination before retrying.
 - `delete_remote(owner: str, name: str, *, token=None) -> None`: permanently delete the
-  selected repository, without an interactive confirmation, retry or
-  local deletion. Requires administration permission (or classic token
+  selected repository, without an interactive confirmation or local deletion. Requires administration permission (or classic token
   delete_repo scope). All failures, including 404, propagate.
 - `rename_remote(owner: str, name: str, new_name: str, *, token=None) -> None`: rename
   within the same owner, preserving the repository and its Git history.
@@ -80,12 +79,24 @@ permission. No credential registry is introduced.
 
 ## Operation credentials
 
-All network operations accept an optional keyword-only `token: str | None`.
-With None, existing Git and gh authentication is unchanged. With a token,
-only the operation's child environment receives GH_TOKEN and a GitHub HTTPS
-credential helper override using gh. No global environment or persistent Git
+All network operations accept an optional keyword-only `token: str | list[str] | None`.
+With None, existing Git and gh authentication is unchanged. A string selects
+one token; a nonempty list selects ordered alternatives, not a union of permissions.
+All entries must be valid before execution. Each attempt sends only its selected
+token to the child environment as GH_TOKEN and a GitHub HTTPS credential helper
+override using gh. No global environment or persistent Git
 configuration is modified. The token is not added to command arguments or
 remote URLs. A token must be a nonempty string without whitespace.
+
+Git and gh try the next alternative only after a recognized authentication or
+access denial (HTTP 401/403/404, including GitHub hiding a private repository,
+or equivalent CLI diagnostics). Explicit rate-limit responses, timeouts,
+cancellation, network failures, server errors and unrecognized failures are not
+retried. The first successful command stops the sequence; if every credential
+fails, the final failure is preserved, including unchecked 404 for exists_remote.
+A successful listing is not merged with other credentials. Each network command
+in a compound operation selects its own credential; completed commands are not
+replayed. A timeout applies to each attempted subprocess.
 
 For `create_remote` from a source, the source clone uses ordinary credentials;
 `token` applies to destination creation and push. This allows reading a
@@ -99,6 +110,7 @@ checkouts or processes. Example:
 git.create_remote('cloud', 'project', from_owner='base', from_name='starter', token=cloud_token)
 git.clone('cloud', 'project', path, token=cloud_token)
 await git.pull(path, token=cloud_token)
+visible = git.exists_remote('owner', 'private-project', token=[cloud_token, extra_token])
 ```
 
 Core Git commands disable client-side hooks and terminal prompts for their
