@@ -135,13 +135,14 @@ class Reloadable:
 			try:
 				key     = cls.__dict__.get('__original_module__', cls.__module__)
 				current = sys.modules[key].__dict__[cls.__name__]
-				target  = current() if issubclass(current, Singleton) else current
-				fresh   = target.__reload__()
-				current = type(fresh) if isinstance(fresh, Singleton) else fresh
+				if changes.get('.') != 'created' or os.path.getmtime(file.get_path()) != current.__mtime__:
+					target  = current() if issubclass(current, Singleton) else current
+					fresh   = target.__reload__()
+					current = type(fresh) if isinstance(fresh, Singleton) else fresh
 
-				for instance in gc.get_objects():
-					if type(instance) is current:
-						Reloadable._notify(instance)
+					for instance in gc.get_objects():
+						if type(instance) is current:
+							Reloadable._notify(instance)
 			except Exception:
 				logging.exception('Reloadable source update failed: %s', file.get_path())
 

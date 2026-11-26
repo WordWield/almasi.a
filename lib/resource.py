@@ -76,12 +76,16 @@ class Resource(Module):
 
 	# Notify live listeners in registration order without consuming content.
 	# ----------------------------------------------------------------------
-	def update(self, changed=None):
+	def update(
+		self,
+		changed         = None,
+		subscription_id = None
+	):
 		subscriptions = self._subscriptions
 
 		if subscriptions:
-			for subscription_id in tuple(subscriptions):
-				callback = subscriptions.get(subscription_id)
+			for registration in tuple(subscriptions) if subscription_id is None else (subscription_id,):
+				callback = subscriptions.get(registration)
 
 				if callback is not None:
 					try:

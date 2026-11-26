@@ -9,8 +9,8 @@ that registration; cancellation is idempotent. There is no
 identifier scope on a listener. `resource.is_subscribed()` reports whether
 external observation is needed.
 
-`resource.update(changed=None)` delivers the producer's change notification to
-live subscribers in registration order. Notifications do not consume content.
+`resource.update(changed=None, subscription_id=None)` delivers the producer's change notification to
+live subscribers in registration order, or to one registration when its ID is supplied. Notifications do not consume content.
 Callbacks run synchronously in the producer's execution context. A canceled
 listener is skipped if it has not started; cancellation does not wait for a
 running callback. Direct callback exceptions propagate, while externally
@@ -34,41 +34,27 @@ The canonical Almasi Filesystem service observes all resources, including
 those belonging to forks. Each resource retains its effective namespace for
 visibility and inherited override resolution, independently of the observer.
 
-Filesystem owns watcher roots and effective paths. It observes a resource
-once regardless of listener count, invalidates file and namespace caches before
-calling resource.update({path: status}), and releases unused OS watchers.
-Inherited overrides and fork-local resource identity remain unchanged.
-A file observes its logical identity across replacement, removal, recreation
-and changes of its supplying library layer. A directory observes its subtree.
+Filesystem owns watcher roots, effective file membership and its observation
+context. File and Directory inherit the same subscription implementation from
+FilesystemResource. Every registration receives its own initial mapping
+of effective files to `created` (including an empty mapping), and subsequent
+changes through the same Resource.update operation. A File uses the key `'.'`;
+a Directory uses relative file names with forward slashes. Notifications
+describe effective file membership: a newly visible file is created, a missing
+file is deleted, and a changed or replaced source is modified. Directories
+themselves are not file entries.
 
-All filesystem notifications use paths relative to the subscribed resource,
-in effective namespace coordinates for inherited resources and physical
-coordinates for external resources. The key `'.'` identifies the resource itself
-(a File or Directory); a directory descendant is named by its relative path,
-such as `'nested/item.js'`. A File affected by an ancestor event can receive
-`'..'` or a more distant ancestor path. Keys use forward slashes; they are
-event coordinates, not necessarily valid child names for Directory.read().
-For example, a File callback can receive `{'.': 'modified'}`; a Directory
-callback can receive `{'notes.txt': 'modified'}`. Obtain the resource's name
-through `get_name()` rather than interpreting the notification key as its name.
-Status values remain `created`, `modified`, and `deleted`, describing
-observed filesystem changes, not necessarily effective membership changes.
-Consumers must resolve current membership when inheritance or coalescing
-matters. Each Directory subscription synchronously delivers its own initial
-batch of recursively enumerated filenames across the existing library layers,
-marked `created` (or an empty dictionary if none exist), without loading file
-contents. The same relative keys are used for subsequent change hints. File
-subscriptions remain change-only. No atomic snapshot of concurrent edits is
-promised. If the initial callback raises, its registration is removed and
-the error propagates.
+The service replaces root-specific dispatch threads with one observation
+event loop, using watchfiles.awatch to observe physical roots. All source
+notifications, including deferred deployment publication, run in that context.
+The synchronous subscribe API waits for registration, not the completion of
+its initial callback. Cancellation remains idempotent. Generic non-filesystem
+Resource subscriptions retain their existing producer-context behavior.
 
-This replaces the previous library-relative File notification keys. Consumers
-that interpret those keys must use resource-relative coordinates instead.
-Hidden parent changes do not invalidate a local override; removing that
-override can reveal an inherited file. Notifications are coalescible hints,
-not an event history. OS watchers do not by themselves establish global
-cache freshness, nor guarantee gap-free delivery across watcher startup,
-overflow or restart.
+Existing watchers are shared by physical root and released when no resource
+needs them. The service invalidates caches before notifying. A source callback
+must not block the observation loop. Native watchfiles startup and overflow
+still do not provide an atomic gap-free snapshot guarantee.
 
 Example:
 

@@ -26,19 +26,15 @@ class File(FilesystemResource):
 		self._hash_method = hash_method
 
 	# ======================================================================
-	# PRIVATE METHODS
+	# PUBLIC METHODS
 	# ======================================================================
 
 	# Forget content after a successful filesystem mutation.
 	# ----------------------------------------------------------------------
-	def _invalidate(self):
+	def invalidate(self):
 		self._data   = None
 		self._hash   = None
 		self._loaded = False
-
-	# ======================================================================
-	# PUBLIC METHODS
-	# ======================================================================
 
 	# Preserve the established public carrier-type predicate.
 	# ----------------------------------------------------------------------
