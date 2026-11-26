@@ -2,7 +2,7 @@
 # TEST PIP
 # ==============================================================================
 # PURPOSE:
-# Verify requirements synchronization, package commands and atomic declaration edits.
+# Verify requirements synchronization, package commands and declaration edits.
 #
 # RESPONSIBILITY BOUNDARIES:
 # Owns: Isolated fixtures and assertions.
@@ -107,7 +107,7 @@ class TestPip(a.Tester):
 				pip.initialize(path)
 				assert run.call_args.args[0][-3:] == ['install', '-r', path]
 
-				with patch('os.replace', side_effect=OSError('Publication failed')):
+				with patch.object(a.__PLUGINS__['Text'], 'write', side_effect=OSError('Write failed')):
 					with TestCase().assertRaises(OSError):
 						pip.install('example', min_version='2')
 
