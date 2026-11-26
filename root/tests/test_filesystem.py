@@ -5,6 +5,7 @@
 # ==============================================================================
 
 import os
+import shutil
 import sys
 import tempfile
 import types
@@ -55,9 +56,8 @@ class TestFilesystem(a.Tester):
 	# Fail after copying some bytes into the destination.
 	# ----------------------------------------------------------------------
 	@classmethod
-	def _fail_copy(cls, source, destination):
-		with open(destination, 'wb') as stream:
-			stream.write(b'partial')
+	def _fail_copy(cls, incoming, outgoing, length):
+		outgoing.write(b'partial')
 		raise OSError('Interrupted copy')
 
 	# Verify that the plugin writes directly to the requested destination.
@@ -313,7 +313,7 @@ class TestFilesystem(a.Tester):
 
 			assert directory.notes == 'old'
 
-			with patch.object(directory, '_copy', side_effect=cls._fail_copy):
+			with patch.object(shutil, 'copyfileobj', side_effect=cls._fail_copy):
 				with TestCase().assertRaises(OSError):
 					directory.copy('notes.txt', source)
 

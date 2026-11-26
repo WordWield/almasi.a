@@ -5,11 +5,11 @@
 # ==============================================================================
 
 import os
+import shutil
 import stat
 import weakref
 
 from fnmatch import fnmatchcase
-from functools import partial
 
 from .filesystem_resource import FilesystemResource
 from .file     import File
@@ -180,17 +180,6 @@ class Directory(FilesystemResource):
 						face.__dict__.pop(name, None)
 						face.__cached_names__.discard(name)
 
-	# Stream bytes without invoking a format plugin.
-	# ----------------------------------------------------------------------
-	def _copy(self, source, destination):
-		with open(source, 'rb') as incoming:
-			if not stat.S_ISREG(os.fstat(incoming.fileno()).st_mode):
-				raise ValueError(f'Not a regular file: {source}')
-
-			with open(destination, 'wb') as outgoing:
-				for chunk in iter(partial(incoming.read, 1024 * 1024), b''):
-					outgoing.write(chunk)
-
 	# ======================================================================
 	# PUBLIC METHODS
 	# ======================================================================
@@ -342,7 +331,12 @@ class Directory(FilesystemResource):
 			raise ValueError(f'Source and destination are the same file: {path}')
 
 		try:
-			self._copy(source, path)
+			with open(source, 'rb') as incoming:
+				if stat.S_ISREG(os.fstat(incoming.fileno()).st_mode):
+					with open(path, 'wb') as outgoing:
+						shutil.copyfileobj(incoming, outgoing, 1024 * 1024)
+				else:
+					raise ValueError(f'Not a regular file: {source}')
 		finally:
 			self._invalidate_children(path)
 

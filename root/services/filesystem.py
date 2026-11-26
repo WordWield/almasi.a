@@ -273,14 +273,15 @@ class Filesystem(a.Singleton):
 		namespace      = resource._namespace_lib
 		path           = resource.get_path()
 		_, _, relative = self._source(namespace, path)
-		bases          = (os.path.join(root, relative) for root in self._roots_for(namespace, path, relative)) if relative is not None else (path,)
+		bases          = (os.path.join(root, relative or path) for root in self._roots_for(namespace, path, relative))
+		changes        = {}
 
-		return {
-			os.path.relpath(os.path.join(directory, name), base).replace(os.sep, '/'): 'created'
-			for base in bases
-			for directory, _, files in os.walk(base)
-			for name in files
-		}
+		for base in bases:
+			for directory, _, files in os.walk(base):
+				prefix = '' if directory == base else os.path.relpath(directory, base).replace(os.sep, '/') + '/'
+				changes.update((prefix + name, 'created') for name in files)
+
+		return changes
 
 	# Track a resource only while it has listeners; share its OS watchers.
 	# ----------------------------------------------------------------------

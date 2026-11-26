@@ -258,6 +258,35 @@ class TestResourceSubscriptions(a.Tester):
 					directory.unsubscribe(left)
 					directory.unsubscribe(right)
 
+	# A failed initial notification releases only its own registration.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_directory_initial_callback_failure(cls):
+		with tempfile.TemporaryDirectory() as root:
+			directory = a.Directory(a, root, 'almasi.initial')
+			service   = a.services.Filesystem
+			callback  = Mock()
+			failure   = Mock(side_effect=ValueError('intentional'))
+
+			with patch.object(type(service), '_watch', return_value=None):
+				handle = directory.subscribe(callback)
+
+				try:
+					try:
+						directory.subscribe(failure)
+					except ValueError as error:
+						assert str(error) == 'intentional'
+					else:
+						raise AssertionError('Initial callback error was suppressed')
+
+					directory.update({'one.py': 'created'})
+					assert callback.call_count == 2
+					failure.assert_called_once_with({})
+				finally:
+					directory.unsubscribe(handle)
+
+				assert directory not in service._resources
+
 	# Keep a directory subscribed across removal and subsequent recreation.
 	# --------------------------------------------------------------------------
 	@classmethod
