@@ -53,6 +53,11 @@ class FilesystemResource(Resource):
 	def get_path(self):
 		return self.__path__
 
+	# Keep existing notification coordinates unless a resource selects a base.
+	# --------------------------------------------------------------------------
+	def get_change_base(self):
+		return None
+
 	# Return the logical route in the Almasi namespace.
 	# --------------------------------------------------------------------------
 	def get_route(self):

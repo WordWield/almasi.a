@@ -150,6 +150,8 @@ class TestResourceSubscriptions(a.Tester):
 			file = next(item for item in directory if item.get_name() == 'notes.txt')
 
 			assert isinstance(file, a.Resource)
+			assert file.get_change_base() is None
+			assert directory.get_change_base() == directory.get_path()
 			assert file.read() == 'text'
 			assert directory.read() is directory
 			assert directory.read('notes.txt') == 'text'
@@ -194,11 +196,11 @@ class TestResourceSubscriptions(a.Tester):
 
 				service._changed_paths(root, {path: 'modified'})
 				assert len(got_file) == 1
-				assert next(iter(got_file[0].values())) == 'modified'
+				assert got_file == [{'notes.txt': 'modified'}]
 				assert file.load() == 'after'
 
 				service._changed_paths(os.path.dirname(root), {path: 'modified'})
-				assert len(got_dir) == 1
+				assert got_dir == [{'notes.txt': 'modified'}]
 				assert directory.notes == 'after'
 
 				file.unsubscribe(file_handle)
@@ -245,12 +247,12 @@ class TestResourceSubscriptions(a.Tester):
 
 				shutil.rmtree(root)
 				service._changed_paths(parent, {root: 'deleted'})
-				assert events[-1] == {'foo': 'deleted'}
+				assert events[-1] == {'.': 'deleted'}
 				assert directory.is_subscribed()
 
 				os.mkdir(root)
 				service._changed_paths(parent, {root: 'created'})
-				assert events[-1] == {'foo': 'created'}
+				assert events[-1] == {'.': 'created'}
 
 				directory.unsubscribe(handle)
 				assert not directory.is_subscribed()
@@ -276,7 +278,7 @@ class TestResourceSubscriptions(a.Tester):
 				service._changed_paths(parent, changes)
 				assert len(events) == 1
 				assert len(events[0]) == 1001
-				assert events[0]['foo/nested/item_500.js'] == 'modified'
+				assert events[0]['nested/item_500.js'] == 'modified'
 
 				directory.unsubscribe(handle)
 
@@ -381,34 +383,42 @@ class TestResourceSubscriptions(a.Tester):
 			parent.mkdir('shared').write('note.md', 'inherited')
 			face   = child.mkdir('shared')
 			file   = face.__resolve__('note.md')
-			events = []
-			source = a.services.Filesystem
-			p_path = parent.shared.join('note.md')
-			c_path = face.join('note.md')
+			events     = []
+			dir_events = []
+			source     = a.services.Filesystem
+			p_path     = parent.shared.join('note.md')
+			c_path     = face.join('note.md')
 
 			assert file.get_lib() is parent
 			assert file._namespace_lib is child
 
 			with patch.object(type(source), '_watch', return_value=None):
-				handle = file.subscribe(events.append)
+				handle     = file.subscribe(events.append)
+				dir_handle = face.subscribe(dir_events.append)
 
 				parent.shared.write('note.md', 'changed')
 				source._changed_paths(parent.__path__, {p_path: 'modified'})
-				assert len(events) == 1
+				assert events == [{'shared/note.md': 'modified'}]
+				assert dir_events == [{'note.md': 'modified'}]
 
 				face.write('note.md', 'local')
 				source._changed_paths(child.__path__, {c_path: 'created'})
-				assert len(events) == 2
+				assert events[-1] == {'shared/note.md': 'created'}
+				assert dir_events[-1] == {'note.md': 'created'}
+				assert len(events) == len(dir_events) == 2
 
 				parent.shared.write('note.md', 'hidden')
 				source._changed_paths(parent.__path__, {p_path: 'modified'})
-				assert len(events) == 2
+				assert len(events) == len(dir_events) == 2
 
 				os.remove(c_path)
 				source._changed_paths(child.__path__, {c_path: 'deleted'})
-				assert len(events) == 3
+				assert events[-1] == {'shared/note.md': 'deleted'}
+				assert dir_events[-1] == {'note.md': 'deleted'}
+				assert len(events) == len(dir_events) == 3
 
 				file.unsubscribe(handle)
+				face.unsubscribe(dir_handle)
 
 	# Resolve inherited unregistered file extensions without plugin filtering.
 	# --------------------------------------------------------------------------

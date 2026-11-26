@@ -40,6 +40,23 @@ calling resource.update({path: status}), and releases unused OS watchers.
 Inherited overrides and fork-local resource identity remain unchanged.
 A file observes its logical identity across replacement, removal, recreation
 and changes of its supplying library layer. A directory observes its subtree.
+
+Each FilesystemResource supplies its notification coordinate origin through
+`get_change_base() -> str | None`. A canonical absolute directory path selects
+that origin; None retains the library-relative coordinates (or the physical
+resource parent's coordinates for external paths). File inherits None, so its
+notification keys are unchanged. Directory returns its own canonical path.
+Filesystem resolves the supplied origin in the effective namespace and uses
+physical coordinates outside it. It does not select the origin by resource
+type. The origin is derived from the resource on delivery, not stored per
+subscriber. The `subscribe(callback)` contract remains unchanged.
+
+A directory callback receives a dictionary with slash-separated paths relative
+to that directory, such as `{'notes.txt': 'modified', 'nested/item.js': 'created'}`.
+The key `'.'` identifies the directory itself. Status values remain
+`created`, `modified`, and `deleted`, describing observed filesystem changes,
+not necessarily changes in effective namespace membership. Consumers must
+resolve current membership when inheritance or coalesced events matter.
 Hidden parent changes do not invalidate a local override; removing that
 override can reveal an inherited file. Notifications are coalescible hints,
 not an event history. OS watchers do not by themselves establish global
