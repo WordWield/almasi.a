@@ -109,13 +109,13 @@ class Git(a.Singleton):
 
 	# Require the selected working tree itself, never a containing repository.
 	# ----------------------------------------------------------------------
-	def _checkout(self, directory):
-		path = os.path.realpath(directory)
+	def _checkout(self, path):
+		path = os.path.realpath(path)
 
-		if self.is_repository(path):
+		if self.is_cloned(path):
 			result = ['git', '-C', path, '--git-dir=.git', '--work-tree=.']
 		else:
-			raise ValueError(f'Expected a Git working checkout root: {directory}')
+			raise ValueError(f'Expected a Git working checkout root: {path}')
 
 		return result
 
@@ -130,30 +130,37 @@ class Git(a.Singleton):
 
 	# Serialize concurrent updates to one working tree, not unrelated trees.
 	# ----------------------------------------------------------------------
-	def _pull_lock(self, directory):
-		lock = self._pull_locks.get(directory)
+	def _pull_lock(self, path):
+		lock = self._pull_locks.get(path)
 
 		if lock is None:
 			lock = asyncio.Lock()
-			self._pull_locks[directory] = lock
+			self._pull_locks[path] = lock
 
 		return lock
 
-	# Validate an explicit GitHub owner/name, never a URL or shell option.
+	# Validate the two coordinates before forming a GitHub repository slug.
 	# ----------------------------------------------------------------------
-	def _validate_repository(self, repository):
+	def _get_slug(self, owner, name):
 		is_valid = (
-			isinstance(repository, str)
-			and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+', repository)
-			and repository.rsplit('/', 1)[1] not in ('.', '..')
+			isinstance(owner, str)
+			and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9-]*', owner)
+			and isinstance(name, str)
+			and re.fullmatch(r'[A-Za-z0-9_.-]+', name)
+			and name not in ('.', '..')
 		)
 
 		if is_valid:
-			result = repository
+			result = f'{owner}/{name}'
 		else:
-			raise ValueError(f'Expected GitHub owner/name: {repository!r}')
+			raise ValueError(f'Expected GitHub owner and name: {owner!r}, {name!r}')
 
 		return result
+
+	# Derive the canonical HTTPS address from repository identity.
+	# ----------------------------------------------------------------------
+	def _get_url(self, owner, name):
+		return f'https://{self._HOST}/{self._get_slug(owner, name)}.git'
 
 	# Use the authenticated GitHub CLI without interactive prompts.
 	# ----------------------------------------------------------------------
@@ -164,28 +171,40 @@ class Git(a.Singleton):
 	# PUBLIC METHODS
 	# ======================================================================
 
-	# Clone a trusted remote into an explicitly selected local directory.
+	# Clone an explicitly named GitHub repository into the selected path.
 	# ----------------------------------------------------------------------
-	def clone(self, url: str, directory: str, timeout: float | None = None) -> str:
-		self._run(['git', 'clone', '--quiet', '--', url, directory], timeout=timeout)
+	def clone(self, owner: str, name: str, path: str, timeout: float | None = None) -> str:
+		url = self._get_url(owner, name)
+		self._run(['git', 'clone', '--quiet', '--', url, path], timeout=timeout)
 
-		return directory
+		return path
 
-	# Return the remote URL selected by the checkout's tracking configuration.
+	# Resolve the GitHub identity of the checkout's configured upstream.
 	# ----------------------------------------------------------------------
-	def get_repository_url(self, directory: str) -> str:
-		'''Return the configured upstream remote URL of an exact checkout root.'''
-		command   = self._checkout(directory)
+	def get_remote(self, path: str) -> tuple[str, str]:
+		'''Return (owner, name) for a configured GitHub HTTPS or SSH upstream.'''
+		command   = self._checkout(path)
 		_, remote = self._upstream(command)
+		url       = self._run([*command, 'config', '--get', f'remote.{remote}.url']).stdout.strip()
+		host      = re.escape(self._HOST)
+		match     = re.fullmatch(rf'(?:https://{host}/|ssh://git@{host}/|git@{host}:)([^/]+)/([^/]+)', url)
 
-		return self._run([*command, 'remote', 'get-url', remote]).stdout.strip()
+		if match is not None:
+			owner, name = match.groups()
+			name        = name.removesuffix('.git')
+			self._get_slug(owner, name)
+		else:
+			raise ValueError('Expected a GitHub upstream remote')
 
-	# Change the URL of the remote selected by the checkout's tracking configuration.
+		return owner, name
+
+	# Update the configured upstream without changing branch or checkout contents.
 	# ----------------------------------------------------------------------
-	def set_repository_url(self, directory: str, url: str) -> None:
-		'''Set the upstream remote fetch URL without changing the branch or files.
+	def set_remote(self, path: str, owner: str, name: str) -> None:
+		'''Set the upstream fetch URL to the selected GitHub repository.
 		An explicitly configured push URL is not changed.'''
-		command   = self._checkout(directory)
+		url       = self._get_url(owner, name)
+		command   = self._checkout(path)
 		_, remote = self._upstream(command)
 
 		self._run([*command, 'remote', 'set-url', '--', remote, url])
@@ -194,7 +213,7 @@ class Git(a.Singleton):
 	# ----------------------------------------------------------------------
 	async def pull(
 		self,
-		directory : str,
+		path : str,
 		*,
 		exact     : bool         = False,
 		timeout   : float | None = None
@@ -204,7 +223,7 @@ class Git(a.Singleton):
 		HEAD, including rewinds, and rejects uncommitted tracked changes.
 		Timeout is in seconds per network command; cancellation stops that
 		command. Use exact mode only for dedicated deployment checkouts.'''
-		command = self._checkout(directory)
+		command = self._checkout(path)
 
 		async with self._pull_lock(command[2]):
 			if exact:
@@ -231,12 +250,12 @@ class Git(a.Singleton):
 
 	# Recognize working checkout roots, including linked Git worktrees.
 	# ----------------------------------------------------------------------
-	def is_repository(self, directory: str) -> bool:
+	def is_cloned(self, path: str) -> bool:
 		result = False
 
-		if os.path.exists(os.path.join(directory, '.git')):
+		if os.path.exists(os.path.join(path, '.git')):
 			probe = self._run(
-				['git', '-C', directory, '--git-dir=.git', '--work-tree=.', 'rev-parse', '--is-inside-work-tree'],
+				['git', '-C', path, '--git-dir=.git', '--work-tree=.', 'rev-parse', '--is-inside-work-tree'],
 				check=False
 			)
 			result = probe.returncode == 0 and probe.stdout.strip() == 'true'
@@ -245,7 +264,7 @@ class Git(a.Singleton):
 
 	# List all repositories visible to the authenticated identity under one owner.
 	# ----------------------------------------------------------------------
-	def list_repositories(self, owner: str) -> list[str]:
+	def list_remotes(self, owner: str) -> list[str]:
 		if isinstance(owner, str) and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9-]*', owner):
 			query = '''query($owner: String!, $endCursor: String) {
 				repositoryOwner(login: $owner) {
@@ -268,62 +287,53 @@ class Git(a.Singleton):
 
 	# Check repository visibility to the authenticated GitHub identity.
 	# ----------------------------------------------------------------------
-	def exists(self, repository: str) -> bool:
-		repository = self._validate_repository(repository)
-		probe      = self._gh(['api', '--hostname', self._HOST, '--include', f'repos/{repository}'], check=False)
+	def exists_remote(self, owner: str, name: str) -> bool:
+		slug  = self._get_slug(owner, name)
+		probe = self._gh(['api', '--hostname', self._HOST, '--include', f'repos/{slug}'], check=False)
 
 		if probe.returncode == 0:
 			result = True
 		elif re.match(r'HTTP/\S+ 404\b', probe.stdout):
 			result = False
 		else:
-			raise RuntimeError(f'GitHub lookup failed for {repository}: {probe.stderr.strip()}')
+			raise RuntimeError(f'GitHub lookup failed for {slug}: {probe.stderr.strip()}')
 
 		return result
 
 	# Create an independent repository, optionally with the source branch.
 	# ----------------------------------------------------------------------
-	def create(
+	def create_remote(
 		self,
-		new_repository  : str,
-		from_repository : str | None = None,
-		private         : bool       = True
-	) -> str:
-		new_repository   = self._validate_repository(new_repository)
-		visibility     = '--private' if private else '--public'
-		arguments      = ['repo', 'create', new_repository, visibility]
+		owner      : str,
+		name       : str,
+		from_owner : str | None = None,
+		from_name  : str | None = None,
+		private    : bool       = True
+	) -> None:
+		slug       = self._get_slug(owner, name)
+		visibility = '--private' if private else '--public'
+		arguments  = ['repo', 'create', slug, visibility]
 
-		if from_repository is None:
+		if from_owner is None and from_name is None:
 			self._gh(arguments)
+		elif from_owner is not None and from_name is not None:
+			with tempfile.TemporaryDirectory(prefix='almasi_git_') as path:
+				self.clone(from_owner, from_name, path)
+				self._gh([*arguments, '--source', path, '--remote', 'destination', '--push'])
 		else:
-			from_repository = self._validate_repository(from_repository)
-
-			with tempfile.TemporaryDirectory(prefix='almasi_git_') as directory:
-				self.clone(f'https://{self._HOST}/{from_repository}.git', directory)
-				self._gh([*arguments, '--source', directory, '--remote', 'destination', '--push'])
-
-		return f'https://{self._HOST}/{new_repository}.git'
+			raise ValueError('Source owner and name must be supplied together')
 
 	# Delete exactly one explicitly named remote repository.
 	# ----------------------------------------------------------------------
-	def delete(self, repository: str) -> None:
-		'''Permanently delete a GitHub owner/name using the active credential.
-		Requires repository administration permission; errors propagate.'''
-		repository = self._validate_repository(repository)
-		self._gh(['api', '--hostname', self._HOST, '--method', 'DELETE', f'repos/{repository}'])
+	def delete_remote(self, owner: str, name: str) -> None:
+		'''Permanently delete the selected GitHub repository.'''
+		slug = self._get_slug(owner, name)
+		self._gh(['api', '--hostname', self._HOST, '--method', 'DELETE', f'repos/{slug}'])
 
-	# Rename a repository in place, preserving its identity and history.
+	# Rename a repository within its existing owner, preserving its history.
 	# ----------------------------------------------------------------------
-	def rename(self, repository: str, new_name: str) -> str:
-		'''Rename a GitHub owner/name within its current owner.
-		Return the new HTTPS clone URL; local checkouts are unchanged.'''
-		repository = self._validate_repository(repository)
-		owner      = repository.split('/')[0]
-
-		if isinstance(new_name, str) and '/' not in new_name:
-			destination = self._validate_repository(f'{owner}/{new_name}')
-			self._gh(['api', '--hostname', self._HOST, '--method', 'PATCH', f'repos/{repository}', '-f', f'name={new_name}'])
-		else:
-			raise ValueError(f'Expected a repository name: {new_name!r}')
-
-		return f'https://{self._HOST}/{destination}.git'
+	def rename_remote(self, owner: str, name: str, new_name: str) -> None:
+		'''Rename the remote repository; local checkouts are unchanged.'''
+		slug = self._get_slug(owner, name)
+		self._get_slug(owner, new_name)
+		self._gh(['api', '--hostname', self._HOST, '--method', 'PATCH', f'repos/{slug}', '-f', f'name={new_name}'])

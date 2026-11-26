@@ -1,78 +1,85 @@
 # Git service
 
-`a.services.Git` provides Git checkout operations and authenticated GitHub
-repository management. It is an Almasi Singleton service without repository binding, ready to use
-without explicit initialization. Core is independent of the installer's
-private Git implementation.
+`a.services.Git` is a Singleton ready to use without initialization.
+Remote repositories are identified by two separate strings, `owner` and
+`name`, on github.com. A local checkout is identified by its filesystem
+`path`. The service derives Git URLs internally. The installer's private
+Git implementation is independent.
 
 ```python
 from almasi import a
 
 git = a.services.Git
 
-if not git.exists('owner/project'):
-	git.create('owner/project', from_repository='owner/starter')
+if not git.exists_remote('owner', 'project'):
+	git.create_remote('owner', 'project', from_owner='base', from_name='starter')
 
-git.clone('https://github.com/owner/project.git', './project')
+if not git.is_cloned('./project'):
+	git.clone('owner', 'project', './project')
+else:
+	await git.pull('./project')
 ```
 
-- `list_repositories(owner: str) -> list[str]`: lists repository names (not
-  owner/name pairs) visible to the authenticated GitHub identity under the
-  specified owner, including accessible private repositories. Reads all pages
-  via GitHub CLI; discovery does not clone or create repositories. Invalid owners
-  and CLI failures raise errors.
-- `exists(repository: str) -> bool`: accepts an explicit GitHub `owner/name`.
-  True means the repository is visible to the authenticated identity. False
-  means GitHub returned HTTP 404; GitHub also uses 404 for inaccessible private
-  repositories. Other HTTP errors, connection failures and missing CLI raise
-  errors. Never interpret False as proof of permission to create.
-- `create(new_repository: str, from_repository: str | None = None, private: bool = True) -> str`:
-  creates a new empty repository, or clones the source's default branch into
-  a temporary checkout and pushes it (including its commit history) to a new,
-  independent repository. Returns its HTTPS clone URL. It does not modify the
-  source, require a GitHub template, or overwrite an existing destination.
-  Explicit `private=False` requests public visibility; only use this for code
-  authorized for public release. If creation succeeds but the push fails, the
-  destination may remain empty and must be inspected before retrying.
-- `delete(repository: str) -> None`: permanently deletes the explicit GitHub
-  owner/name through the authenticated API. Requires administration write
-  permission (or the classic token's delete_repo scope). No confirmation
-  prompt, local deletion, automatic retry or ignored 404. The caller must
-  authorize the target and coordinate its lifecycle before calling.
-- `rename(repository: str, new_name: str) -> str`: renames the existing remote
-  repository within its current owner, preserving repository identity and Git
-  history. Accepts an owner/name and a bare destination name, not a new owner.
-  Returns the new HTTPS clone URL. Does not move local checkouts or change
-  their Git configuration. Provider failures propagate.
-- `set_repository_url(directory: str, url: str) -> None`: changes the fetch
-  URL of the remote selected by the checkout's current upstream configuration.
-  Requires an exact checkout root and a configured upstream. Does not contact
-  the remote, change the working tree or alter explicitly configured push URLs.
-- `clone(url, directory, timeout=None) -> str`: clone and return the directory.
-- `get_repository_url(directory) -> str`: return the checkout's upstream remote URL.
-- `await pull(directory, *, exact=False, timeout=None) -> str`: return the final
-  commit SHA after a fast-forward-only update, or explicitly synchronize to
-  upstream HEAD (including rewinds) with exact=True; reject dirty tracked
-  files in exact mode. Only use exact mode on dedicated deployment checkouts.
-- `is_repository(directory) -> bool`: recognize an exact working checkout root.
-  See [Git architecture](architecture.git.md) for lifecycle and error contracts.
+## Remote operations
 
-For a coordinated, authorized rename, for example:
+- `list_remotes(owner: str) -> list[str]`: list all repository names
+  visible under the specified GitHub owner, including accessible private
+  repositories. Reads all pages; no checkout or remote mutation.
+- `exists_remote(owner: str, name: str) -> bool`: True means the remote is
+  visible; False means GitHub returned HTTP 404, which can also indicate
+  insufficient visibility. Other failures propagate.
+- `create_remote(owner, name, from_owner=None, from_name=None, private=True) -> None`:
+  create an empty repository when both source coordinates are omitted.
+  When both are supplied, clone the source's default branch into a temporary
+  checkout and push its history to the new independent repository, including
+  across owners. Supplying just one source coordinate is invalid.
+  No GitHub template or fork is required; the source is not modified.
+  Explicit private=False requests public visibility. If the initial push
+  fails after creation, inspect the destination before retrying.
+- `delete_remote(owner: str, name: str) -> None`: permanently delete the
+  selected repository, without an interactive confirmation, retry or
+  local deletion. Requires administration permission (or classic token
+  delete_repo scope). All failures, including 404, propagate.
+- `rename_remote(owner: str, name: str, new_name: str) -> None`: rename
+  within the same owner, preserving the repository and its Git history.
+  Local checkouts are not moved or modified.
+
+## Local checkout operations
+
+- `clone(owner, name, path, timeout=None) -> str`: clone the GitHub
+  repository over HTTPS into a missing or empty path and return that path.
+  The caller determines whether to reuse an existing checkout.
+- `is_cloned(path: str) -> bool`: recognize an exact working checkout
+  root, including one created by git init or a linked worktree.
+- `await pull(path, *, exact=False, timeout=None) -> str`: return the final
+  commit SHA. Default is fast-forward only. With exact=True, match upstream
+  HEAD including rewinds, rejecting dirty tracked files. Use exact mode
+  only for dedicated deployment checkouts.
+- `get_remote(path: str) -> tuple[str, str]`: return (owner, name) from the
+  current branch's configured GitHub upstream (HTTPS or standard SSH).
+  Requires an exact checkout root and a configured upstream. Unsupported
+  hosts and local repository paths raise ValueError.
+- `set_remote(path: str, owner: str, name: str) -> None`: update that
+  upstream remote's fetch URL to the specified GitHub repository, preserving
+  branch tracking and working files. Explicit push URLs are unchanged.
+  Does not contact the remote.
+
+For an authorized coordinated rename:
 
 ```python
-url = git.rename('owner/old', 'new')
-git.set_repository_url(directory, url)
+git.rename_remote('owner', 'old', 'new')
+git.set_remote(path, 'owner', 'new')
 ```
 
-Remote operations require GitHub CLI (`gh`) authenticated to github.com,
-permission to create repositories under the target owner, and Git credentials
-to read the source and push the destination. Configure these before use,
-for example with `gh auth login --hostname github.com` and
-`gh auth setup-git --hostname github.com`. No new Python dependency is required.
+The caller owns target authorization, coordination of local and remote
+mutations, and recovery from partial failure. GitHub CLI (`gh`) and
+appropriate Git credentials must be configured before remote operations.
+Creation from a source requires read access to the source and create/push
+access to the destination. Rename and deletion require administration
+permission. No credential registry is introduced.
 
-Core Git commands disable client-side Git hooks and terminal prompts for their
-subprocesses, including Git children started by `gh`. Normal manual Git commands,
-user configuration and server-side repository checks are unchanged.
-
-Failed checked commands retain their native CalledProcessError and attach
-captured stdout and stderr as exception notes, visible in the traceback.
+Core Git commands disable client-side hooks and terminal prompts for their
+subprocesses, including Git children started by gh. Normal manual commands,
+persistent configuration and server-side checks are unchanged. Failed
+checked commands preserve CalledProcessError and attach captured diagnostics.
+See [Git architecture](architecture.git.md) for lifecycle details.

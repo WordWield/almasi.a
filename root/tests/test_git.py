@@ -80,10 +80,11 @@ class TestGit(a.Tester):
 			]
 			subprocess.run([*commit, 'Initial'], check=True)
 
-			assert git.is_repository(origin)
-			assert not git.is_repository(checkout)
-			assert git.clone(origin, checkout) == checkout
-			assert git.is_repository(checkout)
+			assert git.is_cloned(origin)
+			assert not git.is_cloned(checkout)
+			with patch.object(git, '_get_url', return_value=origin):
+				assert git.clone('owner', 'repo', checkout) == checkout
+			assert git.is_cloned(checkout)
 
 			with open(filename, 'w') as stream:
 				stream.write('second')
@@ -132,9 +133,9 @@ class TestGit(a.Tester):
 				'GIT_CONFIG_VALUE_0' : hooks
 			}
 
-			with patch.dict(os.environ, environment):
-				git.clone(origin, checkout)
-				assert git.is_repository(checkout)
+			with patch.dict(os.environ, environment), patch.object(git, '_get_url', return_value=origin):
+				git.clone('owner', 'repo', checkout)
+				assert git.is_cloned(checkout)
 
 				arguments = ['git', '-C', checkout, 'push', 'origin', 'HEAD:refs/heads/copied']
 
@@ -182,12 +183,12 @@ class TestGit(a.Tester):
 	# Read all repository names from the authenticated paginated GitHub query.
 	# ----------------------------------------------------------------------
 	@classmethod
-	def test_list_repositories(cls):
+	def test_list_remotes(cls):
 		git = a.services.Git
 
 		with patch.object(git, '_gh') as gh:
 			gh.return_value = subprocess.CompletedProcess([], 0, 'one\ntwo\n', '')
-			assert git.list_repositories('owner') == ['one', 'two']
+			assert git.list_remotes('owner') == ['one', 'two']
 
 			arguments = gh.call_args.args[0]
 			assert arguments[:5] == ['api', 'graphql', '--hostname', git._HOST, '--paginate']
@@ -197,7 +198,7 @@ class TestGit(a.Tester):
 			gh.reset_mock()
 
 			try:
-				git.list_repositories('owner/repo')
+				git.list_remotes('owner/repo')
 			except ValueError:
 				gh.assert_not_called()
 			else:
@@ -206,7 +207,7 @@ class TestGit(a.Tester):
 			gh.side_effect = subprocess.CalledProcessError(1, ['gh'])
 
 			try:
-				git.list_repositories('owner')
+				git.list_remotes('owner')
 			except subprocess.CalledProcessError:
 				assert gh.called
 			else:
@@ -215,20 +216,20 @@ class TestGit(a.Tester):
 	# Distinguish a missing repository from authentication and network errors.
 	# ----------------------------------------------------------------------
 	@classmethod
-	def test_exists(cls):
+	def test_exists_remote(cls):
 		git = a.services.Git
 
 		with patch.object(git, '_gh') as gh:
 			gh.return_value = subprocess.CompletedProcess([], 0, 'HTTP/2 200 OK', '')
-			assert git.exists('owner/repo') is True
+			assert git.exists_remote('owner', 'repo') is True
 
 			gh.return_value = subprocess.CompletedProcess([], 1, 'HTTP/2 404 Not Found', 'gh: Not Found')
-			assert git.exists('owner/repo') is False
+			assert git.exists_remote('owner', 'repo') is False
 
 			gh.return_value = subprocess.CompletedProcess([], 1, 'HTTP/2 403 Forbidden', 'gh: Forbidden')
 
 			try:
-				git.exists('owner/repo')
+				git.exists_remote('owner', 'repo')
 			except RuntimeError as error:
 				assert 'Forbidden' in str(error)
 			else:
@@ -237,7 +238,7 @@ class TestGit(a.Tester):
 			gh.return_value = subprocess.CompletedProcess([], 1, '', 'network unavailable')
 
 			try:
-				git.exists('owner/repo')
+				git.exists_remote('owner', 'repo')
 			except RuntimeError as error:
 				assert 'network unavailable' in str(error)
 			else:
@@ -250,11 +251,11 @@ class TestGit(a.Tester):
 		git = a.services.Git
 
 		with patch.object(git, '_gh') as gh:
-			assert git.create('owner/repo') == 'https://github.com/owner/repo.git'
+			assert git.create_remote('owner', 'repo') is None
 			gh.assert_called_once_with(['repo', 'create', 'owner/repo', '--private'])
 
 		with patch.object(git, '_gh') as gh:
-			git.create('owner/repo', private=False)
+			git.create_remote('owner', 'repo', private=False)
 			gh.assert_called_once_with(['repo', 'create', 'owner/repo', '--public'])
 
 	# Seed from an ordinary repository, without requiring GitHub template flags.
@@ -264,29 +265,29 @@ class TestGit(a.Tester):
 		git = a.services.Git
 
 		with patch.object(git, 'clone') as clone, patch.object(git, '_gh') as gh:
-			assert git.create('owner/new', from_repository='base/old') == 'https://github.com/owner/new.git'
+			assert git.create_remote('owner', 'new', from_owner='base', from_name='old') is None
 
-			url, directory = clone.call_args.args
-			assert url == 'https://github.com/base/old.git'
+			owner, name, path = clone.call_args.args
+			assert (owner, name) == ('base', 'old')
 			gh.assert_called_once_with([
 				'repo', 'create', 'owner/new', '--private',
-				'--source', directory, '--remote', 'destination', '--push'
+				'--source', path, '--remote', 'destination', '--push'
 			])
 
 	# Delete only the explicit remote and propagate provider failures.
 	# ----------------------------------------------------------------------
 	@classmethod
-	def test_delete(cls):
+	def test_delete_remote(cls):
 		git = a.services.Git
 
 		with patch.object(git, '_gh') as gh:
-			assert git.delete('owner/repo') is None
+			assert git.delete_remote('owner', 'repo') is None
 			gh.assert_called_once_with(['api', '--hostname', git._HOST, '--method', 'DELETE', 'repos/owner/repo'])
 			gh.reset_mock()
 
-			for repository in ('repo', 'owner/..', 'owner/repo/extra', 'https://github.com/owner/repo'):
+			for owner, name in (('', 'repo'), ('owner', '..'), ('owner', 'repo/extra'), ('https://github.com/owner', 'repo')):
 				try:
-					git.delete(repository)
+					git.delete_remote(owner, name)
 				except ValueError:
 					gh.assert_not_called()
 				else:
@@ -295,7 +296,7 @@ class TestGit(a.Tester):
 			gh.side_effect = subprocess.CalledProcessError(1, ['gh'])
 
 			try:
-				git.delete('owner/repo')
+				git.delete_remote('owner', 'repo')
 			except subprocess.CalledProcessError:
 				gh.assert_called_once()
 			else:
@@ -304,17 +305,17 @@ class TestGit(a.Tester):
 	# Rename within the current owner without creating or deleting a repository.
 	# ----------------------------------------------------------------------
 	@classmethod
-	def test_rename(cls):
+	def test_rename_remote(cls):
 		git = a.services.Git
 
 		with patch.object(git, '_gh') as gh:
-			assert git.rename('owner/old', 'new.name') == 'https://github.com/owner/new.name.git'
+			assert git.rename_remote('owner', 'old', 'new.name') is None
 			gh.assert_called_once_with(['api', '--hostname', git._HOST, '--method', 'PATCH', 'repos/owner/old', '-f', 'name=new.name'])
 			gh.reset_mock()
 
-			for repository, name in (('old', 'new'), ('owner/old', 'other/new'), ('owner/old', '..'), ('owner/old', ''), ('owner/old', None)):
+			for owner, name, new_name in (('', 'old', 'new'), ('owner', 'old', 'other/new'), ('owner', 'old', '..'), ('owner', 'old', ''), ('owner', 'old', None)):
 				try:
-					git.rename(repository, name)
+					git.rename_remote(owner, name, new_name)
 				except ValueError:
 					gh.assert_not_called()
 				else:
@@ -323,7 +324,7 @@ class TestGit(a.Tester):
 			gh.side_effect = subprocess.CalledProcessError(1, ['gh'])
 
 			try:
-				git.rename('owner/old', 'new')
+				git.rename_remote('owner', 'old', 'new')
 			except subprocess.CalledProcessError:
 				gh.assert_called_once()
 			else:
@@ -332,7 +333,7 @@ class TestGit(a.Tester):
 	# Update the tracked remote, not an assumed origin or the working tree.
 	# ----------------------------------------------------------------------
 	@classmethod
-	def test_set_repository_url(cls):
+	def test_set_remote(cls):
 		git = a.services.Git
 
 		with tempfile.TemporaryDirectory(prefix='almasi_git_url_') as directory:
@@ -343,7 +344,7 @@ class TestGit(a.Tester):
 			cls._git(origin, 'config', 'user.name', 'Test')
 			cls._git(origin, 'config', 'user.email', 'test@example.org')
 			cls._git(origin, 'commit', '-qm', 'Initial', '--allow-empty')
-			git.clone(origin, checkout)
+			subprocess.run(['git', 'clone', '-q', origin, checkout], check=True)
 
 			cls._git(checkout, 'remote', 'rename', 'origin', 'upstream')
 			cls._git(checkout, 'remote', 'add', 'origin', 'https://github.com/owner/unrelated.git')
@@ -351,22 +352,62 @@ class TestGit(a.Tester):
 
 			commit = cls._git(checkout, 'rev-parse', 'HEAD')
 			branch = cls._git(checkout, 'rev-parse', '--abbrev-ref', '@{upstream}')
-			url    = 'https://github.com/owner/renamed.git'
+			for url in ('https://github.com/owner/old.git', 'https://github.com/owner/old', 'git@github.com:owner/old.git', 'ssh://git@github.com/owner/old.git'):
+				cls._git(checkout, 'remote', 'set-url', 'upstream', url)
+				assert git.get_remote(checkout) == ('owner', 'old')
 
-			assert git.get_repository_url(checkout) == origin
-			assert git.set_repository_url(checkout, url) is None
-			assert git.get_repository_url(checkout) == url
+			assert git.set_remote(checkout, 'owner', 'renamed') is None
+			assert git.get_remote(checkout) == ('owner', 'renamed')
+			assert cls._git(checkout, 'remote', 'get-url', 'upstream') == 'https://github.com/owner/renamed.git'
 			assert cls._git(checkout, 'remote', 'get-url', 'origin') == 'https://github.com/owner/unrelated.git'
 			assert cls._git(checkout, 'remote', 'get-url', '--push', 'upstream') == 'https://github.com/owner/publish.git'
 			assert cls._git(checkout, 'rev-parse', 'HEAD') == commit
 			assert cls._git(checkout, 'rev-parse', '--abbrev-ref', '@{upstream}') == branch
 
+			for url in (origin, 'https://example.org/owner/repo.git', 'https://github.com/owner/repo/extra'):
+				cls._git(checkout, 'remote', 'set-url', 'upstream', url)
+
+				try:
+					git.get_remote(checkout)
+				except ValueError:
+					assert cls._git(checkout, 'remote', 'get-url', 'upstream') == url
+				else:
+					assert False, 'A non-GitHub upstream was accepted'
+
+			git.set_remote(checkout, 'owner', 'renamed')
+
 			try:
-				git.set_repository_url(directory, url)
+				git.set_remote(directory, 'owner', 'renamed')
 			except ValueError:
-				assert git.get_repository_url(checkout) == url
+				assert git.get_remote(checkout) == ('owner', 'renamed')
 			else:
 				assert False, 'An exact checkout root is required'
+
+	# Reject incomplete source identities before creating a repository.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_create_requires_source_coordinates(cls):
+		git = a.services.Git
+
+		with patch.object(git, '_gh') as gh, patch.object(git, 'clone') as clone:
+			for owner, name in (('base', None), (None, 'old')):
+				try:
+					git.create_remote('owner', 'new', from_owner=owner, from_name=name)
+				except ValueError:
+					gh.assert_not_called()
+					clone.assert_not_called()
+				else:
+					assert False, 'Both source coordinates are required'
+
+	# Derive the clone address internally from the two remote coordinates.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_clone_coordinates(cls):
+		git = a.services.Git
+
+		with patch.object(git, '_run') as run:
+			assert git.clone('owner', 'repo.name', '/checkout', timeout=5) == '/checkout'
+			run.assert_called_once_with(['git', 'clone', '--quiet', '--', 'https://github.com/owner/repo.name.git', '/checkout'], timeout=5)
 
 	# Reject ambiguous names before invoking the CLI.
 	# ----------------------------------------------------------------------
@@ -376,7 +417,7 @@ class TestGit(a.Tester):
 
 		with patch.object(git, '_gh') as gh:
 			try:
-				git.exists('repo')
+				git.exists_remote('', 'repo')
 			except ValueError:
 				assert not gh.called
 			else:
@@ -408,7 +449,6 @@ class TestGit(a.Tester):
 			subprocess.run(['git', 'clone', '-q', '-b', 'master', remote, local], check=True)
 
 			service = a.services.Git
-			assert service.get_repository_url(local) == remote
 
 			with open(file, 'w', encoding='utf-8') as stream:
 				stream.write('version = 2\n')
