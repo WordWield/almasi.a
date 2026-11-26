@@ -207,15 +207,13 @@ class TestGit(a.Tester):
 	def test_create_destination_token(cls):
 		git = a.services.Git
 
-		with patch.object(git, 'clone') as clone, patch.object(git, '_gh') as gh:
+		with patch.object(git, 'clone') as clone, patch.object(git, '_gh') as gh, patch.object(git, '_run') as run:
 			git.create_remote('owner', 'new', from_owner='base', from_name='old', token='scoped-test-token')
 
 			owner, name, path = clone.call_args.args
 			clone.assert_called_once_with('base', 'old', path)
-			gh.assert_called_once_with([
-				'repo', 'create', 'owner/new', '--private',
-				'--source', path, '--remote', 'destination', '--push'
-			], token='scoped-test-token')
+			gh.assert_called_once_with(['repo', 'create', 'owner/new', '--private'], token='scoped-test-token')
+			run.assert_called_once_with(['git', '-C', path, 'push', '--quiet', '--', 'https://github.com/owner/new.git', 'HEAD'], token='scoped-test-token')
 
 	# Verify the token reaches each authenticated operation.
 	# ----------------------------------------------------------------------
@@ -362,15 +360,13 @@ class TestGit(a.Tester):
 	def test_create_from_repository(cls):
 		git = a.services.Git
 
-		with patch.object(git, 'clone') as clone, patch.object(git, '_gh') as gh:
+		with patch.object(git, 'clone') as clone, patch.object(git, '_gh') as gh, patch.object(git, '_run') as run:
 			assert git.create_remote('owner', 'new', from_owner='base', from_name='old') is None
 
 			owner, name, path = clone.call_args.args
 			assert (owner, name) == ('base', 'old')
-			gh.assert_called_once_with([
-				'repo', 'create', 'owner/new', '--private',
-				'--source', path, '--remote', 'destination', '--push'
-			], token=None)
+			gh.assert_called_once_with(['repo', 'create', 'owner/new', '--private'], token=None)
+			run.assert_called_once_with(['git', '-C', path, 'push', '--quiet', '--', 'https://github.com/owner/new.git', 'HEAD'], token=None)
 
 	# Delete only the explicit remote and propagate provider failures.
 	# ----------------------------------------------------------------------

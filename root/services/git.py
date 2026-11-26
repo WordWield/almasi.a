@@ -220,7 +220,7 @@ class Git(a.Singleton):
 		path    : str,
 		timeout : float | None = None,
 		*,
-		token   : str   | None = None
+		token   : str   | None  = None
 	) -> str:
 		url = self._to_url(owner, name)
 		self._run(['git', 'clone', '--quiet', '--', url, path], timeout=timeout, token=token)
@@ -361,7 +361,8 @@ class Git(a.Singleton):
 		elif from_owner is not None and from_name is not None:
 			with tempfile.TemporaryDirectory(prefix='almasi_git_') as path:
 				self.clone(from_owner, from_name, path)
-				self._gh([*arguments, '--source', path, '--remote', 'destination', '--push'], token=token)
+				self._gh(arguments, token=token)
+				self._run(['git', '-C', path, 'push', '--quiet', '--', self._to_url(owner, name), 'HEAD'], token=token)
 		else:
 			raise ValueError('Source owner and name must be supplied together')
 
