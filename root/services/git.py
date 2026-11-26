@@ -28,25 +28,6 @@ class Git(a.Singleton):
 	# PRIVATE METHODS
 	# ======================================================================
 
-	# Validate all ordered alternatives before starting a network command.
-	# ----------------------------------------------------------------------
-	def _get_tokens(self, token):
-		if token is None:
-			result = (None,)
-		else:
-			tokens   = token if isinstance(token, list) else [token]
-			is_valid = tokens and all(
-				isinstance(value, str) and value and not any(character.isspace() for character in value)
-				for value in tokens
-			)
-
-			if is_valid:
-				result = tuple(tokens)
-			else:
-				raise ValueError('Expected a nonempty GitHub token or list of tokens without whitespace')
-
-		return result
-
 	# Share noninteractive, hook-free configuration across all CLI operations.
 	# ----------------------------------------------------------------------
 	def _environment(self, token=None):
@@ -60,9 +41,12 @@ class Git(a.Singleton):
 		settings = [('core.hooksPath', os.devnull)]
 
 		if token is not None:
-			environment['GH_TOKEN'] = token
-			credential              = f'credential.https://{self._HOST}.helper'
-			settings.extend([(credential, ''), (credential, '!gh auth git-credential')])
+			if isinstance(token, str) and token and not any(character.isspace() for character in token):
+				environment['GH_TOKEN'] = token
+				credential              = f'credential.https://{self._HOST}.helper'
+				settings.extend([(credential, ''), (credential, '!gh auth git-credential')])
+			else:
+				raise ValueError('Expected a nonempty GitHub token without whitespace')
 
 		index = int(environment.get('GIT_CONFIG_COUNT', '0'))
 
@@ -75,45 +59,12 @@ class Git(a.Singleton):
 
 		return environment
 
-	# Retry only recognized access denials, never ambiguous mutation failures.
-	# ----------------------------------------------------------------------
-	def _should_retry(self, result, remaining):
-		retry = False
-
-		if remaining and result.returncode != 0:
-			stderr        = result.stderr or ''
-			is_rate_limit = re.search(r'rate limit|abuse detection', stderr, re.IGNORECASE)
-
-			if not is_rate_limit:
-				if result.args[0] == 'gh':
-					retry = bool(
-						re.search(r'^gh: .*\(HTTP (?:401|403|404)\)\s*$', stderr, re.MULTILINE)
-						or (
-							'--include' in result.args
-							and re.match(r'HTTP/\S+ (?:401|403|404)\b', result.stdout or '')
-						)
-						or re.search(r'^GraphQL: Resource not accessible by (?:personal access token|integration) \(createRepository\)\s*$', stderr, re.MULTILINE)
-					)
-				elif result.args[0] == 'git':
-					retry = bool(re.search(
-						r'^fatal: Authentication failed for |^remote: Repository not found\.\s*$|'
-						r'^fatal: unable to access .+: The requested URL returned error: (?:401|403|404)\s*$',
-						stderr, re.MULTILINE
-					))
-
-		return retry
-
 	# Preserve native failures and their captured diagnostics.
 	# ----------------------------------------------------------------------
-	def _check_result(self, result):
-		try:
-			result.check_returncode()
-		except subprocess.CalledProcessError as error:
-			for output in (error.stdout, error.stderr):
-				if output and output.strip():
-					error.add_note(output.strip())
-
-			raise
+	def _annotate_error(self, error):
+		for output in (error.stdout, error.stderr):
+			if output and output.strip():
+				error.add_note(output.strip())
 
 	# Execute short local and synchronous remote operations without a shell.
 	# ----------------------------------------------------------------------
@@ -124,29 +75,29 @@ class Git(a.Singleton):
 		check   = True,
 		token   = None
 	):
-		tokens = self._get_tokens(token)
-
-		for index, candidate in enumerate(tokens):
+		try:
 			result = subprocess.run(
 				arguments,
-				env            = self._environment(candidate),
+				env            = self._environment(token),
 				capture_output = True,
 				text           = True,
 				timeout        = timeout,
-				check          = False
+				check          = check
 			)
-
-			if not self._should_retry(result, len(tokens) - index - 1):
-				break
-
-		if check:
-			self._check_result(result)
+		except subprocess.CalledProcessError as error:
+			self._annotate_error(error)
+			raise
 
 		return result
 
-	# Await one Git subprocess, preserving cancellation and timeout behavior.
+	# Await a Git operation without blocking the caller's event loop.
 	# ----------------------------------------------------------------------
-	async def _execute_async(self, arguments, timeout, token):
+	async def _run_async(
+		self,
+		arguments,
+		timeout = None,
+		token   = None
+	):
 		process = await asyncio.create_subprocess_exec(
 			*arguments,
 			env    = self._environment(token),
@@ -163,31 +114,18 @@ class Git(a.Singleton):
 			await process.communicate()
 			raise
 
-		return subprocess.CompletedProcess(
-			arguments, process.returncode,
-			stdout = stdout.decode('utf-8', errors='replace'),
-			stderr = stderr.decode('utf-8', errors='replace')
-		)
+		if process.returncode == 0:
+			result = stdout.decode('utf-8', errors='replace').strip()
+		else:
+			error = subprocess.CalledProcessError(
+				process.returncode, arguments,
+				output = stdout.decode('utf-8', errors='replace'),
+				stderr = stderr.decode('utf-8', errors='replace')
+			)
+			self._annotate_error(error)
+			raise error
 
-	# Await ordered credential alternatives without blocking the event loop.
-	# ----------------------------------------------------------------------
-	async def _run_async(
-		self,
-		arguments,
-		timeout = None,
-		token   = None
-	):
-		tokens = self._get_tokens(token)
-
-		for index, candidate in enumerate(tokens):
-			result = await self._execute_async(arguments, timeout, candidate)
-
-			if not self._should_retry(result, len(tokens) - index - 1):
-				break
-
-		self._check_result(result)
-
-		return result.stdout.strip()
+		return result
 
 	# Require the selected working tree itself, never a containing repository.
 	# ----------------------------------------------------------------------
@@ -280,9 +218,9 @@ class Git(a.Singleton):
 		owner   : str,
 		name    : str,
 		path    : str,
-		timeout : float | None           = None,
+		timeout : float | None = None,
 		*,
-		token   : str | list[str] | None = None
+		token   : str   | None  = None
 	) -> str:
 		url = self._to_url(owner, name)
 		self._run(['git', 'clone', '--quiet', '--', url, path], timeout=timeout, token=token)
@@ -316,9 +254,9 @@ class Git(a.Singleton):
 		self,
 		path    : str,
 		*,
-		exact   : bool                   = False,
-		timeout : float | None           = None,
-		token   : str | list[str] | None = None
+		exact   : bool         = False,
+		timeout : float | None = None,
+		token   : str   | None = None
 	) -> str:
 		'''Fetch and update the selected checkout, returning its final HEAD.
 		By default allow only fast-forward updates. exact=True matches upstream
@@ -366,7 +304,7 @@ class Git(a.Singleton):
 
 	# List all repositories visible to the authenticated identity under one owner.
 	# ----------------------------------------------------------------------
-	def list_remotes(self, owner: str, *, token: str | list[str] | None = None) -> list[str]:
+	def list_remotes(self, owner: str, *, token: str | None = None) -> list[str]:
 		if isinstance(owner, str) and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9-]*', owner):
 			query = '''query($owner: String!, $endCursor: String) {
 				repositoryOwner(login: $owner) {
@@ -389,7 +327,7 @@ class Git(a.Singleton):
 
 	# Check repository visibility to the authenticated GitHub identity.
 	# ----------------------------------------------------------------------
-	def exists_remote(self, owner: str, name: str, *, token: str | list[str] | None = None) -> bool:
+	def exists_remote(self, owner: str, name: str, *, token: str | None = None) -> bool:
 		slug  = self._get_slug(owner, name)
 		probe = self._gh(['api', '--hostname', self._HOST, '--include', f'repos/{slug}'], check=False, token=token)
 
@@ -408,11 +346,11 @@ class Git(a.Singleton):
 		self,
 		owner      : str,
 		name       : str,
-		from_owner : str | None             = None,
-		from_name  : str | None             = None,
-		private    : bool                   = True,
+		from_owner : str | None = None,
+		from_name  : str | None = None,
+		private    : bool       = True,
 		*,
-		token      : str | list[str] | None = None
+		token      : str | None = None
 	) -> None:
 		slug       = self._get_slug(owner, name)
 		visibility = '--private' if private else '--public'
@@ -430,14 +368,14 @@ class Git(a.Singleton):
 
 	# Delete exactly one explicitly named remote repository.
 	# ----------------------------------------------------------------------
-	def delete_remote(self, owner: str, name: str, *, token: str | list[str] | None = None) -> None:
+	def delete_remote(self, owner: str, name: str, *, token: str | None = None) -> None:
 		'''Permanently delete the selected GitHub repository.'''
 		slug = self._get_slug(owner, name)
 		self._gh(['api', '--hostname', self._HOST, '--method', 'DELETE', f'repos/{slug}'], token=token)
 
 	# Rename a repository within its existing owner, preserving its history.
 	# ----------------------------------------------------------------------
-	def rename_remote(self, owner: str, name: str, new_name: str, *, token: str | list[str] | None = None) -> None:
+	def rename_remote(self, owner: str, name: str, new_name: str, *, token: str | None = None) -> None:
 		'''Rename the remote repository; local checkouts are unchanged.'''
 		slug = self._get_slug(owner, name)
 		self._get_slug(owner, new_name)
