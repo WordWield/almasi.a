@@ -133,11 +133,9 @@ class Reloadable:
 
 		if os.path.isfile(file.get_path()):
 			try:
-				key    = cls.__dict__.get('__original_module__', cls.__module__)
-				module = sys.modules[key]
-
-				if cls.__lib__.Imports.has_source_changed(module):
-					current = module.__dict__[cls.__name__]
+				key     = cls.__dict__.get('__original_module__', cls.__module__)
+				current = sys.modules[key].__dict__[cls.__name__]
+				if os.path.getmtime(file.get_path()) != current.__mtime__:
 					target  = current() if issubclass(current, Singleton) else current
 					fresh   = target.__reload__()
 					current = type(fresh) if isinstance(fresh, Singleton) else fresh

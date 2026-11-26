@@ -1,4 +1,3 @@
-import hashlib
 import os
 import sys
 import importlib.util
@@ -16,40 +15,22 @@ class Imports:
 		key  = f'{path}#fork-{id(lib)}' if lib.__dict__.get('__fork_source__') is not None else path
 		return key
 
-	# Record the identity of the executed source; forks may reuse compiled code.
+	# Share compiled code objects without sharing the module's globals.
 	# ----------------------------------------------------------------------
 	@classmethod
-	def _execute_module(cls, module, path, share_code=False):
-		cached = None
+	def _execute_fork_module(cls, module, path):
+		stat   = os.stat(path)
+		stamp  = (stat.st_mtime_ns, stat.st_size)
+		cached = cls.__fork_codes__.get(path)
 
-		if share_code:
-			stat   = os.stat(path)
-			stamp  = (stat.st_mtime_ns, stat.st_size)
-			cached = cls.__fork_codes__.get(path)
-
-		if cached is not None and cached[0] == stamp:
-			_, code, source_hash = cached
-		else:
+		if cached is None or cached[0] != stamp:
 			with open(path, 'rb') as source:
-				content = source.read()
+				code = compile(source.read(), path, 'exec')
+			cls.__fork_codes__[path] = (stamp, code)
+		else:
+			code = cached[1]
 
-			code        = compile(content, path, 'exec')
-			source_hash = hashlib.sha256(content).digest()
-
-			if share_code:
-				cls.__fork_codes__[path] = (stamp, code, source_hash)
-
-		module.__source_hash__ = source_hash
 		exec(code, module.__dict__)
-
-	# Compare the current source with the exact version executed by the loader.
-	# ----------------------------------------------------------------------
-	@classmethod
-	def has_source_changed(cls, module):
-		with open(module.__file__, 'rb') as source:
-			changed = hashlib.sha256(source.read()).digest() != module.__source_hash__
-
-		return changed
 
 	# Discard source code after a known filesystem mutation.
 	# ----------------------------------------------------------------------
@@ -87,7 +68,10 @@ class Imports:
 			sys.modules[key] = module
 
 			try:
-				cls._execute_module(module, path, share_code=lib.__dict__.get('__fork_source__') is not None)
+				if lib.__dict__.get('__fork_source__') is not None:
+					cls._execute_fork_module(module, path)
+				else:
+					spec.loader.exec_module(module)
 			except Exception:
 				sys.modules.pop(key, None)
 				raise
@@ -116,7 +100,8 @@ class Imports:
 		sys.modules[key] = module
 
 		try:
-			cls._execute_module(module, path)
+			with open(path, 'rb') as source:
+				exec(compile(source.read(), path, 'exec'), module.__dict__)
 		finally:
 			if previous is not None:
 				sys.modules[key] = previous
