@@ -227,11 +227,7 @@ class TestDirectory(a.Tester):
 			with patch.object(plugin, 'write', wraps=plugin.write) as write:
 				directory.write('notes.txt', 'text')
 
-				assert write.call_count == 1
-				assert os.path.dirname(write.call_args.args[0]) == path
-				assert os.path.basename(write.call_args.args[0]).startswith('.almasi-')
-				assert write.call_args.args[0].endswith('.txt')
-				assert write.call_args.kwargs == {'value': 'text'}
+				write.assert_called_once_with(directory.join('notes.txt'), value='text')
 
 	# Delegate root writes and replace the library's cached child carrier.
 	# ----------------------------------------------------------------------

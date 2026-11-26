@@ -118,18 +118,17 @@ class Filesystem(a.Singleton):
 		changes = {}
 
 		for change, path in events:
-			if not os.path.basename(path).startswith('.almasi-'):
-				path   = os.path.abspath(path)
-				status = 'created' if change == Change.added else 'deleted' if change == Change.deleted else 'modified'
+			path   = os.path.abspath(path)
+			status = 'created' if change == Change.added else 'deleted' if change == Change.deleted else 'modified'
 
-				if path in changes:
-					status = (
-						'deleted' if not os.path.exists(path)
-						else 'created' if 'created' in (status, changes[path])
-						else 'modified'
-					)
+			if path in changes:
+				status = (
+					'deleted' if not os.path.exists(path)
+					else 'created' if 'created' in (status, changes[path])
+					else 'modified'
+				)
 
-				changes[path] = status
+			changes[path] = status
 
 		return changes
 
@@ -267,6 +266,22 @@ class Filesystem(a.Singleton):
 
 				if paths:
 					self._deliver_changes(root, paths)
+
+	# Enumerate existing filenames in the same logical coordinates as changes.
+	# ----------------------------------------------------------------------
+	def snapshot(self, resource):
+		namespace      = resource._namespace_lib
+		path           = resource.get_path()
+		_, _, relative = self._source(namespace, path)
+		bases          = (os.path.join(root, relative or path) for root in self._roots_for(namespace, path, relative))
+		changes        = {}
+
+		for base in bases:
+			for directory, _, files in os.walk(base):
+				prefix = '' if directory == base else os.path.relpath(directory, base).replace(os.sep, '/') + '/'
+				changes.update((prefix + name, 'created') for name in files)
+
+		return changes
 
 	# Track a resource only while it has listeners; share its OS watchers.
 	# ----------------------------------------------------------------------

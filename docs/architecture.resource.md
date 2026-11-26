@@ -54,7 +54,13 @@ through `get_name()` rather than interpreting the notification key as its name.
 Status values remain `created`, `modified`, and `deleted`, describing
 observed filesystem changes, not necessarily effective membership changes.
 Consumers must resolve current membership when inheritance or coalescing
-matters. The `subscribe(callback)` contract is unchanged.
+matters. Each Directory subscription synchronously delivers its own initial
+batch of recursively enumerated filenames across the existing library layers,
+marked `created` (or an empty dictionary if none exist), without loading file
+contents. The same relative keys are used for subsequent change hints. File
+subscriptions remain change-only. No atomic snapshot of concurrent edits is
+promised. If the initial callback raises, its registration is removed and
+the error propagates.
 
 This replaces the previous library-relative File notification keys. Consumers
 that interpret those keys must use resource-relative coordinates instead.

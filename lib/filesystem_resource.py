@@ -10,7 +10,6 @@
 # ==============================================================================
 
 import os
-from importlib import import_module
 
 from .resource import Resource
 
@@ -38,11 +37,17 @@ class FilesystemResource(Resource):
 	# PRIVATE METHODS
 	# ======================================================================
 
-	# Import the published Almasi instance, not its entry module during startup.
+	# Use the canonical Core owner, including for inherited and forked carriers.
+	# ----------------------------------------------------------------------
+	@property
+	def _filesystem(self):
+		return self.get_lib().A.__instance__.services.Filesystem
+
+	# Delegate external observation to the same filesystem service.
 	# ----------------------------------------------------------------------
 	@property
 	def _observe(self):
-		return import_module('almasi.a').services.Filesystem.observe
+		return self._filesystem.observe
 
 	# ==========================================================================
 	# PUBLIC METHODS

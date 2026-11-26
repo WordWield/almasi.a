@@ -28,8 +28,8 @@ Library class metadata, Python module special attributes, plugin ownership, and 
 | `join(*parts)` | Return an absolute validated path without creating anything; zero arguments return the directory path |
 | `mkdir(*parts)` | Create nested directories and return a natively resolved `Directory` |
 | `read(name)` | Load an explicit filename through the responsible existing plugin |
-| `write(name, value)` | Serialize through a plugin and atomically replace the destination |
-| `copy(name, source)` | Copy a regular file byte-for-byte and atomically replace the destination |
+| `write(name, value)` | Serialize through a plugin directly to the destination |
+| `copy(name, source)` | Copy a regular file byte-for-byte to the destination |
 | `link(name, path)` | Create or retarget an explicit filesystem link |
 
 Root library faces delegate these six operations to their root `Directory`.
@@ -51,17 +51,15 @@ cover    = output.join('images', 'cover.png')
 
 `copy` requires an existing regular readable source. It does not recursively copy directories. Copying onto the same file raises `ValueError`, including hard-link identity. Explicit `link()` remains the operation for intentional mounts outside the library tree.
 
-## Atomic publication
+## Direct writes
 
-`write` and `copy` create a unique hidden temporary file in the destination directory, preserve the destination extension, finish serialization or byte copying, then call `os.replace`. Temporary files are excluded from normal discovery. A failure before replacement preserves the old destination and its caches; temporary files are removed and the original exception propagates. A cleanup failure is attached to the original exception rather than replacing it.
-
-These methods provide atomic replacement on the filesystem. They do not synchronize files or directory metadata and do not promise power-loss durability. Copying preserves bytes, not source permissions or timestamps. Streaming and externally managed writes retain their existing protocols.
+`write` and `copy` write to the destination without temporary files. Errors propagate; a failed write can leave partial content. Cache invalidation also runs after an attempted write or copy, including failures. Neither operation guarantees atomic replacement, rollback, or power-loss durability. Existing hard links retain their ordinary filesystem behavior. Copying preserves bytes, not source permissions or timestamps.
 
 ## Memoization and mutation
 
 The namespace face owns `__children__` carriers. `Resource` owns canonical path, source-library and route identity. `File` owns `_data`, `_hash`, `_load_method`, `_hash_method`, and its loaded state. Legitimate `None` is memoized. Normal reads do not probe timestamps or hashes on every access.
 
-Successful mutations invalidate related bindings and reset affected retained file carriers in the receiving face. Unrelated cached resources remain intact. A root `Directory` representing the owning library root shares that library's existing child cache. Creating a local override preserves local-first resolution and existing plugin priority. Retargeting a link removes its old namespace binding.
+Mutations invalidate related bindings and reset affected retained file carriers in the receiving face. Unrelated cached resources remain intact. A root `Directory` representing the owning library root shares that library's existing child cache. Creating a local override preserves local-first resolution and existing plugin priority. Retargeting a link removes its old namespace binding.
 
 Previously returned values remain snapshots. Independently constructed directory faces, inherited consumer faces already holding a cached resource, and external filesystem edits have no automatic global invalidation. There is no new global registry or freshness policy. Callers that need one coherent mutation/read lifetime should retain and use the same namespace face.
 
@@ -99,8 +97,14 @@ remain memoized and do not probe the filesystem for freshness.
 subscriptions cover the entire descendant tree; deletion does not cancel a
 subscription, so recreation can be observed. The callback receives a
 `{relative_path: change}` dictionary, with changes `'created'`,
-`'modified'` or `'deleted'`, not replacement file contents.
-Subscription handles support `update()` and `cancel()`.
+`'modified'` or `'deleted'`, not replacement file contents. A `Directory`
+subscription synchronously delivers one initial dictionary of existing files
+as `'created'`, including inherited paths, to the new callback only (an empty
+dictionary for an empty directory). Subsequent notifications use the same
+relative paths. File subscriptions remain change-only. Initial delivery and
+OS observation are not an atomic snapshot; concurrent edits may race.
+`subscribe(callback)` returns a subscription identity; pass it to
+`unsubscribe(subscription_id)` to cancel.
 
 The source `get_lib()` identifies the supplying library, while the
 observing namespace can be a different inheriting library/fork.

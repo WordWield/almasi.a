@@ -99,7 +99,7 @@ class Pip(a.Singleton):
 			if canonicalize_name(re.split(r'[\s<>=!~;\[@]', line.lstrip(), maxsplit=1)[0]) != prefix
 		]
 
-	# Publish the declaration through the existing atomic file operation.
+	# Write the declaration through the existing filesystem operation.
 	# ----------------------------------------------------------------------
 	def _save(self):
 		content = '\n'.join(self.requirements)

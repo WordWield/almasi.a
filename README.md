@@ -153,7 +153,7 @@ Forks isolate Python-side runtime namespaces and service instances. They **do no
 
 ### Filesystem operations
 
-The runtime also provides `join()`, `mkdir()`, `read()`, `write()`, `copy()` and `link()` on directory faces and library roots. Writes and copies use atomic replacement, and successful mutations invalidate affected cached filesystem carriers. [Read the detailed invariants](docs/almasi_invariants8.md).
+The runtime also provides `join()`, `mkdir()`, `read()`, `write()`, `copy()` and `link()` on directory faces and library roots. Writes and copies operate directly on the destination and invalidate affected cached filesystem carriers. [Read the detailed invariants](docs/almasi_invariants8.md).
 
 ## Git repository management
 

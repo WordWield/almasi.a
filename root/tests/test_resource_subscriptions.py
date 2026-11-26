@@ -45,7 +45,7 @@ class TestResourceSubscriptions(a.Tester):
 		assert a.File.is_directory(a.File(a, __file__, 'almasi.file')) is False
 		assert a.Directory(a, os.path.dirname(__file__), 'almasi.tests').is_directory() is True
 		assert a.File.subscribe is a.Resource.subscribe
-		assert a.Directory.subscribe is a.Resource.subscribe
+		assert a.Directory.subscribe is not a.Resource.subscribe
 		assert not hasattr(a.Directory, 'load')
 		assert a.File.read is not a.Resource.read
 		assert a.Directory.read is not a.Resource.read
@@ -197,7 +197,7 @@ class TestResourceSubscriptions(a.Tester):
 				assert file.load() == 'after'
 
 				service._changed_paths(os.path.dirname(root), {path: 'modified'})
-				assert got_dir == [{'notes.txt': 'modified'}]
+				assert got_dir == [{'notes.txt': 'created'}, {'notes.txt': 'modified'}]
 				assert directory.notes == 'after'
 
 				file.unsubscribe(file_handle)
@@ -227,6 +227,65 @@ class TestResourceSubscriptions(a.Tester):
 				service._changed_paths(alias, {os.path.join(alias, 'notes.txt'): 'modified'})
 				assert events == [{'.': 'modified'}]
 				file.unsubscribe(handle)
+
+	# Each new directory listener receives its own recursive initial batch.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_directory_initial_changes(cls):
+		with tempfile.TemporaryDirectory() as root:
+			directory = a.Directory(a, root, 'almasi.initial')
+			service   = a.services.Filesystem
+			first     = []
+			second    = []
+			os.mkdir(os.path.join(root, 'nested'))
+
+			for name in ('one.py', 'nested/two.txt', '.almasi-temp'):
+				with open(os.path.join(root, name), 'w', encoding='utf-8') as stream:
+					stream.write('content')
+
+			with patch.object(type(service), '_watch', return_value=None):
+				left  = directory.subscribe(first.append)
+				right = directory.subscribe(second.append)
+
+				try:
+					assert first == second == [{'one.py': 'created', 'nested/two.txt': 'created', '.almasi-temp': 'created'}]
+					directory.update({'one.py': 'modified'})
+					assert first == second == [
+						{'one.py': 'created', 'nested/two.txt': 'created', '.almasi-temp': 'created'},
+						{'one.py': 'modified'}
+					]
+				finally:
+					directory.unsubscribe(left)
+					directory.unsubscribe(right)
+
+	# A failed initial notification releases only its own registration.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_directory_initial_callback_failure(cls):
+		with tempfile.TemporaryDirectory() as root:
+			directory = a.Directory(a, root, 'almasi.initial')
+			service   = a.services.Filesystem
+			callback  = Mock()
+			failure   = Mock(side_effect=ValueError('intentional'))
+
+			with patch.object(type(service), '_watch', return_value=None):
+				handle = directory.subscribe(callback)
+
+				try:
+					try:
+						directory.subscribe(failure)
+					except ValueError as error:
+						assert str(error) == 'intentional'
+					else:
+						raise AssertionError('Initial callback error was suppressed')
+
+					directory.update({'one.py': 'created'})
+					assert callback.call_count == 2
+					failure.assert_called_once_with({})
+				finally:
+					directory.unsubscribe(handle)
+
+				assert directory not in service._resources
 
 	# Keep a directory subscribed across removal and subsequent recreation.
 	# --------------------------------------------------------------------------
@@ -299,9 +358,10 @@ class TestResourceSubscriptions(a.Tester):
 					for index in range(1001)
 				}
 				service._changed_paths(parent, changes)
-				assert len(events) == 1
-				assert len(events[0]) == 1001
-				assert events[0]['nested/item_500.js'] == 'modified'
+				assert len(events) == 2
+				assert events[0] == {}
+				assert len(events[1]) == 1001
+				assert events[1]['nested/item_500.js'] == 'modified'
 
 				directory.unsubscribe(handle)
 
@@ -392,7 +452,7 @@ class TestResourceSubscriptions(a.Tester):
 				(Change.modified, path),
 				(Change.deleted, hidden)
 			})
-			assert changes == {path: 'created'}
+			assert changes == {path: 'created', hidden: 'deleted'}
 
 	# An overridden inherited file must not notify for hidden parent edits.
 	# --------------------------------------------------------------------------
@@ -422,23 +482,23 @@ class TestResourceSubscriptions(a.Tester):
 				parent.shared.write('note.md', 'changed')
 				source._changed_paths(parent.__path__, {p_path: 'modified'})
 				assert events == [{'.': 'modified'}]
-				assert dir_events == [{'note.md': 'modified'}]
+				assert dir_events == [{'note.md': 'created'}, {'note.md': 'modified'}]
 
 				face.write('note.md', 'local')
 				source._changed_paths(child.__path__, {c_path: 'created'})
 				assert events[-1] == {'.': 'created'}
 				assert dir_events[-1] == {'note.md': 'created'}
-				assert len(events) == len(dir_events) == 2
+				assert len(events) == 2 and len(dir_events) == 3
 
 				parent.shared.write('note.md', 'hidden')
 				source._changed_paths(parent.__path__, {p_path: 'modified'})
-				assert len(events) == len(dir_events) == 2
+				assert len(events) == 2 and len(dir_events) == 3
 
 				os.remove(c_path)
 				source._changed_paths(child.__path__, {c_path: 'deleted'})
 				assert events[-1] == {'.': 'deleted'}
 				assert dir_events[-1] == {'note.md': 'deleted'}
-				assert len(events) == len(dir_events) == 3
+				assert len(events) == 3 and len(dir_events) == 4
 
 				file.unsubscribe(handle)
 				face.unsubscribe(dir_handle)
@@ -473,7 +533,7 @@ class TestResourceSubscriptions(a.Tester):
 						service._changed_paths(parent.__path__, {path: 'modified'})
 						assert invalidate.call_count == 1
 
-					assert first == second == [{'notes.md': 'modified'}]
+					assert first == second == [{'notes.md': 'created'}, {'notes.md': 'modified'}]
 					assert parent.shared.notes == face.notes == 'after'
 				finally:
 					parent.shared.unsubscribe(parent_id)
