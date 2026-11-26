@@ -98,11 +98,13 @@ subscriptions cover the entire descendant tree; deletion does not cancel a
 subscription, so recreation can be observed. The callback receives a
 `{relative_path: change}` dictionary, with changes `'created'`,
 `'modified'` or `'deleted'`, not replacement file contents. A `Directory`
-subscription synchronously delivers one initial dictionary of existing files
+subscription queues one initial dictionary of existing files
 as `'created'`, including inherited paths, to the new callback only (an empty
-dictionary for an empty directory). Subsequent notifications use the same
-relative paths. File subscriptions remain change-only. Initial delivery and
-OS observation are not an atomic snapshot; concurrent edits may race.
+dictionary for an empty directory). All Directory callbacks run on the same
+shared executor worker, including the initial callback. Queued callbacks
+respect cancellation; callback exceptions are logged without cancellation.
+File subscriptions remain change-only and synchronous in the producer context.
+Initial enumeration and OS observation are not atomic; concurrent edits may race.
 `subscribe(callback)` returns a subscription identity; pass it to
 `unsubscribe(subscription_id)` to cancel.
 

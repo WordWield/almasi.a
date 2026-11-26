@@ -9,7 +9,8 @@ import shutil
 import stat
 import weakref
 
-from fnmatch import fnmatchcase
+from concurrent.futures import ThreadPoolExecutor
+from fnmatch            import fnmatchcase
 
 from .filesystem_resource import FilesystemResource
 from .file     import File
@@ -20,6 +21,8 @@ class Directory(FilesystemResource):
 
 	# Weak references keep namespace tracking from extending object lifetimes.
 	__namespace_faces__ = weakref.WeakSet()
+
+	_notification_executor = ThreadPoolExecutor(max_workers=1)
 
 	# Share the existing root face cache when representing that same root.
 	# ----------------------------------------------------------------------
@@ -100,6 +103,11 @@ class Directory(FilesystemResource):
 	# ======================================================================
 	# PRIVATE METHODS
 	# ======================================================================
+
+	# Deliver every directory notification on the same shared worker.
+	# ----------------------------------------------------------------------
+	def _deliver_notification(self, subscription_id, changed):
+		Directory._notification_executor.submit(super()._deliver_notification, subscription_id, changed)
 
 	# Accept one visible basename and refuse symbolic-link destinations.
 	# ----------------------------------------------------------------------
@@ -192,11 +200,11 @@ class Directory(FilesystemResource):
 	# Deliver existing filenames only to the newly registered subscriber.
 	# ----------------------------------------------------------------------
 	def subscribe(self, callback):
-		'''Register for changes and synchronously deliver existing filenames as created.'''
+		'''Register for changes and enqueue existing filenames as created.'''
 		subscription_id = super().subscribe(callback)
 
 		try:
-			callback(self._filesystem.snapshot(self))
+			self._deliver_notification(subscription_id, self._filesystem.snapshot(self))
 		except BaseException:
 			self.unsubscribe(subscription_id)
 			raise

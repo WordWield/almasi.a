@@ -29,6 +29,24 @@ class Resource(Module):
 		self._observe = observe
 
 	# ======================================================================
+	# PRIVATE METHODS
+	# ======================================================================
+
+	# Resolve the live registration at delivery time and isolate external failures.
+	# ----------------------------------------------------------------------
+	def _deliver_notification(self, subscription_id, changed):
+		callback = self._subscriptions.get(subscription_id)
+
+		if callback is not None:
+			try:
+				callback(changed)
+			except Exception:
+				if self._observe is not None:
+					logging.exception('Subscription callback failed')
+				else:
+					raise
+
+	# ======================================================================
 	# PUBLIC METHODS
 	# ======================================================================
 
@@ -81,13 +99,4 @@ class Resource(Module):
 
 		if subscriptions:
 			for subscription_id in tuple(subscriptions):
-				callback = subscriptions.get(subscription_id)
-
-				if callback is not None:
-					try:
-						callback(changed)
-					except Exception:
-						if self._observe is not None:
-							logging.exception('Subscription callback failed')
-						else:
-							raise
+				self._deliver_notification(subscription_id, changed)

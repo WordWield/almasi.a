@@ -11,10 +11,11 @@ external observation is needed.
 
 `resource.update(changed=None)` delivers the producer's change notification to
 live subscribers in registration order. Notifications do not consume content.
-Callbacks run synchronously in the producer's execution context. A canceled
-listener is skipped if it has not started; cancellation does not wait for a
-running callback. Direct callback exceptions propagate, while externally
-observed resources log callback failures and deliver to the other listeners.
+By default, callbacks run synchronously in the producer's execution context;
+Directory specializes delivery as described below. A canceled listener is
+skipped if it has not started; cancellation does not wait for a running
+callback. Direct callback exceptions propagate, while externally observed
+resources log callback failures and deliver to the other listeners.
 
 An external producer observes resource identity, not subscriptions. Resource
 calls its optional observation callable when registration changes; the
@@ -54,13 +55,20 @@ through `get_name()` rather than interpreting the notification key as its name.
 Status values remain `created`, `modified`, and `deleted`, describing
 observed filesystem changes, not necessarily effective membership changes.
 Consumers must resolve current membership when inheritance or coalescing
-matters. Each Directory subscription synchronously delivers its own initial
-batch of recursively enumerated filenames across the existing library layers,
-marked `created` (or an empty dictionary if none exist), without loading file
-contents. The same relative keys are used for subsequent change hints. File
-subscriptions remain change-only. No atomic snapshot of concurrent edits is
-promised. If the initial callback raises, its registration is removed and
-the error propagates.
+matters. Each Directory subscription queues its own initial batch of
+recursively enumerated filenames across the existing library layers, marked
+`created` (or an empty dictionary if none exist), without loading file contents.
+Initial and subsequent Directory notifications use the same Resource delivery
+operation on one shared executor worker. Neither `subscribe()` nor `update()`
+waits for the callback to finish; no asyncio loop is required. Callbacks run
+serially on that worker in submission order, not on the calling or watcher
+thread. Canceling a registration also skips its queued callbacks that have
+not started. Callback failures are logged for both initial and subsequent
+notifications; they do not cancel the registration. A failure to prepare or
+submit the initial batch still cancels the registration and propagates.
+File subscriptions remain change-only and retain synchronous producer-context
+delivery. The initial enumeration and OS observation are not atomic;
+concurrent changes during subscription can race with the initial submission.
 
 This replaces the previous library-relative File notification keys. Consumers
 that interpret those keys must use resource-relative coordinates instead.
