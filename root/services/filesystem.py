@@ -268,6 +268,22 @@ class Filesystem(a.Singleton):
 				if paths:
 					self._deliver_changes(root, paths)
 
+	# Enumerate existing filenames in the same logical coordinates as changes.
+	# ----------------------------------------------------------------------
+	def snapshot(self, resource):
+		namespace      = resource._namespace_lib
+		path           = resource.get_path()
+		_, _, relative = self._source(namespace, path)
+		bases          = (os.path.join(root, relative) for root in self._roots_for(namespace, path, relative)) if relative is not None else (path,)
+
+		return {
+			os.path.relpath(os.path.join(directory, name), base).replace(os.sep, '/'): 'created'
+			for base in bases
+			for directory, _, files in os.walk(base)
+			for name in files
+			if not name.startswith('.almasi-')
+		}
+
 	# Track a resource only while it has listeners; share its OS watchers.
 	# ----------------------------------------------------------------------
 	def observe(self, resource):
