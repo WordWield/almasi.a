@@ -6,8 +6,6 @@
 
 import os
 import stat
-import sys
-import tempfile
 import weakref
 
 from fnmatch import fnmatchcase
@@ -182,28 +180,6 @@ class Directory(FilesystemResource):
 						face.__dict__.pop(name, None)
 						face.__cached_names__.discard(name)
 
-	# Publish a completed temporary file; never expose a partial destination.
-	# ----------------------------------------------------------------------
-	def _replace(self, path, write):
-		extension        = os.path.splitext(path)[1]
-		descriptor, temp = tempfile.mkstemp(prefix='.almasi-', suffix=extension, dir=self.get_path())
-
-		try:
-			os.close(descriptor)
-			write(temp)
-			os.replace(temp, path)
-		finally:
-			if os.path.lexists(temp):
-				error = sys.exc_info()[1]
-				try:
-					os.unlink(temp)
-				except OSError as cleanup_error:
-					if error is None:
-						raise
-					error.add_note(f'Temporary file cleanup failed: {cleanup_error}')
-
-		self._invalidate_children(path)
-
 	# Stream bytes without invoking a format plugin.
 	# ----------------------------------------------------------------------
 	def _copy(self, source, destination):
@@ -343,15 +319,18 @@ class Directory(FilesystemResource):
 
 		return result
 
-	# Serialize through the format owner and atomically replace the destination.
+	# Serialize directly through the format owner.
 	# ----------------------------------------------------------------------
 	def write(self, name, value=''):
 		path   = self._destination(name)
 		plugin = self._plugin(name)
 
-		self._replace(path, partial(plugin.write, value=value))
+		try:
+			plugin.write(path, value=value)
+		finally:
+			self._invalidate_children(path)
 
-	# Copy a regular file byte-for-byte and atomically replace the destination.
+	# Copy a regular file directly, without invoking a format plugin.
 	# ----------------------------------------------------------------------
 	def copy(self, name, source):
 		path = self._destination(name)
@@ -362,7 +341,10 @@ class Directory(FilesystemResource):
 		if os.path.exists(path) and os.path.samefile(source, path):
 			raise ValueError(f'Source and destination are the same file: {path}')
 
-		self._replace(path, partial(self._copy, source))
+		try:
+			self._copy(source, path)
+		finally:
+			self._invalidate_children(path)
 
 	# Create or retarget an explicit filesystem mount.
 	# ----------------------------------------------------------------------
