@@ -159,8 +159,23 @@ class Git(a.Singleton):
 
 	# Derive the canonical HTTPS address from repository identity.
 	# ----------------------------------------------------------------------
-	def _get_url(self, owner, name):
+	def _to_url(self, owner, name):
 		return f'https://{self._HOST}/{self._get_slug(owner, name)}.git'
+
+	# Recover repository coordinates from supported GitHub remote addresses.
+	# ----------------------------------------------------------------------
+	def _from_url(self, url):
+		host  = re.escape(self._HOST)
+		match = re.fullmatch(rf'(?:https://{host}/|ssh://git@{host}/|git@{host}:)([^/]+)/([^/]+)', url)
+
+		if match is not None:
+			owner, name = match.groups()
+			name        = name.removesuffix('.git')
+			self._get_slug(owner, name)
+		else:
+			raise ValueError('Expected a GitHub upstream remote')
+
+		return owner, name
 
 	# Use the authenticated GitHub CLI without interactive prompts.
 	# ----------------------------------------------------------------------
@@ -174,7 +189,7 @@ class Git(a.Singleton):
 	# Clone an explicitly named GitHub repository into the selected path.
 	# ----------------------------------------------------------------------
 	def clone(self, owner: str, name: str, path: str, timeout: float | None = None) -> str:
-		url = self._get_url(owner, name)
+		url = self._to_url(owner, name)
 		self._run(['git', 'clone', '--quiet', '--', url, path], timeout=timeout)
 
 		return path
@@ -186,24 +201,15 @@ class Git(a.Singleton):
 		command   = self._checkout(path)
 		_, remote = self._upstream(command)
 		url       = self._run([*command, 'config', '--get', f'remote.{remote}.url']).stdout.strip()
-		host      = re.escape(self._HOST)
-		match     = re.fullmatch(rf'(?:https://{host}/|ssh://git@{host}/|git@{host}:)([^/]+)/([^/]+)', url)
 
-		if match is not None:
-			owner, name = match.groups()
-			name        = name.removesuffix('.git')
-			self._get_slug(owner, name)
-		else:
-			raise ValueError('Expected a GitHub upstream remote')
-
-		return owner, name
+		return self._from_url(url)
 
 	# Update the configured upstream without changing branch or checkout contents.
 	# ----------------------------------------------------------------------
 	def set_remote(self, path: str, owner: str, name: str) -> None:
 		'''Set the upstream fetch URL to the selected GitHub repository.
 		An explicitly configured push URL is not changed.'''
-		url       = self._get_url(owner, name)
+		url       = self._to_url(owner, name)
 		command   = self._checkout(path)
 		_, remote = self._upstream(command)
 

@@ -82,7 +82,7 @@ class TestGit(a.Tester):
 
 			assert git.is_cloned(origin)
 			assert not git.is_cloned(checkout)
-			with patch.object(git, '_get_url', return_value=origin):
+			with patch.object(git, '_to_url', return_value=origin):
 				assert git.clone('owner', 'repo', checkout) == checkout
 			assert git.is_cloned(checkout)
 
@@ -133,7 +133,7 @@ class TestGit(a.Tester):
 				'GIT_CONFIG_VALUE_0' : hooks
 			}
 
-			with patch.dict(os.environ, environment), patch.object(git, '_get_url', return_value=origin):
+			with patch.dict(os.environ, environment), patch.object(git, '_to_url', return_value=origin):
 				git.clone('owner', 'repo', checkout)
 				assert git.is_cloned(checkout)
 
