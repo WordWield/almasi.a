@@ -26,6 +26,16 @@ from almasi import a
 
 class TestResourceSubscriptions(a.Tester):
 
+	# ======================================================================
+	# PRIVATE METHODS
+	# ======================================================================
+
+	# Wait for the directory worker to deliver the preceding notifications.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def _wait_for_directory_delivery(cls):
+		a.Directory._executor.submit(bool).result(timeout=5)
+
 	# ==========================================================================
 	# PUBLIC METHODS
 	# ==========================================================================
@@ -197,6 +207,7 @@ class TestResourceSubscriptions(a.Tester):
 				assert file.load() == 'after'
 
 				service._changed_paths(os.path.dirname(root), {path: 'modified'})
+				cls._wait_for_directory_delivery()
 				assert got_dir == [{'notes.txt': 'created'}, {'notes.txt': 'modified'}]
 				assert directory.notes == 'after'
 
@@ -248,8 +259,10 @@ class TestResourceSubscriptions(a.Tester):
 				right = directory.subscribe(second.append)
 
 				try:
+					cls._wait_for_directory_delivery()
 					assert first == second == [{'one.py': 'created', 'nested/two.txt': 'created', '.almasi-temp': 'created'}]
 					directory.update({'one.py': 'modified'})
+					cls._wait_for_directory_delivery()
 					assert first == second == [
 						{'one.py': 'created', 'nested/two.txt': 'created', '.almasi-temp': 'created'},
 						{'one.py': 'modified'}
@@ -258,10 +271,10 @@ class TestResourceSubscriptions(a.Tester):
 					directory.unsubscribe(left)
 					directory.unsubscribe(right)
 
-	# A failed initial notification releases only its own registration.
+	# Initial and later callback errors use the same isolation contract.
 	# ----------------------------------------------------------------------
 	@classmethod
-	def test_directory_initial_callback_failure(cls):
+	def test_directory_callback_failure(cls):
 		with tempfile.TemporaryDirectory() as root:
 			directory = a.Directory(a, root, 'almasi.initial')
 			service   = a.services.Filesystem
@@ -269,23 +282,68 @@ class TestResourceSubscriptions(a.Tester):
 			failure   = Mock(side_effect=ValueError('intentional'))
 
 			with patch.object(type(service), '_watch', return_value=None):
+				with patch('almasi.a.lib.resource.logging.exception') as report:
+					handle    = directory.subscribe(callback)
+					failed_id = directory.subscribe(failure)
+
+					try:
+						directory.update({'one.py': 'created'})
+						cls._wait_for_directory_delivery()
+
+						assert callback.call_count == failure.call_count == report.call_count == 2
+						assert failure.call_args_list == callback.call_args_list
+					finally:
+						directory.unsubscribe(handle)
+						directory.unsubscribe(failed_id)
+
+				assert directory not in service._resources
+
+	# Verify both batches execute on the same worker, not the subscribing thread.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_directory_delivery_context(cls):
+		with tempfile.TemporaryDirectory() as root:
+			directory = a.Directory(a, root, 'almasi.initial')
+			service   = a.services.Filesystem
+			threads   = []
+			callback  = Mock(side_effect=lambda changed: threads.append(threading.get_ident()))
+
+			with patch.object(type(service), '_watch', return_value=None):
 				handle = directory.subscribe(callback)
 
 				try:
-					try:
-						directory.subscribe(failure)
-					except ValueError as error:
-						assert str(error) == 'intentional'
-					else:
-						raise AssertionError('Initial callback error was suppressed')
+					service._changed_paths(os.path.dirname(root), {directory.join('one.py'): 'created'})
+					cls._wait_for_directory_delivery()
 
-					directory.update({'one.py': 'created'})
 					assert callback.call_count == 2
-					failure.assert_called_once_with({})
+					assert callback.call_args_list[0].args == ({},)
+					assert callback.call_args_list[1].args == ({'one.py': 'created'},)
+					assert threads[0] == threads[1] != threading.get_ident()
 				finally:
 					directory.unsubscribe(handle)
 
-				assert directory not in service._resources
+	# Cancellation also skips a queued initial notification that has not started.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_directory_cancel_queued_delivery(cls):
+		with tempfile.TemporaryDirectory() as root:
+			directory = a.Directory(a, root, 'almasi.initial')
+			service   = a.services.Filesystem
+			release   = threading.Event()
+			callback  = Mock()
+
+			with patch.object(type(service), '_watch', return_value=None):
+				a.Directory._executor.submit(release.wait, 5)
+
+				try:
+					handle = directory.subscribe(callback)
+					directory.update({'one.py': 'created'})
+					directory.unsubscribe(handle)
+				finally:
+					release.set()
+
+				cls._wait_for_directory_delivery()
+				callback.assert_not_called()
 
 	# Keep a directory subscribed across removal and subsequent recreation.
 	# --------------------------------------------------------------------------
@@ -303,11 +361,13 @@ class TestResourceSubscriptions(a.Tester):
 
 				shutil.rmtree(root)
 				service._changed_paths(parent, {root: 'deleted'})
+				cls._wait_for_directory_delivery()
 				assert events[-1] == {'.': 'deleted'}
 				assert directory.is_subscribed()
 
 				os.mkdir(root)
 				service._changed_paths(parent, {root: 'created'})
+				cls._wait_for_directory_delivery()
 				assert events[-1] == {'.': 'created'}
 
 				directory.unsubscribe(handle)
@@ -358,6 +418,7 @@ class TestResourceSubscriptions(a.Tester):
 					for index in range(1001)
 				}
 				service._changed_paths(parent, changes)
+				cls._wait_for_directory_delivery()
 				assert len(events) == 2
 				assert events[0] == {}
 				assert len(events[1]) == 1001
@@ -482,21 +543,25 @@ class TestResourceSubscriptions(a.Tester):
 				parent.shared.write('note.md', 'changed')
 				source._changed_paths(parent.__path__, {p_path: 'modified'})
 				assert events == [{'.': 'modified'}]
+				cls._wait_for_directory_delivery()
 				assert dir_events == [{'note.md': 'created'}, {'note.md': 'modified'}]
 
 				face.write('note.md', 'local')
 				source._changed_paths(child.__path__, {c_path: 'created'})
 				assert events[-1] == {'.': 'created'}
+				cls._wait_for_directory_delivery()
 				assert dir_events[-1] == {'note.md': 'created'}
 				assert len(events) == 2 and len(dir_events) == 3
 
 				parent.shared.write('note.md', 'hidden')
 				source._changed_paths(parent.__path__, {p_path: 'modified'})
+				cls._wait_for_directory_delivery()
 				assert len(events) == 2 and len(dir_events) == 3
 
 				os.remove(c_path)
 				source._changed_paths(child.__path__, {c_path: 'deleted'})
 				assert events[-1] == {'.': 'deleted'}
+				cls._wait_for_directory_delivery()
 				assert dir_events[-1] == {'note.md': 'deleted'}
 				assert len(events) == 3 and len(dir_events) == 4
 
@@ -533,6 +598,7 @@ class TestResourceSubscriptions(a.Tester):
 						service._changed_paths(parent.__path__, {path: 'modified'})
 						assert invalidate.call_count == 1
 
+					cls._wait_for_directory_delivery()
 					assert first == second == [{'notes.md': 'created'}, {'notes.md': 'modified'}]
 					assert parent.shared.notes == face.notes == 'after'
 				finally:
