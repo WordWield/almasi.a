@@ -41,8 +41,14 @@ class FilesystemResource(Resource):
 	# Import the published Almasi instance, not its entry module during startup.
 	# ----------------------------------------------------------------------
 	@property
+	def _filesystem(self):
+		return import_module('almasi.a').services.Filesystem
+
+	# Delegate external observation to the same filesystem service.
+	# ----------------------------------------------------------------------
+	@property
 	def _observe(self):
-		return import_module('almasi.a').services.Filesystem.observe
+		return self._filesystem.observe
 
 	# ==========================================================================
 	# PUBLIC METHODS
