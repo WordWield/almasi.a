@@ -89,8 +89,19 @@ class Counter(a.ReloadableSingleton):
 
 The loaded source class retains its exact `a.File` and opaque subscription ID.
 A successful reload transfers these to its replacement class, without a global registry
-of observed source paths. The initial created notification does not reload an unchanged loaded source. When the source changes, it invokes the existing
-`__reload__()` behavior, preserving live instances and state.
+of observed source paths. On every filesystem notification, regardless of its
+status, Reloadable compares the source content with the digest recorded by
+Imports for the executed module. Unchanged source is not reloaded, including
+on subscription or duplicate notifications. Changed source is reloaded even
+when its modification time is unchanged. Explicit `__reload__()` calls remain
+unconditional, preserving live instances and state.
+
+`Imports.has_source_changed(module)` accepts a Python module loaded by
+`Imports` and returns whether its current source bytes differ from the
+executed version. It reads the module's source file and propagates I/O errors.
+Almasi-managed initial loads and reloads now share the same source compilation
+path; fork loads retain the existing compiled-code cache. Non-Almasi Python
+imports are unaffected.
 If replacement fails, the current published class remains in place and the
 exception is logged.
 

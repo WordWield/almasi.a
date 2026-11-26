@@ -95,7 +95,7 @@ class TestReloadable(a.Tester):
 		with tempfile.TemporaryDirectory(dir=a.__path__, prefix='__reloadable_') as path:
 			file_path = os.path.join(path, 'handler.py')
 			with open(file_path, 'w', encoding='utf-8') as stream:
-				stream.write('from almasi import a\nclass Handler(a.ReloadableModule):\n\tpass\n')
+				stream.write('from almasi import a\nclass Handler(a.ReloadableModule):\n\tversion = 1\n')
 
 			directory = a.Directory(a, path, 'almasi.' + os.path.basename(path))
 			with patch.object(type(a.services.Filesystem), '_watch', return_value=None):
@@ -107,11 +107,17 @@ class TestReloadable(a.Tester):
 				first   = handler()
 				second  = handler()
 
+				cls._change(file_path)
+				assert type(first) is handler
 				assert seen == [first, second]
+
+				mtime = os.stat(file_path).st_mtime_ns
 
 				with open(file_path, 'w', encoding='utf-8') as stream:
 					stream.write('from almasi import a\nclass Handler(a.ReloadableModule):\n\tversion = 2\n')
 
+				os.utime(file_path, ns=(mtime, mtime))
+				cls._change(file_path)
 				cls._change(file_path)
 
 				assert seen == [first, second, first, second]
