@@ -248,10 +248,10 @@ class TestResourceSubscriptions(a.Tester):
 				right = directory.subscribe(second.append)
 
 				try:
-					assert first == second == [{'one.py': 'created', 'nested/two.txt': 'created'}]
+					assert first == second == [{'one.py': 'created', 'nested/two.txt': 'created', '.almasi-temp': 'created'}]
 					directory.update({'one.py': 'modified'})
 					assert first == second == [
-						{'one.py': 'created', 'nested/two.txt': 'created'},
+						{'one.py': 'created', 'nested/two.txt': 'created', '.almasi-temp': 'created'},
 						{'one.py': 'modified'}
 					]
 				finally:
@@ -423,7 +423,7 @@ class TestResourceSubscriptions(a.Tester):
 				(Change.modified, path),
 				(Change.deleted, hidden)
 			})
-			assert changes == {path: 'created'}
+			assert changes == {path: 'created', hidden: 'deleted'}
 
 	# An overridden inherited file must not notify for hidden parent edits.
 	# --------------------------------------------------------------------------
