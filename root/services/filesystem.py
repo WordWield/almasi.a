@@ -35,6 +35,8 @@ class Filesystem(a.Singleton):
 		instance = super().__new__(cls)
 
 		if '_loop' not in instance.__dict__:
+			logging.getLogger('watchfiles.main').setLevel(logging.WARNING)
+
 			instance._resources  = {}
 			instance._watchers   = {}
 			instance._deferred   = {}
