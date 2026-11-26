@@ -535,7 +535,7 @@ class TestResourceSubscriptions(a.Tester):
 
 				parent.shared.write('note.md', 'changed')
 				cls._sync(source, parent.__path__, {p_path: 'modified'})
-				assert events == [{'.': 'modified'}]
+				assert events == [{'.': 'created'}, {'.': 'modified'}]
 				assert dir_events == [{'note.md': 'created'}, {'note.md': 'modified'}]
 
 				face.write('note.md', 'local')
