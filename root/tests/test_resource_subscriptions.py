@@ -38,7 +38,7 @@ class TestResourceSubscriptions(a.Tester):
 		paths = None
 	):
 		if root is not None:
-			service._changed_paths(root, paths)
+			service._process_changed_paths(root, paths)
 
 	# Wait for previously scheduled source operations before assertions.
 	# ----------------------------------------------------------------------

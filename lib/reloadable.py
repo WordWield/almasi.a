@@ -122,13 +122,13 @@ class Reloadable:
 	def _observe_reload(cls, file):
 		if '_reload_subscription' not in cls.__dict__:
 			cls._reload_file         = file
-			cls._reload_subscription = file.subscribe(cls._reload_changed)
+			cls._reload_subscription = file.subscribe(cls._reload_if_changed)
 
 	# Resolve the currently published class even when the callback was bound
 	# before an earlier reload.
 	# ----------------------------------------------------------------------
 	@classmethod
-	def _reload_changed(cls, changes):
+	def _reload_if_changed(cls, changes):
 		file = cls._reload_file
 
 		if os.path.isfile(file.get_path()):

@@ -61,7 +61,7 @@ class Filesystem(a.Singleton):
 
 	# Express physical locations in local-first effective namespace order.
 	# ----------------------------------------------------------------------
-	def _locations(self, resource):
+	def _get_locations(self, resource):
 		path      = resource.get_path()
 		namespace = resource.get_namespace()
 		layers    = tuple(namespace.__instances__())
@@ -102,7 +102,7 @@ class Filesystem(a.Singleton):
 
 	# Select the first existing source of each logical file.
 	# ----------------------------------------------------------------------
-	def _snapshot(self, resource, locations):
+	def _get_effective_files(self, resource, locations):
 		files = {}
 
 		for _, base in locations.values():
@@ -135,7 +135,7 @@ class Filesystem(a.Singleton):
 	async def _watch(self, root):
 		try:
 			async for changes in awatch(root, debounce=100, step=50, rust_timeout=500):
-				self._changed_paths(root, {os.path.realpath(path) for _, path in changes})
+				self._process_changed_paths(root, {os.path.realpath(path) for _, path in changes})
 		except Exception:
 			logging.exception('Filesystem observer failed: %s', root)
 
@@ -152,7 +152,7 @@ class Filesystem(a.Singleton):
 
 	# Find logical files affected by one physical event, including subtrees.
 	# ----------------------------------------------------------------------
-	def _affected(self, resource, base, path, files):
+	def _get_affected_names(self, resource, base, path, files):
 		names = set()
 
 		if resource.is_directory():
@@ -189,7 +189,7 @@ class Filesystem(a.Singleton):
 		for resource, locations, files in observed:
 			if resource in self._resources:
 				_, base = locations[root]
-				names   = {name for path in paths for name in self._affected(resource, base, path, files)}
+				names   = {name for path in paths for name in self._get_affected_names(resource, base, path, files)}
 				changes = {}
 
 				for name in names:
@@ -214,7 +214,7 @@ class Filesystem(a.Singleton):
 
 	# Buffer physical changes only while their deployment is being prepared.
 	# ----------------------------------------------------------------------
-	def _changed_paths(self, root, paths):
+	def _process_changed_paths(self, root, paths):
 		root  = os.path.realpath(root)
 		paths = {os.path.realpath(path) for path in paths}
 
@@ -272,8 +272,8 @@ class Filesystem(a.Singleton):
 			if self._is_observation_context():
 				if resource.is_subscribed():
 					if resource not in self._resources:
-						locations = self._locations(resource)
-						self._resources[resource] = (locations, self._snapshot(resource, locations))
+						locations = self._get_locations(resource)
+						self._resources[resource] = (locations, self._get_effective_files(resource, locations))
 				else:
 					self._resources.pop(resource, None)
 

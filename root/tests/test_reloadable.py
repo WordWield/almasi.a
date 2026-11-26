@@ -23,7 +23,7 @@ class TestReloadable(a.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	async def _publish(cls, filesystem, path):
-		filesystem._changed_paths(a.__path__, {path})
+		filesystem._process_changed_paths(a.__path__, {path})
 
 	# Complete the synthetic source notification before checking the class.
 	# ----------------------------------------------------------------------
