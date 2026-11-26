@@ -41,6 +41,12 @@ policy, or process supervision. Concurrent pulls of one checkout in one
 event loop are serialized; other mutations and separate processes must be
 coordinated by callers.
 
+Optional per-operation tokens override authentication in the child process
+only; the service stores no credentials. GitHub HTTPS uses a process-local
+credential helper override, while gh receives GH_TOKEN. Source acquisition
+in create_remote uses ordinary authentication; the token applies to the
+destination. See the API documentation for exact contracts.
+
 Automated commands disable client-side hooks and terminal prompts through
 their subprocess environment. Git children inherit that setting; manual
 commands and persistent configuration remain unchanged.

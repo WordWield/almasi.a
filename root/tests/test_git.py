@@ -15,7 +15,7 @@ import subprocess
 import sys
 import tempfile
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from almasi import a
 
@@ -166,6 +166,104 @@ class TestGit(a.Tester):
 				assert environment['GIT_TERMINAL_PROMPT'] == '0'
 				assert environment['GH_PROMPT_DISABLED'] == '1'
 
+	# Apply an explicit token only to a child environment, never global state.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_token_environment(cls):
+		git = a.services.Git
+
+		with patch.dict(os.environ, {'GH_TOKEN': 'ordinary-test-token', 'GIT_CONFIG_COUNT': '0'}):
+			with patch('subprocess.run') as run:
+				git.delete_remote('owner', 'repo', token='scoped-test-token')
+
+				environment = run.call_args.kwargs['env']
+				assert environment['GH_TOKEN'] == 'scoped-test-token'
+				assert environment['GIT_CONFIG_COUNT'] == '3'
+				assert environment['GIT_CONFIG_KEY_1'] == 'credential.https://github.com.helper'
+				assert environment['GIT_CONFIG_VALUE_1'] == ''
+				assert environment['GIT_CONFIG_KEY_2'] == 'credential.https://github.com.helper'
+				assert environment['GIT_CONFIG_VALUE_2'] == '!gh auth git-credential'
+				assert 'scoped-test-token' not in run.call_args.args[0]
+				assert os.environ['GH_TOKEN'] == 'ordinary-test-token'
+				assert os.environ['GIT_CONFIG_COUNT'] == '0'
+
+				git.delete_remote('owner', 'repo')
+				assert run.call_args.kwargs['env']['GH_TOKEN'] == 'ordinary-test-token'
+				assert run.call_args.kwargs['env']['GIT_CONFIG_COUNT'] == '1'
+
+				run.reset_mock()
+
+				for token in ('', 'invalid token'):
+					try:
+						git.delete_remote('owner', 'repo', token=token)
+					except ValueError:
+						run.assert_not_called()
+					else:
+						assert False, 'Invalid token was accepted'
+
+	# Keep source authentication separate from destination administration.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_create_destination_token(cls):
+		git = a.services.Git
+
+		with patch.object(git, 'clone') as clone, patch.object(git, '_gh') as gh:
+			git.create_remote('owner', 'new', from_owner='base', from_name='old', token='scoped-test-token')
+
+			owner, name, path = clone.call_args.args
+			clone.assert_called_once_with('base', 'old', path)
+			gh.assert_called_once_with([
+				'repo', 'create', 'owner/new', '--private',
+				'--source', path, '--remote', 'destination', '--push'
+			], token='scoped-test-token')
+
+	# Verify the token reaches each authenticated operation.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_remote_tokens(cls):
+		git   = a.services.Git
+		token = 'scoped-test-token'
+
+		with patch.object(git, '_gh') as gh:
+			gh.return_value = subprocess.CompletedProcess([], 0, 'HTTP/2 200 OK', '')
+			git.list_remotes('owner', token=token)
+			assert gh.call_args.kwargs['token'] == token
+
+			git.exists_remote('owner', 'repo', token=token)
+			assert gh.call_args.kwargs['token'] == token
+
+			git.create_remote('owner', 'repo', token=token)
+			assert gh.call_args.kwargs['token'] == token
+
+			git.rename_remote('owner', 'repo', 'new', token=token)
+			assert gh.call_args.kwargs['token'] == token
+
+		with patch('subprocess.run') as run:
+			git.clone('owner', 'repo', '/checkout', token=token)
+			assert run.call_args.kwargs['env']['GH_TOKEN'] == token
+
+	# Supply a credential only to pull's network command, in either mode.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_pull_token(cls):
+		git   = a.services.Git
+		token = 'scoped-test-token'
+
+		with tempfile.TemporaryDirectory() as directory:
+			origin   = os.path.join(directory, 'origin')
+			checkout = os.path.join(directory, 'checkout')
+
+			subprocess.run(['git', 'init', '-q', '-b', 'master', origin], check=True)
+			cls._git(origin, 'config', 'user.name', 'Test')
+			cls._git(origin, 'config', 'user.email', 'test@example.org')
+			cls._git(origin, 'commit', '-qm', 'Initial', '--allow-empty')
+			subprocess.run(['git', 'clone', '-q', origin, checkout], check=True)
+
+			with patch.object(git, '_run_async', new_callable=AsyncMock) as run:
+				for exact in (False, True):
+					asyncio.run(git.pull(checkout, exact=exact, token=token))
+					assert run.call_args.kwargs['token'] == token
+
 	# Retain native exceptions while exposing captured diagnostics in tracebacks.
 	# ----------------------------------------------------------------------
 	@classmethod
@@ -252,11 +350,11 @@ class TestGit(a.Tester):
 
 		with patch.object(git, '_gh') as gh:
 			assert git.create_remote('owner', 'repo') is None
-			gh.assert_called_once_with(['repo', 'create', 'owner/repo', '--private'])
+			gh.assert_called_once_with(['repo', 'create', 'owner/repo', '--private'], token=None)
 
 		with patch.object(git, '_gh') as gh:
 			git.create_remote('owner', 'repo', private=False)
-			gh.assert_called_once_with(['repo', 'create', 'owner/repo', '--public'])
+			gh.assert_called_once_with(['repo', 'create', 'owner/repo', '--public'], token=None)
 
 	# Seed from an ordinary repository, without requiring GitHub template flags.
 	# ----------------------------------------------------------------------
@@ -272,7 +370,7 @@ class TestGit(a.Tester):
 			gh.assert_called_once_with([
 				'repo', 'create', 'owner/new', '--private',
 				'--source', path, '--remote', 'destination', '--push'
-			])
+			], token=None)
 
 	# Delete only the explicit remote and propagate provider failures.
 	# ----------------------------------------------------------------------
@@ -282,7 +380,7 @@ class TestGit(a.Tester):
 
 		with patch.object(git, '_gh') as gh:
 			assert git.delete_remote('owner', 'repo') is None
-			gh.assert_called_once_with(['api', '--hostname', git._HOST, '--method', 'DELETE', 'repos/owner/repo'])
+			gh.assert_called_once_with(['api', '--hostname', git._HOST, '--method', 'DELETE', 'repos/owner/repo'], token=None)
 			gh.reset_mock()
 
 			for owner, name in (('', 'repo'), ('owner', '..'), ('owner', 'repo/extra'), ('https://github.com/owner', 'repo')):
@@ -310,7 +408,7 @@ class TestGit(a.Tester):
 
 		with patch.object(git, '_gh') as gh:
 			assert git.rename_remote('owner', 'old', 'new.name') is None
-			gh.assert_called_once_with(['api', '--hostname', git._HOST, '--method', 'PATCH', 'repos/owner/old', '-f', 'name=new.name'])
+			gh.assert_called_once_with(['api', '--hostname', git._HOST, '--method', 'PATCH', 'repos/owner/old', '-f', 'name=new.name'], token=None)
 			gh.reset_mock()
 
 			for owner, name, new_name in (('', 'old', 'new'), ('owner', 'old', 'other/new'), ('owner', 'old', '..'), ('owner', 'old', ''), ('owner', 'old', None)):
@@ -407,7 +505,7 @@ class TestGit(a.Tester):
 
 		with patch.object(git, '_run') as run:
 			assert git.clone('owner', 'repo.name', '/checkout', timeout=5) == '/checkout'
-			run.assert_called_once_with(['git', 'clone', '--quiet', '--', 'https://github.com/owner/repo.name.git', '/checkout'], timeout=5)
+			run.assert_called_once_with(['git', 'clone', '--quiet', '--', 'https://github.com/owner/repo.name.git', '/checkout'], timeout=5, token=None)
 
 	# Reject ambiguous names before invoking the CLI.
 	# ----------------------------------------------------------------------
