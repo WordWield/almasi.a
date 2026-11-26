@@ -41,23 +41,23 @@ Inherited overrides and fork-local resource identity remain unchanged.
 A file observes its logical identity across replacement, removal, recreation
 and changes of its supplying library layer. A directory observes its subtree.
 
-Each FilesystemResource selects its notification coordinate origin through
-`get_change_base(relative: str) -> str`. Filesystem supplies the resource's
-relative path in its effective library namespace, or relative to its physical
-parent for an external resource. Both the argument and returned origin are
-relative paths in the same coordinates. File inherits the default origin
-`'.'`, retaining its existing notification keys. Directory returns the supplied
-relative path unchanged, selecting itself as the origin. Filesystem applies
-one relative-path transformation without selecting the origin by resource
-type or storing per-subscriber state. The `subscribe(callback)` contract
-remains unchanged.
+All filesystem notifications use paths relative to the subscribed resource,
+in effective namespace coordinates for inherited resources and physical
+coordinates for external resources. The key `'.'` identifies the resource itself
+(a File or Directory); a directory descendant is named by its relative path,
+such as `'nested/item.js'`. A File affected by an ancestor event can receive
+`'..'` or a more distant ancestor path. Keys use forward slashes; they are
+event coordinates, not necessarily valid child names for Directory.read().
+For example, a File callback can receive `{'.': 'modified'}`; a Directory
+callback can receive `{'notes.txt': 'modified'}`. Obtain the resource's name
+through `get_name()` rather than interpreting the notification key as its name.
+Status values remain `created`, `modified`, and `deleted`, describing
+observed filesystem changes, not necessarily effective membership changes.
+Consumers must resolve current membership when inheritance or coalescing
+matters. The `subscribe(callback)` contract is unchanged.
 
-A directory callback receives a dictionary with slash-separated paths relative
-to that directory, such as `{'notes.txt': 'modified', 'nested/item.js': 'created'}`.
-The key `'.'` identifies the directory itself. Status values remain
-`created`, `modified`, and `deleted`, describing observed filesystem changes,
-not necessarily changes in effective namespace membership. Consumers must
-resolve current membership when inheritance or coalesced events matter.
+This replaces the previous library-relative File notification keys. Consumers
+that interpret those keys must use resource-relative coordinates instead.
 Hidden parent changes do not invalidate a local override; removing that
 override can reveal an inherited file. Notifications are coalescible hints,
 not an event history. OS watchers do not by themselves establish global

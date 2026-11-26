@@ -48,18 +48,16 @@ class Filesystem(a.Singleton):
 	# Find the physical source layer and its path relative to that layer.
 	# --------------------------------------------------------------------------
 	def _source(self, namespace, path):
-		index    = None
-		relative = None
+		source = (None, namespace, None)
 
-		for position, layer in enumerate(namespace.__instances__()):
+		for index, layer in enumerate(namespace.__instances__()):
 			root = os.path.realpath(layer.__path__)
 
 			if path == root or path.startswith(root + os.sep):
-				index    = position
-				relative = os.path.relpath(path, root)
+				source = (index, layer, os.path.relpath(path, root))
 				break
 
-		return index, relative
+		return source
 
 	# Locate the effective source even when no format plugin handles the file.
 	# Preserve Almasi's own resolver for known file and directory carriers.
@@ -84,22 +82,17 @@ class Filesystem(a.Singleton):
 
 	# Keep the resolved source path to detect overridden files and removals.
 	# --------------------------------------------------------------------------
-	def _effective(self, resource):
-		_, relative = self._source(resource._namespace_lib, resource.get_path())
-
+	def _effective(self, namespace, path, relative):
 		if relative is not None and relative != '.':
-			path = self._resolve(resource._namespace_lib, relative)
+			path = self._resolve(namespace, relative)
 		else:
-			path = resource.get_path() if os.path.exists(resource.get_path()) else None
+			path = path if os.path.exists(path) else None
 
 		return path
 
 	# Observe all inherited roots or the parent of an external resource.
 	# --------------------------------------------------------------------------
-	def _roots_for(self, resource):
-		namespace, path = resource._namespace_lib, resource.get_path()
-		_, relative     = self._source(namespace, path)
-
+	def _roots_for(self, namespace, path, relative):
 		if relative is not None:
 			roots = {os.path.realpath(layer.__path__) for layer in namespace.__instances__()}
 		else:
@@ -146,13 +139,12 @@ class Filesystem(a.Singleton):
 		roots = {root for entry in self._resources.values() for root in entry['roots']}
 
 		for root in roots - self._watchers.keys():
-			stop   = threading.Event()
-			thread = threading.Thread(target=self._watch, args=(root, stop), daemon=True)
-			thread.start()
-			self._watchers[root] = {'stop': stop, 'thread': thread}
+			stop = threading.Event()
+			threading.Thread(target=self._watch, args=(root, stop), daemon=True).start()
+			self._watchers[root] = stop
 
 		for root in self._watchers.keys() - roots:
-			self._watchers.pop(root)['stop'].set()
+			self._watchers.pop(root).set()
 
 	# Ignore shadowed changes, while notifying when an override disappears.
 	# --------------------------------------------------------------------------
@@ -161,7 +153,7 @@ class Filesystem(a.Singleton):
 		visible   = effective is None or effective == path
 
 		if not visible:
-			effective_index, _ = self._source(namespace, effective)
+			effective_index, _, _ = self._source(namespace, effective)
 			visible = effective_index is not None and index < effective_index
 
 		return visible
@@ -189,27 +181,28 @@ class Filesystem(a.Singleton):
 				if root in entry['roots']
 			)
 
-		namespaces = {resource._namespace_lib for resource, old in observed}
-		sources    = {}
-		visibility = {}
+		namespaces  = {resource._namespace_lib for resource, old in observed}
+		sources     = {}
+		visibility  = {}
+		invalidated = set()
 
 		for path in paths:
 			for namespace in namespaces:
-				index, relative = self._source(namespace, path)
-				layer = tuple(namespace.__instances__())[index] if index is not None else namespace
-				a.Directory(layer, os.path.dirname(path), layer.__name__)._invalidate_children(path)
+				index, layer, relative   = self._source(namespace, path)
 				sources[namespace, path] = (index, relative)
+
+				if (layer, path) not in invalidated:
+					a.Directory(layer, os.path.dirname(path), layer.__name__)._invalidate_children(path)
+					invalidated.add((layer, path))
 
 		changed = {}
 
 		for resource, old in observed:
-			namespace   = resource._namespace_lib
-			base        = os.path.realpath(resource.get_path())
-			_, relative = self._source(namespace, base)
-			is_file     = isinstance(resource, a.File)
-			current     = self._effective(resource) if is_file else None
-
-			origin = resource.get_change_base(relative or os.path.relpath(base, os.path.dirname(base)))
+			namespace      = resource._namespace_lib
+			base           = resource.get_path()
+			_, _, relative = self._source(namespace, base)
+			is_file        = isinstance(resource, a.File)
+			current        = self._effective(namespace, base, relative) if is_file else None
 
 			for path, status in paths.items():
 				index, event = sources[namespace, path]
@@ -234,14 +227,13 @@ class Filesystem(a.Singleton):
 					affected = path == base or path.startswith(base + os.sep)
 
 				if affected:
-					name = event if relative is not None and event is not None else os.path.relpath(path, os.path.dirname(base))
-					name = os.path.relpath(name, origin)
+					name = os.path.relpath(event, relative) if event is not None and relative is not None else os.path.relpath(path, base)
 					changed.setdefault(resource, {})[name.replace(os.sep, '/')] = status
 
-			if resource in changed and is_file:
-				resource._invalidate()
-
 			if is_file:
+				if resource in changed:
+					resource._invalidate()
+
 				with self._observation_lock:
 					entry = self._resources.get(resource)
 
@@ -283,9 +275,13 @@ class Filesystem(a.Singleton):
 			with self._observation_lock:
 				if resource.is_subscribed():
 					if resource not in self._resources:
+						namespace      = resource._namespace_lib
+						path           = resource.get_path()
+						_, _, relative = self._source(namespace, path)
+
 						self._resources[resource] = {
-							'roots': self._roots_for(resource),
-							'path' : self._effective(resource) if isinstance(resource, a.File) else None
+							'roots': self._roots_for(namespace, path, relative),
+							'path' : self._effective(namespace, path, relative) if isinstance(resource, a.File) else None
 						}
 
 						try:

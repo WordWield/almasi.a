@@ -224,11 +224,6 @@ class Directory(FilesystemResource):
 	def is_directory(self):
 		return True
 
-	# Express subtree notifications relative to this directory.
-	# ----------------------------------------------------------------------
-	def get_change_base(self, relative):
-		return relative
-
 	# List direct resources matching a filename mask without loading them.
 	# ----------------------------------------------------------------------
 	def list(self, mask='*'):
