@@ -11,7 +11,8 @@ external observation is needed.
 
 `resource.update(changed=None)` delivers the producer's change notification to
 live subscribers in registration order. Notifications do not consume content.
-Callbacks run synchronously in the producer's execution context. A canceled
+Callbacks normally run synchronously in the producer's execution context.
+Directory callbacks use the asynchronous delivery described below. A canceled
 listener is skipped if it has not started; cancellation does not wait for a
 running callback. Direct callback exceptions propagate, while externally
 observed resources log callback failures and deliver to the other listeners.
@@ -54,13 +55,18 @@ through `get_name()` rather than interpreting the notification key as its name.
 Status values remain `created`, `modified`, and `deleted`, describing
 observed filesystem changes, not necessarily effective membership changes.
 Consumers must resolve current membership when inheritance or coalescing
-matters. Each Directory subscription synchronously delivers its own initial
-batch of recursively enumerated filenames across the existing library layers,
-marked `created` (or an empty dictionary if none exist), without loading file
-contents. The same relative keys are used for subsequent change hints. File
-subscriptions remain change-only. No atomic snapshot of concurrent edits is
-promised. If the initial callback raises, its registration is removed and
-the error propagates.
+matters. Each Directory subscription queues its own initial batch of recursively
+enumerated filenames across the existing library layers, marked `created` (or
+an empty dictionary if none exist), without loading file contents. Initial
+and subsequent callbacks use the same single serial worker, independent of the
+subscriber's thread or asyncio loop. The initial batch is queued before later
+observer notifications; `subscribe()` does not wait for its delivery. Callbacks
+must not block waiting for another directory notification. A canceled queued
+callback is skipped. Callback exceptions are logged for both kinds of batch and
+do not cancel the registration. Registration or snapshot failures still
+propagate and roll back the subscription. File subscriptions remain change-only
+and synchronous in the producer's context. No atomic snapshot of concurrent
+filesystem edits is promised.
 
 This replaces the previous library-relative File notification keys. Consumers
 that interpret those keys must use resource-relative coordinates instead.

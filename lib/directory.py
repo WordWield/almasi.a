@@ -1,7 +1,12 @@
 # ==============================================================================
 # DIRECTORY
 # ==============================================================================
+# PURPOSE:
 # Resolve filesystem namespaces and invalidate cached attributes on mutation.
+#
+# RESPONSIBILITY BOUNDARIES:
+# Owns: Directory namespace operations and asynchronous directory delivery.
+# Delegates: Observation and snapshots to Filesystem, registrations to Resource.
 # ==============================================================================
 
 import os
@@ -9,17 +14,23 @@ import shutil
 import stat
 import weakref
 
-from fnmatch import fnmatchcase
+from concurrent.futures import ThreadPoolExecutor
+from fnmatch            import fnmatchcase
 
 from .filesystem_resource import FilesystemResource
-from .file     import File
-from .imports import Imports
+from .file                import File
+from .imports             import Imports
 
 
 class Directory(FilesystemResource):
 
 	# Weak references keep namespace tracking from extending object lifetimes.
 	__namespace_faces__ = weakref.WeakSet()
+	_executor            = ThreadPoolExecutor(max_workers=1)
+
+	# ======================================================================
+	# FRAMEWORK METHODS
+	# ======================================================================
 
 	# Share the existing root face cache when representing that same root.
 	# ----------------------------------------------------------------------
@@ -100,6 +111,11 @@ class Directory(FilesystemResource):
 	# ======================================================================
 	# PRIVATE METHODS
 	# ======================================================================
+
+	# Deliver every directory notification through the same serial worker.
+	# ----------------------------------------------------------------------
+	def _deliver(self, subscription_id, changed):
+		self._executor.submit(super()._deliver, subscription_id, changed)
 
 	# Accept one visible basename and refuse symbolic-link destinations.
 	# ----------------------------------------------------------------------
@@ -189,17 +205,19 @@ class Directory(FilesystemResource):
 	def is_directory(self):
 		return True
 
-	# Deliver existing filenames only to the newly registered subscriber.
+	# Queue the initial batch before the observer can queue subsequent changes.
 	# ----------------------------------------------------------------------
 	def subscribe(self, callback):
-		'''Register for changes and synchronously deliver existing filenames as created.'''
-		subscription_id = super().subscribe(callback)
+		'''Register a callable and return its cancellation ID. Initial filenames
+		and later changes are delivered asynchronously on the same serial worker.'''
+		with self._filesystem._dispatch_lock:
+			subscription_id = super().subscribe(callback)
 
-		try:
-			callback(self._filesystem.snapshot(self))
-		except BaseException:
-			self.unsubscribe(subscription_id)
-			raise
+			try:
+				self._deliver(subscription_id, self._filesystem.snapshot(self))
+			except BaseException:
+				self.unsubscribe(subscription_id)
+				raise
 
 		return subscription_id
 
