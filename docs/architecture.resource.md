@@ -37,14 +37,15 @@ visibility and inherited override resolution, independently of the observer.
 Filesystem owns watcher roots, effective file membership and its observation
 context. File and Directory inherit the same subscription implementation from
 FilesystemResource. Every registration receives its own initial mapping
-of effective files to `created` (including an empty mapping), and subsequent
+of the currently observed effective files to `created` (including an empty mapping), and subsequent
 changes through the same Resource.update operation. A File uses the key `'.'`;
 a Directory uses relative file names with forward slashes. Notifications
 describe effective file membership: a newly visible file is created, a missing
 file is deleted, and a changed or replaced source is modified. Directories
 themselves are not file entries.
 
-The service replaces root-specific dispatch threads with one observation
+Callback failures are logged for both initial and later notifications and do not
+cancel registrations. The service replaces root-specific dispatch threads with one observation
 event loop, using watchfiles.awatch to observe physical roots. All source
 notifications, including deferred deployment publication, run in that context.
 The synchronous subscribe API waits for registration, not the completion of

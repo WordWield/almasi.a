@@ -35,9 +35,9 @@ class Filesystem(a.Singleton):
 		instance = super().__new__(cls)
 
 		if '_loop' not in instance.__dict__:
-			instance._resources = {}
-			instance._watchers  = {}
-			instance._deferred  = {}
+			instance._resources  = {}
+			instance._watchers   = {}
+			instance._deferred   = {}
 			instance._defer_lock = asyncio.Lock()
 			instance._loop       = asyncio.new_event_loop()
 
@@ -48,27 +48,6 @@ class Filesystem(a.Singleton):
 	# ======================================================================
 	# PRIVATE METHODS
 	# ======================================================================
-
-	# Execute a requested operation in the observation context.
-	# ----------------------------------------------------------------------
-	def _execute(self, future, operation, args):
-		if future.set_running_or_notify_cancel():
-			try:
-				future.set_result(operation(*args))
-			except Exception as error:
-				future.set_exception(error)
-
-	# Cross the synchronous resource API boundary without adding a worker.
-	# ----------------------------------------------------------------------
-	def _submit(self, operation, *args):
-		future = Future()
-
-		if self._is_observation_context():
-			self._execute(future, operation, args)
-		else:
-			self._loop.call_soon_threadsafe(self._execute, future, operation, args)
-
-		return future
 
 	# Identify the owning execution context, not the initiating caller.
 	# ----------------------------------------------------------------------
@@ -98,11 +77,11 @@ class Filesystem(a.Singleton):
 		if relative is None:
 			locations = {os.path.dirname(path): (resource.get_lib(), path)}
 		else:
-			locations = {
-				os.path.realpath(layer.__path__): (layer, os.path.join(os.path.realpath(layer.__path__), relative))
-				for layer in reversed(layers)
-			}
-			locations = dict(reversed(tuple(locations.items())))
+			locations = {}
+
+			for layer in layers:
+				root = os.path.realpath(layer.__path__)
+				locations.setdefault(root, (layer, os.path.join(root, relative)))
 
 		return {root: (layer, os.path.normpath(base)) for root, (layer, base) in locations.items() if os.path.isdir(root)}
 
@@ -182,8 +161,11 @@ class Filesystem(a.Singleton):
 				names.update(self._files(base, base))
 			elif path.startswith(base + os.sep):
 				name = os.path.relpath(path, base).replace(os.sep, '/')
-				names.update(key for key in files if key == name or key.startswith(name + '/'))
-				names.update(self._files(base, path))
+				if name in files and os.path.isfile(path):
+					names.add(name)
+				else:
+					names.update(key for key in files if key == name or key.startswith(name + '/'))
+					names.update(self._files(base, path))
 		elif path == base or base.startswith(path + os.sep):
 			names.add('.')
 
@@ -233,35 +215,30 @@ class Filesystem(a.Singleton):
 	# Buffer physical changes only while their deployment is being prepared.
 	# ----------------------------------------------------------------------
 	def _changed_paths(self, root, paths):
+		root  = os.path.realpath(root)
+		paths = {os.path.realpath(path) for path in paths}
+
 		if root in self._deferred:
 			self._deferred[root].update(paths)
 		else:
 			self._deliver_changes(root, paths)
 
-	# Establish a resource's observation before its first notification.
-	# ----------------------------------------------------------------------
-	def _register(self, resource, callback):
-		subscription_id = a.Resource.subscribe(resource, callback)
-		locations, _   = self._resources[resource]
-		files          = self._snapshot(resource, locations)
-
-		return subscription_id, {name: 'created' for name in files}
-
-	# Publish the initial set through the same Resource delivery operation.
+	# Publish a new registration's existing files through Resource.update.
 	# ----------------------------------------------------------------------
 	def _subscribe(self, future, resource, callback):
-		if future.set_running_or_notify_cancel():
-			try:
-				subscription_id, changes = self._register(resource, callback)
-			except Exception as error:
-				future.set_exception(error)
-			else:
-				future.set_result(subscription_id)
-				resource.update(changes, subscription_id=subscription_id)
+		try:
+			subscription_id = a.Resource.subscribe(resource, callback)
+			_, files       = self._resources[resource]
+			changes        = {name: 'created' for name in files}
+		except Exception as error:
+			future.set_exception(error)
+		else:
+			future.set_result(subscription_id)
+			resource.update(changes, subscription_id=subscription_id)
 
 	# Hold or release notifications in the same context as OS events.
 	# ----------------------------------------------------------------------
-	def _defer(self, root, active):
+	async def _defer(self, root, active):
 		if active:
 			self._deferred.setdefault(root, set())
 		else:
@@ -315,6 +292,6 @@ class Filesystem(a.Singleton):
 		root = os.path.realpath(root)
 
 		async with self._defer_lock:
-			await asyncio.wrap_future(self._submit(self._defer, root, True))
+			await asyncio.wrap_future(asyncio.run_coroutine_threadsafe(self._defer(root, True), self._loop))
 			yield
-			await asyncio.wrap_future(self._submit(self._defer, root, False))
+			await asyncio.wrap_future(asyncio.run_coroutine_threadsafe(self._defer(root, False), self._loop))
