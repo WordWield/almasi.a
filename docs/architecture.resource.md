@@ -41,15 +41,16 @@ Inherited overrides and fork-local resource identity remain unchanged.
 A file observes its logical identity across replacement, removal, recreation
 and changes of its supplying library layer. A directory observes its subtree.
 
-Each FilesystemResource supplies its notification coordinate origin through
-`get_change_base() -> str | None`. A canonical absolute directory path selects
-that origin; None retains the library-relative coordinates (or the physical
-resource parent's coordinates for external paths). File inherits None, so its
-notification keys are unchanged. Directory returns its own canonical path.
-Filesystem resolves the supplied origin in the effective namespace and uses
-physical coordinates outside it. It does not select the origin by resource
-type. The origin is derived from the resource on delivery, not stored per
-subscriber. The `subscribe(callback)` contract remains unchanged.
+Each FilesystemResource selects its notification coordinate origin through
+`get_change_base(relative: str) -> str`. Filesystem supplies the resource's
+relative path in its effective library namespace, or relative to its physical
+parent for an external resource. Both the argument and returned origin are
+relative paths in the same coordinates. File inherits the default origin
+`'.'`, retaining its existing notification keys. Directory returns the supplied
+relative path unchanged, selecting itself as the origin. Filesystem applies
+one relative-path transformation without selecting the origin by resource
+type or storing per-subscriber state. The `subscribe(callback)` contract
+remains unchanged.
 
 A directory callback receives a dictionary with slash-separated paths relative
 to that directory, such as `{'notes.txt': 'modified', 'nested/item.js': 'created'}`.

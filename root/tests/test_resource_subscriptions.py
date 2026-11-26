@@ -150,8 +150,8 @@ class TestResourceSubscriptions(a.Tester):
 			file = next(item for item in directory if item.get_name() == 'notes.txt')
 
 			assert isinstance(file, a.Resource)
-			assert file.get_change_base() is None
-			assert directory.get_change_base() == directory.get_path()
+			assert file.get_change_base('assets/notes.txt') == '.'
+			assert directory.get_change_base('assets') == 'assets'
 			assert file.read() == 'text'
 			assert directory.read() is directory
 			assert directory.read('notes.txt') == 'text'

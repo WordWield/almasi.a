@@ -209,8 +209,7 @@ class Filesystem(a.Singleton):
 			is_file     = isinstance(resource, a.File)
 			current     = self._effective(resource) if is_file else None
 
-			relative_to = resource.get_change_base()
-			_, origin   = self._source(namespace, relative_to) if relative_to is not None else (None, '.')
+			origin = resource.get_change_base(relative or os.path.relpath(base, os.path.dirname(base)))
 
 			for path, status in paths.items():
 				index, event = sources[namespace, path]
@@ -235,10 +234,8 @@ class Filesystem(a.Singleton):
 					affected = path == base or path.startswith(base + os.sep)
 
 				if affected:
-					if event is not None and origin is not None:
-						name = os.path.relpath(event, origin)
-					else:
-						name = os.path.relpath(path, relative_to or os.path.dirname(base))
+					name = event if relative is not None and event is not None else os.path.relpath(path, os.path.dirname(base))
+					name = os.path.relpath(name, origin)
 					changed.setdefault(resource, {})[name.replace(os.sep, '/')] = status
 
 			if resource in changed and is_file:
