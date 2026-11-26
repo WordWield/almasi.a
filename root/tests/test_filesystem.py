@@ -44,7 +44,7 @@ class TestFilesystem(a.Tester):
 
 		return library
 
-	# Fail after a writer has already produced partial temporary content.
+	# Fail after a writer has already produced partial content.
 	# ----------------------------------------------------------------------
 	@classmethod
 	def _fail_write(cls, path, value):
@@ -52,7 +52,7 @@ class TestFilesystem(a.Tester):
 			stream.write('partial')
 		raise OSError('Interrupted serialization')
 
-	# Fail after copying some bytes into the temporary destination.
+	# Fail after copying some bytes into the destination.
 	# ----------------------------------------------------------------------
 	@classmethod
 	def _fail_copy(cls, source, destination):
@@ -60,12 +60,11 @@ class TestFilesystem(a.Tester):
 			stream.write(b'partial')
 		raise OSError('Interrupted copy')
 
-	# Inspect the namespace while the plugin owns a hidden temporary file.
+	# Verify that the plugin writes directly to the requested destination.
 	# ----------------------------------------------------------------------
 	@classmethod
 	def _observe_write(cls, directory, path, value):
-		assert list(directory) == []
-		assert path.endswith('.md')
+		assert path == directory.join('notes.md')
 		with open(path, 'w') as stream:
 			stream.write(value)
 
@@ -229,38 +228,28 @@ class TestFilesystem(a.Tester):
 			assert directory.other is stable
 			assert directory.read('notes.json') == {'version': 2}
 
-	# Preserve destinations and cache identity when serialization or replacement fails.
+	# Invalidate cached content even when a direct write fails.
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_write_failures(cls):
 		with tempfile.TemporaryDirectory() as root:
 			directory = a.Directory(a, root, 'almasi.files')
-			plugin    = a.__PLUGINS__['Json']
+			plugin    = a.__PLUGINS__['Text']
 
-			directory.write('notes.json', {'old': True})
-			old = directory.notes
+			directory.write('notes.txt', 'old')
+			assert directory.notes == 'old'
 
-			for target, attribute, failure in (
-				(plugin, 'write', cls._fail_write),
-				(os, 'replace', OSError('Replacement failed')),
-			):
-				with patch.object(target, attribute, side_effect=failure):
-					with TestCase().assertRaises(OSError):
-						directory.write('notes.json', {'new': True})
+			with patch.object(plugin, 'write', side_effect=cls._fail_write):
+				with TestCase().assertRaises(OSError):
+					directory.write('notes.txt', 'new')
 
-				assert directory.notes is old
-				assert directory.read('notes.json') == {'old': True}
-				assert os.listdir(root) == ['notes.json']
+			assert directory.notes == 'partial'
+			assert os.listdir(root) == ['notes.txt']
 
-			with TestCase().assertRaises(TypeError):
-				directory.write('notes.json', {'not_json': {1}})
-			assert directory.read('notes.json') == {'old': True}
-			assert os.listdir(root) == ['notes.json']
-
-	# Hide temporary content from normal discovery until publication.
+	# Write directly to the final filename without a temporary file.
 	# ----------------------------------------------------------------------
 	@classmethod
-	def test_temporary_visibility(cls):
+	def test_direct_write(cls):
 		with tempfile.TemporaryDirectory() as root:
 			directory = a.Directory(a, root, 'almasi.files')
 			plugin    = a.__PLUGINS__['Text']
@@ -306,7 +295,7 @@ class TestFilesystem(a.Tester):
 			assert directory.notes == 'original'
 			assert os.listdir(root) == ['notes.txt']
 
-	# Leave old bytes and caches intact after unreadable, interrupted or failed copies.
+	# Preserve unreadable-source behavior and invalidate interrupted direct copies.
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_copy_failures(cls):
@@ -316,21 +305,20 @@ class TestFilesystem(a.Tester):
 			directory.write('notes.txt', 'old')
 			source = directory.join('source.txt')
 
-			for target, attribute, failure in (
-				('builtins', 'open', PermissionError('Unreadable source')),
-				(directory, '_copy', cls._fail_copy),
-				(os, 'replace', OSError('Replacement failed')),
-			):
-				old = directory.notes
-				context = patch(target + '.' + attribute, side_effect=failure) if isinstance(target, str) else patch.object(target, attribute, side_effect=failure)
+			assert directory.notes == 'old'
 
-				with context:
-					with TestCase().assertRaises(OSError):
-						directory.copy('notes.txt', source)
+			with patch('builtins.open', side_effect=PermissionError('Unreadable source')):
+				with TestCase().assertRaises(PermissionError):
+					directory.copy('notes.txt', source)
 
-				assert directory.notes is old
-				assert directory.read('notes.txt') == 'old'
-				assert sorted(os.listdir(root)) == ['notes.txt', 'source.txt']
+			assert directory.notes == 'old'
+
+			with patch.object(directory, '_copy', side_effect=cls._fail_copy):
+				with TestCase().assertRaises(OSError):
+					directory.copy('notes.txt', source)
+
+			assert directory.notes == 'partial'
+			assert sorted(os.listdir(root)) == ['notes.txt', 'source.txt']
 
 	# Apply identical destination rules to copies and plugin writes.
 	# ----------------------------------------------------------------------
@@ -348,7 +336,7 @@ class TestFilesystem(a.Tester):
 				with TestCase().assertRaises(ValueError):
 					directory.copy(name, source)
 
-	# Reuse the root face cache for join, read, copy and atomic writes.
+	# Reuse the root face cache for join, read, copy and writes.
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_root_delegation(cls):
@@ -480,7 +468,7 @@ class TestFilesystem(a.Tester):
 			assert directory.notes == {'copied': True}
 			assert directory.read('notes.json') == {'copied': True}
 
-	# Recognize same-file aliases before creating a temporary destination.
+	# Recognize same-file aliases before writing the destination.
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_copy_source_aliases(cls):
