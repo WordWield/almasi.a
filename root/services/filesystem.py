@@ -223,7 +223,7 @@ class Filesystem(a.Singleton):
 		else:
 			self._deliver_changes(root, paths)
 
-	# Publish a new registration's existing files through Resource.update.
+	# Publish existing files to the new registration.
 	# ----------------------------------------------------------------------
 	def _subscribe(self, future, resource, callback):
 		try:
@@ -234,7 +234,7 @@ class Filesystem(a.Singleton):
 			future.set_exception(error)
 		else:
 			future.set_result(subscription_id)
-			resource.update(changes, subscription_id=subscription_id)
+			resource.notify_subscription(subscription_id, changes)
 
 	# Hold or release notifications in the same context as OS events.
 	# ----------------------------------------------------------------------

@@ -9,8 +9,9 @@ that registration; cancellation is idempotent. There is no
 identifier scope on a listener. `resource.is_subscribed()` reports whether
 external observation is needed.
 
-`resource.update(changed=None, subscription_id=None)` delivers the producer's change notification to
-live subscribers in registration order, or to one registration when its ID is supplied. Notifications do not consume content.
+`resource.update(changed=None)` notifies all live subscribers in registration order.
+`resource.notify_subscription(subscription_id, changed)` notifies one using the
+ID from `subscribe()`; unknown or canceled IDs are ignored. Both return None.
 Callbacks run synchronously in the producer's execution context. A canceled
 listener is skipped if it has not started; cancellation does not wait for a
 running callback. Direct callback exceptions propagate, while externally
@@ -38,7 +39,7 @@ Filesystem owns watcher roots, effective file membership and its observation
 context. File and Directory inherit the same subscription implementation from
 FilesystemResource. Every registration receives its own initial mapping
 of the currently observed effective files to `created` (including an empty mapping), and subsequent
-changes through the same Resource.update operation. A File uses the key `'.'`;
+changes through the same Resource notification operation. A File uses the key `'.'`;
 a Directory uses relative file names with forward slashes. Notifications
 describe effective file membership: a newly visible file is created, a missing
 file is deleted, and a changed or replaced source is modified. Directories
