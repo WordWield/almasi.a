@@ -4,6 +4,7 @@
 # Verify automatic source reload and persistent service identity.
 # ==============================================================================
 
+import asyncio
 import os
 import tempfile
 
@@ -13,6 +14,23 @@ from almasi import a
 
 
 class TestReloadable(a.Tester):
+
+	# ======================================================================
+	# PRIVATE METHODS
+	# ======================================================================
+
+	# Publish source changes from the real Filesystem observation context.
+	# ----------------------------------------------------------------------
+	@classmethod
+	async def _publish(cls, filesystem, path):
+		filesystem._process_changed_paths(a.__path__, {path})
+
+	# Complete the synthetic source notification before checking the class.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def _change(cls, path):
+		filesystem = a.services.Filesystem
+		asyncio.run_coroutine_threadsafe(cls._publish(filesystem, path), filesystem._loop).result(timeout=5)
 
 	# ==========================================================================
 	# PUBLIC METHODS
@@ -47,7 +65,7 @@ class TestReloadable(a.Tester):
 						'\tdef initialize(self):\n\t\traise AssertionError()\n'
 						'\tdef read(self):\n\t\treturn self.value + 2\n'
 					)
-				a.services.Filesystem._changed_paths(a.__path__, {file_path: 'modified'})
+				cls._change(file_path)
 				assert service.read() == 7
 				assert directory.Counter is service
 				assert type(service)._reload_subscription is subscription
@@ -59,7 +77,7 @@ class TestReloadable(a.Tester):
 						'\tdef read(self):\n\t\treturn self.value + 3\n'
 					)
 
-				a.services.Filesystem._changed_paths(a.__path__, {file_path: 'modified'})
+				cls._change(file_path)
 				assert service.read() == 8
 				assert directory.Counter is service
 				assert type(service)._reload_subscription is subscription
@@ -89,12 +107,15 @@ class TestReloadable(a.Tester):
 				first   = handler()
 				second  = handler()
 
+				cls._change(file_path)
+				assert type(first) is handler
 				assert seen == [first, second]
 
 				with open(file_path, 'w', encoding='utf-8') as stream:
 					stream.write('from almasi import a\nclass Handler(a.ReloadableModule):\n\tversion = 2\n')
 
-				a.services.Filesystem._changed_paths(a.__path__, {file_path: 'modified'})
+				cls._change(file_path)
+				cls._change(file_path)
 
 				assert seen == [first, second, first, second]
 				assert type(first).version == 2

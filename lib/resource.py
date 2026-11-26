@@ -74,20 +74,22 @@ class Resource(Module):
 			if callback is not None and self._observe is not None:
 				self._observe(self)
 
-	# Notify live listeners in registration order without consuming content.
+	# Deliver a change to one live registration without consuming content.
+	# ----------------------------------------------------------------------
+	def notify_subscription(self, subscription_id, changed):
+		callback = (self._subscriptions or {}).get(subscription_id)
+
+		if callback is not None:
+			try:
+				callback(changed)
+			except Exception:
+				if self._observe is not None:
+					logging.exception('Subscription callback failed')
+				else:
+					raise
+
+	# Notify live listeners in registration order.
 	# ----------------------------------------------------------------------
 	def update(self, changed=None):
-		subscriptions = self._subscriptions
-
-		if subscriptions:
-			for subscription_id in tuple(subscriptions):
-				callback = subscriptions.get(subscription_id)
-
-				if callback is not None:
-					try:
-						callback(changed)
-					except Exception:
-						if self._observe is not None:
-							logging.exception('Subscription callback failed')
-						else:
-							raise
+		for subscription_id in tuple(self._subscriptions or ()):
+			self.notify_subscription(subscription_id, changed)

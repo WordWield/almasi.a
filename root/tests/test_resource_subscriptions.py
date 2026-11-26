@@ -19,12 +19,37 @@ import uuid
 
 from unittest.mock import Mock, patch
 
-from watchfiles import Change
-
 from almasi import a
 
 
 class TestResourceSubscriptions(a.Tester):
+
+	# ======================================================================
+	# PRIVATE METHODS
+	# ======================================================================
+
+	# Dispatch synthetic OS paths through the actual observation context.
+	# ----------------------------------------------------------------------
+	@classmethod
+	async def _publish(
+		cls,
+		service,
+		root  = None,
+		paths = None
+	):
+		if root is not None:
+			service._process_changed_paths(root, paths)
+
+	# Wait for previously scheduled source operations before assertions.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def _sync(
+		cls,
+		service,
+		root  = None,
+		paths = None
+	):
+		asyncio.run_coroutine_threadsafe(cls._publish(service, root, paths), service._loop).result(timeout=5)
 
 	# ==========================================================================
 	# PUBLIC METHODS
@@ -44,8 +69,7 @@ class TestResourceSubscriptions(a.Tester):
 		assert not issubclass(a.Directory, a.File)
 		assert a.File.is_directory(a.File(a, __file__, 'almasi.file')) is False
 		assert a.Directory(a, os.path.dirname(__file__), 'almasi.tests').is_directory() is True
-		assert a.File.subscribe is a.Resource.subscribe
-		assert a.Directory.subscribe is not a.Resource.subscribe
+		assert a.File.subscribe is a.Directory.subscribe is a.FilesystemResource.subscribe
 		assert not hasattr(a.Directory, 'load')
 		assert a.File.read is not a.Resource.read
 		assert a.Directory.read is not a.Resource.read
@@ -106,6 +130,8 @@ class TestResourceSubscriptions(a.Tester):
 			with patch.object(type(service), '_watch', return_value=None):
 				first  = file.subscribe(Mock(side_effect=ValueError('intentional')))
 				second = file.subscribe(callback)
+				cls._sync(service)
+				callback.reset_mock()
 
 				try:
 					with patch('almasi.a.lib.resource.logging.exception') as report:
@@ -192,11 +218,11 @@ class TestResourceSubscriptions(a.Tester):
 				with open(path, 'w', encoding='utf-8') as stream:
 					stream.write('after')
 
-				service._changed_paths(root, {path: 'modified'})
-				assert got_file == [{'.': 'modified'}]
+				cls._sync(service, root, {path: 'modified'})
+				assert got_file == [{'.': 'created'}, {'.': 'modified'}]
 				assert file.load() == 'after'
 
-				service._changed_paths(os.path.dirname(root), {path: 'modified'})
+				cls._sync(service, os.path.dirname(root), {path: 'modified'})
 				assert got_dir == [{'notes.txt': 'created'}, {'notes.txt': 'modified'}]
 				assert directory.notes == 'after'
 
@@ -224,8 +250,8 @@ class TestResourceSubscriptions(a.Tester):
 
 			with patch.object(type(service), '_watch', return_value=None):
 				handle = file.subscribe(events.append)
-				service._changed_paths(alias, {os.path.join(alias, 'notes.txt'): 'modified'})
-				assert events == [{'.': 'modified'}]
+				cls._sync(service, alias, {os.path.join(alias, 'notes.txt'): 'modified'})
+				assert events == [{'.': 'created'}, {'.': 'modified'}]
 				file.unsubscribe(handle)
 
 	# Each new directory listener receives its own recursive initial batch.
@@ -246,6 +272,7 @@ class TestResourceSubscriptions(a.Tester):
 			with patch.object(type(service), '_watch', return_value=None):
 				left  = directory.subscribe(first.append)
 				right = directory.subscribe(second.append)
+				cls._sync(service)
 
 				try:
 					assert first == second == [{'one.py': 'created', 'nested/two.txt': 'created', '.almasi-temp': 'created'}]
@@ -258,10 +285,10 @@ class TestResourceSubscriptions(a.Tester):
 					directory.unsubscribe(left)
 					directory.unsubscribe(right)
 
-	# A failed initial notification releases only its own registration.
+	# Initial and live failures follow the same Resource delivery contract.
 	# ----------------------------------------------------------------------
 	@classmethod
-	def test_directory_initial_callback_failure(cls):
+	def test_directory_callback_failure(cls):
 		with tempfile.TemporaryDirectory() as root:
 			directory = a.Directory(a, root, 'almasi.initial')
 			service   = a.services.Filesystem
@@ -269,23 +296,22 @@ class TestResourceSubscriptions(a.Tester):
 			failure   = Mock(side_effect=ValueError('intentional'))
 
 			with patch.object(type(service), '_watch', return_value=None):
-				handle = directory.subscribe(callback)
+				with patch('almasi.a.lib.resource.logging.exception') as report:
+					left  = directory.subscribe(callback)
+					right = directory.subscribe(failure)
 
-				try:
 					try:
-						directory.subscribe(failure)
-					except ValueError as error:
-						assert str(error) == 'intentional'
-					else:
-						raise AssertionError('Initial callback error was suppressed')
+						cls._sync(service)
+						path = directory.join('one.py')
 
-					directory.update({'one.py': 'created'})
-					assert callback.call_count == 2
-					failure.assert_called_once_with({})
-				finally:
-					directory.unsubscribe(handle)
+						with open(path, 'w') as stream:
+							stream.write('content')
 
-				assert directory not in service._resources
+						cls._sync(service, os.path.dirname(root), {path})
+						assert callback.call_count == failure.call_count == report.call_count == 2
+					finally:
+						directory.unsubscribe(left)
+						directory.unsubscribe(right)
 
 	# Keep a directory subscribed across removal and subsequent recreation.
 	# --------------------------------------------------------------------------
@@ -297,18 +323,26 @@ class TestResourceSubscriptions(a.Tester):
 			service   = a.services.Filesystem
 			events    = []
 			os.mkdir(root)
+			path = os.path.join(root, 'one.txt')
+
+			with open(path, 'w') as stream:
+				stream.write('before')
 
 			with patch.object(type(service), '_watch', return_value=None):
 				handle = directory.subscribe(events.append)
+				cls._sync(service)
 
 				shutil.rmtree(root)
-				service._changed_paths(parent, {root: 'deleted'})
-				assert events[-1] == {'.': 'deleted'}
+				cls._sync(service, parent, {root: 'deleted'})
+				assert events[-1] == {'one.txt': 'deleted'}
 				assert directory.is_subscribed()
 
 				os.mkdir(root)
-				service._changed_paths(parent, {root: 'created'})
-				assert events[-1] == {'.': 'created'}
+				with open(path, 'w') as stream:
+					stream.write('after')
+
+				cls._sync(service, parent, {root})
+				assert events[-1] == {'one.txt': 'created'}
 
 				directory.unsubscribe(handle)
 				assert not directory.is_subscribed()
@@ -334,8 +368,8 @@ class TestResourceSubscriptions(a.Tester):
 
 				try:
 					shutil.rmtree(parent)
-					service._changed_paths(parent, {parent: 'deleted'})
-					assert events == [{'..': 'deleted'}]
+					cls._sync(service, parent, {parent: 'deleted'})
+					assert events == [{'.': 'created'}, {'.': 'deleted'}]
 				finally:
 					file.unsubscribe(handle)
 
@@ -353,15 +387,17 @@ class TestResourceSubscriptions(a.Tester):
 			with patch.object(type(service), '_watch', return_value=None):
 				handle = directory.subscribe(events.append)
 
-				changes = {
-					os.path.join(root, 'nested', f'item_{index}.js'): 'modified'
-					for index in range(1001)
-				}
-				service._changed_paths(parent, changes)
+				os.mkdir(os.path.join(root, 'nested'))
+				changes = {os.path.join(root, 'nested', f'item_{index}.js') for index in range(1001)}
+
+				for path in changes:
+					with open(path, 'w') as stream:
+						stream.write('content')
+				cls._sync(service, parent, changes)
 				assert len(events) == 2
 				assert events[0] == {}
 				assert len(events[1]) == 1001
-				assert events[1]['nested/item_500.js'] == 'modified'
+				assert events[1]['nested/item_500.js'] == 'created'
 
 				directory.unsubscribe(handle)
 
@@ -386,16 +422,19 @@ class TestResourceSubscriptions(a.Tester):
 				handle = one.subscribe(events.append)
 				one.unsubscribe(handle)
 				handle = two.subscribe(events.append)
+				cls._sync(service)
+				events.clear()
 				assert one not in service._resources
 				assert two in service._resources
 
-				service._changed_paths(root, {one_path: 'modified'})
+				cls._sync(service, root, {one_path: 'modified'})
 				assert not events
-				service._changed_paths(root, {two_path: 'modified'})
+				cls._sync(service, root, {two_path: 'modified'})
 				assert len(events) == 1
 
 				two.unsubscribe(handle)
 				two.unsubscribe(handle)
+				cls._sync(service)
 				assert os.path.realpath(root) not in service._watchers
 				assert one not in service._resources
 				assert two not in service._resources
@@ -420,39 +459,54 @@ class TestResourceSubscriptions(a.Tester):
 				right = file.subscribe(second.append)
 
 				assert os.path.realpath(root) in service._watchers
-				service._changed_paths(root, {path: 'modified'})
-				assert first == [{'.': 'modified'}]
-				assert second == [{'.': 'modified'}]
+				cls._sync(service, root, {path: 'modified'})
+				assert first == [{'.': 'created'}, {'.': 'modified'}]
+				assert second == first
 
 				file.unsubscribe(left)
 				assert os.path.realpath(root) in service._watchers
 
-				service._changed_paths(root, {path: 'modified'})
-				assert len(first) == 1
-				assert len(second) == 2
+				cls._sync(service, root, {path: 'modified'})
+				assert len(first) == 2
+				assert len(second) == 3
 
 				file.unsubscribe(right)
+				cls._sync(service)
 				assert os.path.realpath(root) not in service._watchers
 				assert file not in service._resources
 
-	# Preserve one change per path in an unordered OS event batch.
-	# --------------------------------------------------------------------------
+	# Existing and subsequent notifications share the same source context.
+	# ----------------------------------------------------------------------
 	@classmethod
-	def test_event_coalescing(cls):
+	def test_same_observation_context(cls):
 		with tempfile.TemporaryDirectory() as root:
-			service = a.services.Filesystem
-			path    = os.path.join(root, 'created.js')
-			hidden  = os.path.join(root, '.almasi-temp.js')
+			path = os.path.join(root, 'one.txt')
 
-			with open(path, 'w', encoding='utf-8') as stream:
-				stream.write('ok')
+			with open(path, 'w') as stream:
+				stream.write('before')
 
-			changes = service._changes({
-				(Change.added, path),
-				(Change.modified, path),
-				(Change.deleted, hidden)
-			})
-			assert changes == {path: 'created', hidden: 'deleted'}
+			file      = a.File(a, path, 'almasi.one')
+			directory = a.Directory(a, root, 'almasi.files')
+			service   = a.services.Filesystem
+			file_log  = []
+			dir_log   = []
+
+			with patch.object(type(service), '_watch', return_value=None):
+				left  = file.subscribe(lambda changes: file_log.append((threading.get_ident(), changes)))
+				right = directory.subscribe(lambda changes: dir_log.append((threading.get_ident(), changes)))
+
+				try:
+					cls._sync(service)
+					cls._sync(service, root, {path})
+					cls._sync(service, os.path.dirname(root), {path})
+
+					assert [changes for _, changes in file_log] == [{'.': 'created'}, {'.': 'modified'}]
+					assert [changes for _, changes in dir_log] == [{'one.txt': 'created'}, {'one.txt': 'modified'}]
+					assert len({identity for identity, _ in file_log + dir_log}) == 1
+					assert file_log[0][0] != threading.get_ident()
+				finally:
+					file.unsubscribe(left)
+					directory.unsubscribe(right)
 
 	# An overridden inherited file must not notify for hidden parent edits.
 	# --------------------------------------------------------------------------
@@ -480,25 +534,25 @@ class TestResourceSubscriptions(a.Tester):
 				dir_handle = face.subscribe(dir_events.append)
 
 				parent.shared.write('note.md', 'changed')
-				source._changed_paths(parent.__path__, {p_path: 'modified'})
-				assert events == [{'.': 'modified'}]
+				cls._sync(source, parent.__path__, {p_path: 'modified'})
+				assert events == [{'.': 'created'}, {'.': 'modified'}]
 				assert dir_events == [{'note.md': 'created'}, {'note.md': 'modified'}]
 
 				face.write('note.md', 'local')
-				source._changed_paths(child.__path__, {c_path: 'created'})
-				assert events[-1] == {'.': 'created'}
-				assert dir_events[-1] == {'note.md': 'created'}
-				assert len(events) == 2 and len(dir_events) == 3
+				cls._sync(source, child.__path__, {c_path: 'created'})
+				assert events[-1] == {'.': 'modified'}
+				assert dir_events[-1] == {'note.md': 'modified'}
+				assert len(events) == 3 and len(dir_events) == 3
 
 				parent.shared.write('note.md', 'hidden')
-				source._changed_paths(parent.__path__, {p_path: 'modified'})
-				assert len(events) == 2 and len(dir_events) == 3
+				cls._sync(source, parent.__path__, {p_path: 'modified'})
+				assert len(events) == 3 and len(dir_events) == 3
 
 				os.remove(c_path)
-				source._changed_paths(child.__path__, {c_path: 'deleted'})
-				assert events[-1] == {'.': 'deleted'}
-				assert dir_events[-1] == {'note.md': 'deleted'}
-				assert len(events) == 3 and len(dir_events) == 4
+				cls._sync(source, child.__path__, {c_path: 'deleted'})
+				assert events[-1] == {'.': 'modified'}
+				assert dir_events[-1] == {'note.md': 'modified'}
+				assert len(events) == 4 and len(dir_events) == 4
 
 				file.unsubscribe(handle)
 				face.unsubscribe(dir_handle)
@@ -530,7 +584,7 @@ class TestResourceSubscriptions(a.Tester):
 						stream.write('after')
 
 					with patch.object(a.Directory, '_invalidate_children', autospec=True, side_effect=a.Directory._invalidate_children) as invalidate:
-						service._changed_paths(parent.__path__, {path: 'modified'})
+						cls._sync(service, parent.__path__, {path: 'modified'})
 						assert invalidate.call_count == 1
 
 					assert first == second == [{'notes.md': 'created'}, {'notes.md': 'modified'}]
@@ -564,25 +618,25 @@ class TestResourceSubscriptions(a.Tester):
 
 			with patch.object(type(source), '_watch', return_value=None):
 				handle = file.subscribe(events.append)
-				assert source._resources[file]['path'] == parent_path
+				assert source._resources[file][1]['.'] == parent_path
 
 				with open(child_path, 'wb') as stream:
 					stream.write(b'local')
 
-				source._changed_paths(child.__path__, {child_path: 'created'})
-				assert source._resources[file]['path'] == child_path
-				assert len(events) == 1
+				cls._sync(source, child.__path__, {child_path: 'created'})
+				assert source._resources[file][1]['.'] == child_path
+				assert len(events) == 2
 
 				with open(parent_path, 'wb') as stream:
 					stream.write(b'hidden')
 
-				source._changed_paths(parent.__path__, {parent_path: 'modified'})
-				assert len(events) == 1
+				cls._sync(source, parent.__path__, {parent_path: 'modified'})
+				assert len(events) == 2
 
 				os.unlink(child_path)
-				source._changed_paths(child.__path__, {child_path: 'deleted'})
-				assert source._resources[file]['path'] == parent_path
-				assert len(events) == 2
+				cls._sync(source, child.__path__, {child_path: 'deleted'})
+				assert source._resources[file][1]['.'] == parent_path
+				assert len(events) == 3
 				file.unsubscribe(handle)
 
 	# Forks keep separate resource identities under one physical observer.
@@ -601,6 +655,8 @@ class TestResourceSubscriptions(a.Tester):
 			with patch.object(type(service), '_watch', return_value=None):
 				first_id  = one.subscribe(events.append)
 				second_id = two.subscribe(events.append)
+				cls._sync(service)
+				events.clear()
 
 				try:
 					assert one in service._resources
@@ -610,6 +666,7 @@ class TestResourceSubscriptions(a.Tester):
 					assert os.path.realpath(root) in service._watchers
 
 					one.unsubscribe(first_id)
+					cls._sync(service)
 					assert one not in service._resources
 					assert two in service._resources
 					assert os.path.realpath(root) in service._watchers
@@ -619,6 +676,7 @@ class TestResourceSubscriptions(a.Tester):
 				finally:
 					one.unsubscribe(first_id)
 					two.unsubscribe(second_id)
+					cls._sync(service)
 
 				assert os.path.realpath(root) not in service._watchers
 
@@ -634,11 +692,13 @@ class TestResourceSubscriptions(a.Tester):
 			def callback(resources):
 				events.append(resources)
 
-				if resources['nested.txt'] == 'created':
+				if resources.get('nested.txt') == 'created':
 					file.update({'nested.txt': 'deleted'})
 
 			with patch.object(type(service), '_watch', return_value=None):
 				handle = file.subscribe(callback)
+				cls._sync(service)
+				events.clear()
 				file.update({'nested.txt': 'created'})
 
 				assert events == [
@@ -658,8 +718,9 @@ class TestResourceSubscriptions(a.Tester):
 			received = []
 
 			def callback(resources):
-				barrier.wait(timeout=2)
-				received.append(resources)
+				if resources:
+					barrier.wait(timeout=2)
+					received.append(resources)
 
 			with patch.object(type(service), '_watch', return_value=None):
 				handle  = file.subscribe(callback)
@@ -697,6 +758,9 @@ class TestResourceSubscriptions(a.Tester):
 			handle = file.subscribe(lambda changed: (events.append(changed), received.set()))
 
 			try:
+				assert received.wait(timeout=2)
+				assert events == [{'.': 'created'}]
+				received.clear()
 				time.sleep(0.3)
 				for index in range(6):
 					if not received.is_set():
@@ -705,7 +769,7 @@ class TestResourceSubscriptions(a.Tester):
 						received.wait(timeout=0.6)
 
 				assert received.is_set()
-				assert any('.' in event for event in events)
+				assert any(event.get('.') == 'modified' for event in events)
 			finally:
 				file.unsubscribe(handle)
 
@@ -730,24 +794,24 @@ class TestResourceSubscriptions(a.Tester):
 			with patch.object(service, '_deliver_changes') as deliver:
 				try:
 					async with service.defer_changes(root):
-						service._changed_paths(root, {path: 'created'})
-						service._changed_paths(other, {other: 'modified'})
-						deliver.assert_called_once_with(other, {other: 'modified'})
+						cls._sync(service, root, {path: 'created'})
+						cls._sync(service, other, {other: 'modified'})
+						deliver.assert_called_once_with(other, {other})
 						raise RuntimeError('Dependency installation failed')
 				except RuntimeError as error:
 					assert str(error) == 'Dependency installation failed'
 
-				service._changed_paths(root, {path: 'modified'})
-				deliver.assert_called_once_with(other, {other: 'modified'})
+				cls._sync(service, root, {path: 'modified'})
+				deliver.assert_called_once_with(other, {other})
 
 				async with service.defer_changes(root):
 					assert deliver.call_count == 1
 
 				assert deliver.call_count == 2
-				deliver.assert_called_with(root, {path: 'modified'})
+				deliver.assert_called_with(root, {path})
 
-				service._changed_paths(root, {path: 'deleted'})
-				deliver.assert_called_with(root, {path: 'deleted'})
+				cls._sync(service, root, {path: 'deleted'})
+				deliver.assert_called_with(root, {path})
 
 
 if __name__ == '__main__':

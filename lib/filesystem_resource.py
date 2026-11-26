@@ -53,6 +53,16 @@ class FilesystemResource(Resource):
 	# PUBLIC METHODS
 	# ==========================================================================
 
+	# Subscribe through the shared filesystem observation context.
+	# ----------------------------------------------------------------------
+	def subscribe(self, callback):
+		return self._filesystem.subscribe(self, callback)
+
+	# Return the namespace in which this carrier is observed.
+	# ----------------------------------------------------------------------
+	def get_namespace(self):
+		return self._namespace_lib
+
 	# Return the canonical physical path.
 	# --------------------------------------------------------------------------
 	def get_path(self):

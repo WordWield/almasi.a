@@ -122,26 +122,27 @@ class Reloadable:
 	def _observe_reload(cls, file):
 		if '_reload_subscription' not in cls.__dict__:
 			cls._reload_file         = file
-			cls._reload_subscription = file.subscribe(cls._reload_changed)
+			cls._reload_subscription = file.subscribe(cls._reload_if_changed)
 
 	# Resolve the currently published class even when the callback was bound
 	# before an earlier reload.
 	# ----------------------------------------------------------------------
 	@classmethod
-	def _reload_changed(cls, changes):
+	def _reload_if_changed(cls, changes):
 		file = cls._reload_file
 
 		if os.path.isfile(file.get_path()):
 			try:
 				key     = cls.__dict__.get('__original_module__', cls.__module__)
 				current = sys.modules[key].__dict__[cls.__name__]
-				target  = current() if issubclass(current, Singleton) else current
-				fresh   = target.__reload__()
-				current = type(fresh) if isinstance(fresh, Singleton) else fresh
+				if os.path.getmtime(file.get_path()) != current.__mtime__:
+					target  = current() if issubclass(current, Singleton) else current
+					fresh   = target.__reload__()
+					current = type(fresh) if isinstance(fresh, Singleton) else fresh
 
-				for instance in gc.get_objects():
-					if type(instance) is current:
-						Reloadable._notify(instance)
+					for instance in gc.get_objects():
+						if type(instance) is current:
+							Reloadable._notify(instance)
 			except Exception:
 				logging.exception('Reloadable source update failed: %s', file.get_path())
 

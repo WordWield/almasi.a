@@ -89,12 +89,14 @@ class Counter(a.ReloadableSingleton):
 
 The loaded source class retains its exact `a.File` and opaque subscription ID.
 A successful reload transfers these to its replacement class, without a global registry
-of observed source paths. When the source changes, it invokes the existing
-`__reload__()` behavior, preserving live instances and state.
+of observed source paths. On every notification, Reloadable compares the file's
+modification time with the loaded class's existing `__mtime__`. Equal times
+skip automatic reload, regardless of the event type. Explicit `__reload__()`
+remains unconditional, including when source timestamps have been preserved.
 If replacement fails, the current published class remains in place and the
 exception is logged.
 
-**Concurrency limitation:** filesystem callbacks run on observer threads.
+**Concurrency limitation:** filesystem callbacks run in the Filesystem observation context.
 Reloading from a callback does not drain in-flight calls or suspended
 coroutines. Applications requiring concurrent safety must arrange for affected
 execution to be quiescent before a source update is applied. This implementation

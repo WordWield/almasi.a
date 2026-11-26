@@ -168,7 +168,7 @@ class Directory(FilesystemResource):
 					is_same_name = name == stem or source_lib.String.camel_to_snake(name) == stem
 
 					if is_same_file and isinstance(child, File):
-						child._invalidate()
+						child.invalidate()
 
 					if is_same_file or is_same_name:
 						del face.__children__[name]
@@ -188,20 +188,6 @@ class Directory(FilesystemResource):
 	# ----------------------------------------------------------------------
 	def is_directory(self):
 		return True
-
-	# Deliver existing filenames only to the newly registered subscriber.
-	# ----------------------------------------------------------------------
-	def subscribe(self, callback):
-		'''Register for changes and synchronously deliver existing filenames as created.'''
-		subscription_id = super().subscribe(callback)
-
-		try:
-			callback(self._filesystem.snapshot(self))
-		except BaseException:
-			self.unsubscribe(subscription_id)
-			raise
-
-		return subscription_id
 
 	# List direct resources matching a filename mask without loading them.
 	# ----------------------------------------------------------------------
