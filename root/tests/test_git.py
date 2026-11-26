@@ -273,6 +273,101 @@ class TestGit(a.Tester):
 				'--source', directory, '--remote', 'destination', '--push'
 			])
 
+	# Delete only the explicit remote and propagate provider failures.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_delete(cls):
+		git = a.services.Git
+
+		with patch.object(git, '_gh') as gh:
+			assert git.delete('owner/repo') is None
+			gh.assert_called_once_with(['api', '--hostname', git._HOST, '--method', 'DELETE', 'repos/owner/repo'])
+			gh.reset_mock()
+
+			for repository in ('repo', 'owner/..', 'owner/repo/extra', 'https://github.com/owner/repo'):
+				try:
+					git.delete(repository)
+				except ValueError:
+					gh.assert_not_called()
+				else:
+					assert False, 'Invalid repository was accepted'
+
+			gh.side_effect = subprocess.CalledProcessError(1, ['gh'])
+
+			try:
+				git.delete('owner/repo')
+			except subprocess.CalledProcessError:
+				gh.assert_called_once()
+			else:
+				assert False, 'Deletion failure must propagate'
+
+	# Rename within the current owner without creating or deleting a repository.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_rename(cls):
+		git = a.services.Git
+
+		with patch.object(git, '_gh') as gh:
+			assert git.rename('owner/old', 'new.name') == 'https://github.com/owner/new.name.git'
+			gh.assert_called_once_with(['api', '--hostname', git._HOST, '--method', 'PATCH', 'repos/owner/old', '-f', 'name=new.name'])
+			gh.reset_mock()
+
+			for repository, name in (('old', 'new'), ('owner/old', 'other/new'), ('owner/old', '..'), ('owner/old', ''), ('owner/old', None)):
+				try:
+					git.rename(repository, name)
+				except ValueError:
+					gh.assert_not_called()
+				else:
+					assert False, 'Invalid rename was accepted'
+
+			gh.side_effect = subprocess.CalledProcessError(1, ['gh'])
+
+			try:
+				git.rename('owner/old', 'new')
+			except subprocess.CalledProcessError:
+				gh.assert_called_once()
+			else:
+				assert False, 'Rename failure must propagate'
+
+	# Update the tracked remote, not an assumed origin or the working tree.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_set_repository_url(cls):
+		git = a.services.Git
+
+		with tempfile.TemporaryDirectory(prefix='almasi_git_url_') as directory:
+			origin   = os.path.join(directory, 'origin')
+			checkout = os.path.join(directory, 'checkout')
+
+			subprocess.run(['git', 'init', '-q', '-b', 'master', origin], check=True)
+			cls._git(origin, 'config', 'user.name', 'Test')
+			cls._git(origin, 'config', 'user.email', 'test@example.org')
+			cls._git(origin, 'commit', '-qm', 'Initial', '--allow-empty')
+			git.clone(origin, checkout)
+
+			cls._git(checkout, 'remote', 'rename', 'origin', 'upstream')
+			cls._git(checkout, 'remote', 'add', 'origin', 'https://github.com/owner/unrelated.git')
+			cls._git(checkout, 'remote', 'set-url', '--push', 'upstream', 'https://github.com/owner/publish.git')
+
+			commit = cls._git(checkout, 'rev-parse', 'HEAD')
+			branch = cls._git(checkout, 'rev-parse', '--abbrev-ref', '@{upstream}')
+			url    = 'https://github.com/owner/renamed.git'
+
+			assert git.get_repository_url(checkout) == origin
+			assert git.set_repository_url(checkout, url) is None
+			assert git.get_repository_url(checkout) == url
+			assert cls._git(checkout, 'remote', 'get-url', 'origin') == 'https://github.com/owner/unrelated.git'
+			assert cls._git(checkout, 'remote', 'get-url', '--push', 'upstream') == 'https://github.com/owner/publish.git'
+			assert cls._git(checkout, 'rev-parse', 'HEAD') == commit
+			assert cls._git(checkout, 'rev-parse', '--abbrev-ref', '@{upstream}') == branch
+
+			try:
+				git.set_repository_url(directory, url)
+			except ValueError:
+				assert git.get_repository_url(checkout) == url
+			else:
+				assert False, 'An exact checkout root is required'
+
 	# Reject ambiguous names before invoking the CLI.
 	# ----------------------------------------------------------------------
 	@classmethod

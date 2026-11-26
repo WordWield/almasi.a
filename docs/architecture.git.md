@@ -15,6 +15,9 @@ working directories.
   after success; existing nonempty destinations are rejected by Git.
   Reuse decisions belong to the caller.
 - `get_repository_url(directory: str) -> str`: return the configured upstream remote URL.
+- `set_repository_url(directory: str, url: str) -> None`: change that remote's
+  fetch URL, preserving branch tracking and working files. Explicit push URLs
+  are unchanged. Remote rename and deletion are documented in [Git service API](git.md).
 - `await pull(directory: str, *, exact=False, timeout=None) -> str`: update the
   specified checkout and return its final HEAD. By default use `--ff-only`;
   do not merge divergent histories or discard changes. Explicit `exact=True`

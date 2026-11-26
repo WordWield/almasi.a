@@ -34,6 +34,20 @@ git.clone('https://github.com/owner/project.git', './project')
   Explicit `private=False` requests public visibility; only use this for code
   authorized for public release. If creation succeeds but the push fails, the
   destination may remain empty and must be inspected before retrying.
+- `delete(repository: str) -> None`: permanently deletes the explicit GitHub
+  owner/name through the authenticated API. Requires administration write
+  permission (or the classic token's delete_repo scope). No confirmation
+  prompt, local deletion, automatic retry or ignored 404. The caller must
+  authorize the target and coordinate its lifecycle before calling.
+- `rename(repository: str, new_name: str) -> str`: renames the existing remote
+  repository within its current owner, preserving repository identity and Git
+  history. Accepts an owner/name and a bare destination name, not a new owner.
+  Returns the new HTTPS clone URL. Does not move local checkouts or change
+  their Git configuration. Provider failures propagate.
+- `set_repository_url(directory: str, url: str) -> None`: changes the fetch
+  URL of the remote selected by the checkout's current upstream configuration.
+  Requires an exact checkout root and a configured upstream. Does not contact
+  the remote, change the working tree or alter explicitly configured push URLs.
 - `clone(url, directory, timeout=None) -> str`: clone and return the directory.
 - `get_repository_url(directory) -> str`: return the checkout's upstream remote URL.
 - `await pull(directory, *, exact=False, timeout=None) -> str`: return the final
@@ -42,6 +56,13 @@ git.clone('https://github.com/owner/project.git', './project')
   files in exact mode. Only use exact mode on dedicated deployment checkouts.
 - `is_repository(directory) -> bool`: recognize an exact working checkout root.
   See [Git architecture](architecture.git.md) for lifecycle and error contracts.
+
+For a coordinated, authorized rename, for example:
+
+```python
+url = git.rename('owner/old', 'new')
+git.set_repository_url(directory, url)
+```
 
 Remote operations require GitHub CLI (`gh`) authenticated to github.com,
 permission to create repositories under the target owner, and Git credentials

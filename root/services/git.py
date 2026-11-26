@@ -180,6 +180,16 @@ class Git(a.Singleton):
 
 		return self._run([*command, 'remote', 'get-url', remote]).stdout.strip()
 
+	# Change the URL of the remote selected by the checkout's tracking configuration.
+	# ----------------------------------------------------------------------
+	def set_repository_url(self, directory: str, url: str):
+		'''Set the upstream remote fetch URL without changing the branch or files.
+		An explicitly configured push URL is not changed.'''
+		command   = self._checkout(directory)
+		_, remote = self._upstream(command)
+
+		self._run([*command, 'remote', 'set-url', '--', remote, url])
+
 	# Update one checkout using the requested upstream synchronization policy.
 	# ----------------------------------------------------------------------
 	async def pull(
@@ -293,3 +303,27 @@ class Git(a.Singleton):
 				self._gh([*arguments, '--source', directory, '--remote', 'destination', '--push'])
 
 		return f'https://{self._HOST}/{new_repository}.git'
+
+	# Delete exactly one explicitly named remote repository.
+	# ----------------------------------------------------------------------
+	def delete(self, repository: str):
+		'''Permanently delete a GitHub owner/name using the active credential.
+		Requires repository administration permission; errors propagate.'''
+		repository = self._validate_repository(repository)
+		self._gh(['api', '--hostname', self._HOST, '--method', 'DELETE', f'repos/{repository}'])
+
+	# Rename a repository in place, preserving its identity and history.
+	# ----------------------------------------------------------------------
+	def rename(self, repository: str, new_name: str) -> str:
+		'''Rename a GitHub owner/name within its current owner.
+		Return the new HTTPS clone URL; local checkouts are unchanged.'''
+		repository = self._validate_repository(repository)
+		owner      = repository.split('/')[0]
+
+		if isinstance(new_name, str) and '/' not in new_name:
+			destination = self._validate_repository(f'{owner}/{new_name}')
+			self._gh(['api', '--hostname', self._HOST, '--method', 'PATCH', f'repos/{repository}', '-f', f'name={new_name}'])
+		else:
+			raise ValueError(f'Expected a repository name: {new_name!r}')
+
+		return f'https://{self._HOST}/{destination}.git'
