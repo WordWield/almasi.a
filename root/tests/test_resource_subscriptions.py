@@ -452,14 +452,14 @@ class TestResourceSubscriptions(a.Tester):
 		with tempfile.TemporaryDirectory() as parent_root, tempfile.TemporaryDirectory() as child_root:
 			parent = tests.TestFilesystem._library('shared_source_parent', parent_root, a.A)
 			child  = tests.TestFilesystem._library('shared_source_child', child_root, type(parent))
-			parent.mkdir('shared').write('note.md', 'before')
+			parent.mkdir('shared').write('notes.md', 'before')
 			face    = child.mkdir('shared')
-			path    = parent.shared.join('note.md')
+			path    = parent.shared.join('notes.md')
 			service = a.services.Filesystem
 			first   = []
 			second  = []
 
-			assert parent.shared.note == face.note == 'before'
+			assert parent.shared.notes == face.notes == 'before'
 
 			with patch.object(type(service), '_watch', return_value=None):
 				parent_id = parent.shared.subscribe(first.append)
@@ -473,8 +473,8 @@ class TestResourceSubscriptions(a.Tester):
 						service._changed_paths(parent.__path__, {path: 'modified'})
 						assert invalidate.call_count == 1
 
-					assert first == second == [{'note.md': 'modified'}]
-					assert parent.shared.note == face.note == 'after'
+					assert first == second == [{'notes.md': 'modified'}]
+					assert parent.shared.notes == face.notes == 'after'
 				finally:
 					parent.shared.unsubscribe(parent_id)
 					face.unsubscribe(child_id)
