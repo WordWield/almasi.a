@@ -87,7 +87,7 @@ class Filesystem(a.Singleton):
 
 	# Discover files only at subscription or in an affected new subtree.
 	# ----------------------------------------------------------------------
-	def _files(self, base, path):
+	def _get_initial_files(self, base, path):
 		files = {}
 
 		if os.path.isfile(path):
@@ -107,7 +107,7 @@ class Filesystem(a.Singleton):
 
 		for _, base in locations.values():
 			if resource.is_directory():
-				found = self._files(base, base)
+				found = self._get_initial_files(base, base)
 			else:
 				found = {'.': base} if os.path.isfile(base) else {}
 
@@ -158,14 +158,14 @@ class Filesystem(a.Singleton):
 		if resource.is_directory():
 			if path == base or base.startswith(path + os.sep):
 				names.update(files)
-				names.update(self._files(base, base))
+				names.update(self._get_initial_files(base, base))
 			elif path.startswith(base + os.sep):
 				name = os.path.relpath(path, base).replace(os.sep, '/')
 				if name in files and os.path.isfile(path):
 					names.add(name)
 				else:
 					names.update(key for key in files if key == name or key.startswith(name + '/'))
-					names.update(self._files(base, path))
+					names.update(self._get_initial_files(base, path))
 		elif path == base or base.startswith(path + os.sep):
 			names.add('.')
 
