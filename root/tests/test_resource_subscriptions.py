@@ -193,12 +193,11 @@ class TestResourceSubscriptions(a.Tester):
 					stream.write('after')
 
 				service._changed_paths(root, {path: 'modified'})
-				assert len(got_file) == 1
-				assert next(iter(got_file[0].values())) == 'modified'
+				assert got_file == [{'.': 'modified'}]
 				assert file.load() == 'after'
 
 				service._changed_paths(os.path.dirname(root), {path: 'modified'})
-				assert len(got_dir) == 1
+				assert got_dir == [{'notes.txt': 'modified'}]
 				assert directory.notes == 'after'
 
 				file.unsubscribe(file_handle)
@@ -226,7 +225,7 @@ class TestResourceSubscriptions(a.Tester):
 			with patch.object(type(service), '_watch', return_value=None):
 				handle = file.subscribe(events.append)
 				service._changed_paths(alias, {os.path.join(alias, 'notes.txt'): 'modified'})
-				assert events == [{'notes.txt': 'modified'}]
+				assert events == [{'.': 'modified'}]
 				file.unsubscribe(handle)
 
 	# Keep a directory subscribed across removal and subsequent recreation.
@@ -245,15 +244,41 @@ class TestResourceSubscriptions(a.Tester):
 
 				shutil.rmtree(root)
 				service._changed_paths(parent, {root: 'deleted'})
-				assert events[-1] == {'foo': 'deleted'}
+				assert events[-1] == {'.': 'deleted'}
 				assert directory.is_subscribed()
 
 				os.mkdir(root)
 				service._changed_paths(parent, {root: 'created'})
-				assert events[-1] == {'foo': 'created'}
+				assert events[-1] == {'.': 'created'}
 
 				directory.unsubscribe(handle)
 				assert not directory.is_subscribed()
+
+	# Report changes to an observed file's ancestor in the same coordinates.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_file_ancestor_notification(cls):
+		with tempfile.TemporaryDirectory() as root:
+			parent = os.path.join(root, 'nested')
+			path   = os.path.join(parent, 'note.txt')
+			os.mkdir(parent)
+
+			with open(path, 'w', encoding='utf-8') as stream:
+				stream.write('before')
+
+			file    = a.File(a, path, 'almasi.nested.note')
+			service = a.services.Filesystem
+			events  = []
+
+			with patch.object(type(service), '_watch', return_value=None):
+				handle = file.subscribe(events.append)
+
+				try:
+					shutil.rmtree(parent)
+					service._changed_paths(parent, {parent: 'deleted'})
+					assert events == [{'..': 'deleted'}]
+				finally:
+					file.unsubscribe(handle)
 
 	# Match recursive changes and preserve more than one thousand paths.
 	# --------------------------------------------------------------------------
@@ -276,7 +301,7 @@ class TestResourceSubscriptions(a.Tester):
 				service._changed_paths(parent, changes)
 				assert len(events) == 1
 				assert len(events[0]) == 1001
-				assert events[0]['foo/nested/item_500.js'] == 'modified'
+				assert events[0]['nested/item_500.js'] == 'modified'
 
 				directory.unsubscribe(handle)
 
@@ -336,8 +361,8 @@ class TestResourceSubscriptions(a.Tester):
 
 				assert os.path.realpath(root) in service._watchers
 				service._changed_paths(root, {path: 'modified'})
-				assert first == [{'shared.txt': 'modified'}]
-				assert second == [{'shared.txt': 'modified'}]
+				assert first == [{'.': 'modified'}]
+				assert second == [{'.': 'modified'}]
 
 				file.unsubscribe(left)
 				assert os.path.realpath(root) in service._watchers
@@ -381,34 +406,78 @@ class TestResourceSubscriptions(a.Tester):
 			parent.mkdir('shared').write('note.md', 'inherited')
 			face   = child.mkdir('shared')
 			file   = face.__resolve__('note.md')
-			events = []
-			source = a.services.Filesystem
-			p_path = parent.shared.join('note.md')
-			c_path = face.join('note.md')
+			events     = []
+			dir_events = []
+			source     = a.services.Filesystem
+			p_path     = parent.shared.join('note.md')
+			c_path     = face.join('note.md')
 
 			assert file.get_lib() is parent
 			assert file._namespace_lib is child
 
 			with patch.object(type(source), '_watch', return_value=None):
-				handle = file.subscribe(events.append)
+				handle     = file.subscribe(events.append)
+				dir_handle = face.subscribe(dir_events.append)
 
 				parent.shared.write('note.md', 'changed')
 				source._changed_paths(parent.__path__, {p_path: 'modified'})
-				assert len(events) == 1
+				assert events == [{'.': 'modified'}]
+				assert dir_events == [{'note.md': 'modified'}]
 
 				face.write('note.md', 'local')
 				source._changed_paths(child.__path__, {c_path: 'created'})
-				assert len(events) == 2
+				assert events[-1] == {'.': 'created'}
+				assert dir_events[-1] == {'note.md': 'created'}
+				assert len(events) == len(dir_events) == 2
 
 				parent.shared.write('note.md', 'hidden')
 				source._changed_paths(parent.__path__, {p_path: 'modified'})
-				assert len(events) == 2
+				assert len(events) == len(dir_events) == 2
 
 				os.remove(c_path)
 				source._changed_paths(child.__path__, {c_path: 'deleted'})
-				assert len(events) == 3
+				assert events[-1] == {'.': 'deleted'}
+				assert dir_events[-1] == {'note.md': 'deleted'}
+				assert len(events) == len(dir_events) == 3
 
 				file.unsubscribe(handle)
+				face.unsubscribe(dir_handle)
+
+	# Invalidate a shared source once even when multiple namespaces observe it.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_shared_source_invalidation(cls):
+		tests = a.tests
+
+		with tempfile.TemporaryDirectory() as parent_root, tempfile.TemporaryDirectory() as child_root:
+			parent = tests.TestFilesystem._library('shared_source_parent', parent_root, a.A)
+			child  = tests.TestFilesystem._library('shared_source_child', child_root, type(parent))
+			parent.mkdir('shared').write('notes.md', 'before')
+			face    = child.mkdir('shared')
+			path    = parent.shared.join('notes.md')
+			service = a.services.Filesystem
+			first   = []
+			second  = []
+
+			assert parent.shared.notes == face.notes == 'before'
+
+			with patch.object(type(service), '_watch', return_value=None):
+				parent_id = parent.shared.subscribe(first.append)
+				child_id  = face.subscribe(second.append)
+
+				try:
+					with open(path, 'w', encoding='utf-8') as stream:
+						stream.write('after')
+
+					with patch.object(a.Directory, '_invalidate_children', autospec=True, side_effect=a.Directory._invalidate_children) as invalidate:
+						service._changed_paths(parent.__path__, {path: 'modified'})
+						assert invalidate.call_count == 1
+
+					assert first == second == [{'notes.md': 'modified'}]
+					assert parent.shared.notes == face.notes == 'after'
+				finally:
+					parent.shared.unsubscribe(parent_id)
+					face.unsubscribe(child_id)
 
 	# Resolve inherited unregistered file extensions without plugin filtering.
 	# --------------------------------------------------------------------------
@@ -435,13 +504,13 @@ class TestResourceSubscriptions(a.Tester):
 
 			with patch.object(type(source), '_watch', return_value=None):
 				handle = file.subscribe(events.append)
-				assert source._effective(file) == parent_path
+				assert source._resources[file]['path'] == parent_path
 
 				with open(child_path, 'wb') as stream:
 					stream.write(b'local')
 
 				source._changed_paths(child.__path__, {child_path: 'created'})
-				assert source._effective(file) == child_path
+				assert source._resources[file]['path'] == child_path
 				assert len(events) == 1
 
 				with open(parent_path, 'wb') as stream:
@@ -452,7 +521,7 @@ class TestResourceSubscriptions(a.Tester):
 
 				os.unlink(child_path)
 				source._changed_paths(child.__path__, {child_path: 'deleted'})
-				assert source._effective(file) == parent_path
+				assert source._resources[file]['path'] == parent_path
 				assert len(events) == 2
 				file.unsubscribe(handle)
 
@@ -576,13 +645,10 @@ class TestResourceSubscriptions(a.Tester):
 						received.wait(timeout=0.6)
 
 				assert received.is_set()
-				assert any('observed.txt' in key for event in events for key in event)
+				assert any('.' in event for event in events)
 			finally:
 				file.unsubscribe(handle)
 
-
-if __name__ == '__main__':
-	TestResourceSubscriptions.run()
 
 	# Verify failed deployment holds events and successful retry publishes them.
 	# ----------------------------------------------------------------------
@@ -622,3 +688,7 @@ if __name__ == '__main__':
 
 				service._changed_paths(root, {path: 'deleted'})
 				deliver.assert_called_with(root, {path: 'deleted'})
+
+
+if __name__ == '__main__':
+	TestResourceSubscriptions.run()
