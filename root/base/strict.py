@@ -5,13 +5,11 @@
 # Check explicitly invoked Python methods against their declared types.
 #
 # RESPONSIBILITY BOUNDARIES:
-# Owns: Signature binding and runtime type checks.
-# Delegates: Execution to the original callable; no implicit method wrapping.
+# Owns: Binding and enforcement of typed method contracts.
+# Delegates: Value matching to Annotation and execution to the original method.
 # ==============================================================================
 
 import inspect
-import types
-import typing
 
 from almasi import a
 
@@ -34,53 +32,11 @@ class Strict(a.Module):
 
 	# Check a value without coercion or mutation.
 	# ----------------------------------------------------------------------
-	@classmethod
-	def _check_type(cls, value, annotation):
+	@staticmethod
+	def _check_type(value, annotation):
 		'''Raise TypeError if value does not satisfy the supported annotation.'''
-		if not cls._strict_match(value, annotation):
+		if not a.Annotation(annotation).matches(value):
 			raise TypeError(f'Expected {annotation!r}, got {type(value)!r}')
-
-	# Support concrete classes and common inspectable typing forms.
-	# ----------------------------------------------------------------------
-	@classmethod
-	def _strict_match(cls, value, annotation):
-		origin = typing.get_origin(annotation)
-		args   = typing.get_args(annotation)
-
-		if annotation is typing.Any:
-			result = True
-		elif origin in (typing.Union, types.UnionType):
-			result = any(cls._strict_match(value, item) for item in args)
-		elif origin is typing.Annotated:
-			result = cls._strict_match(value, args[0])
-		elif origin is typing.Literal:
-			result = any(type(value) is type(item) and value == item for item in args)
-		elif origin in (list, set, frozenset):
-			result = isinstance(value, origin) and (not args or all(cls._strict_match(item, args[0]) for item in value))
-		elif origin is dict:
-			result = isinstance(value, dict) and (not args or all(
-				cls._strict_match(key, args[0]) and cls._strict_match(item, args[1])
-				for key, item in value.items()
-			))
-		elif origin is tuple:
-			result = isinstance(value, tuple)
-
-			if result and annotation is not typing.Tuple:
-				if len(args) == 2 and args[1] is Ellipsis:
-					result = all(cls._strict_match(item, args[0]) for item in value)
-				else:
-					result = len(value) == len(args) and all(
-						cls._strict_match(item, kind) for item, kind in zip(value, args)
-					)
-		elif origin is a.Resource:
-			# A carrier's contents are not inspected or consumed by a type check.
-			result = isinstance(value, origin)
-		elif isinstance(annotation, type) and origin is None:
-			result = isinstance(value, annotation)
-		else:
-			raise TypeError(f'Unsupported strict annotation: {annotation!r}')
-
-		return result
 
 	# Complete a checked async call without replacing the declared method.
 	# ----------------------------------------------------------------------
