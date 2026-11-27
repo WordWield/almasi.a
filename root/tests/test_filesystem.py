@@ -109,6 +109,23 @@ class TestFilesystem(a.Tester):
 		load.assert_called_once_with()
 		hash.assert_not_called()
 
+	# Invalidation during observation setup cannot erase a completed load.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_invalidation_during_load(cls):
+		source = type('Source', (), {'__on_load__': Mock(side_effect=a.File.invalidate)})
+		loader = Mock(return_value=source)
+		file   = a.File(a, __file__, 'almasi.source', loader)
+
+		assert file.load() is source
+		source.__on_load__.assert_called_once_with(file)
+
+		loader.return_value = 'next revision'
+
+		assert file.load() == 'next revision'
+		assert file.load() == 'next revision'
+		assert loader.call_count == 2
+
 	# Resolve former metadata names on both root and nested faces.
 	# ----------------------------------------------------------------------
 	@classmethod
