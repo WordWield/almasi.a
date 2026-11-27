@@ -17,6 +17,7 @@ import threading
 import time
 import uuid
 
+from typing        import Generic, get_args, get_origin, get_type_hints
 from unittest.mock import Mock, patch
 
 from almasi import a
@@ -65,7 +66,7 @@ class TestResourceSubscriptions(a.Tester):
 		assert issubclass(a.Resource, a.Module)
 		assert issubclass(a.File, a.Module)
 		assert issubclass(a.Directory, a.Module)
-		assert a.Resource.__bases__ == (a.Module,)
+		assert a.Resource.__bases__ == (a.Module, Generic)
 		assert not issubclass(a.Directory, a.File)
 		assert a.File.is_directory(a.File(a, __file__, 'almasi.file')) is False
 		assert a.Directory(a, os.path.dirname(__file__), 'almasi.tests').is_directory() is True
@@ -98,6 +99,31 @@ class TestResourceSubscriptions(a.Tester):
 
 		resource.update()
 		callback.assert_called_once_with(None)
+
+	# Type declarations describe reads without creating another resource class.
+	# --------------------------------------------------------------------------
+	@classmethod
+	def test_resource_type_parameter(cls):
+		declaration = a.Resource[int]
+		assert get_origin(declaration) is a.Resource
+		assert get_args(declaration) == (int,)
+		assert get_type_hints(a.Resource.read)['return'] is a.Resource.__parameters__[0]
+
+		resource = a.resources.Writable(42)
+		assert isinstance(resource, a.Resource)
+		assert resource.read() == 42
+
+		events = []
+		handle = resource.subscribe(events.append)
+
+		resource.write(None)
+		assert resource.read() is None
+		assert events == [None]
+		resource.unsubscribe(handle)
+
+		resource.write('unchanged runtime contract')
+		assert resource.read() == 'unchanged runtime contract'
+		assert events == [None]
 
 	# Cancellation inside dispatch suppresses a listener that has not run yet.
 	# ----------------------------------------------------------------------
