@@ -18,7 +18,7 @@ class File(FilesystemResource):
 	def __init__(self, lib, path, route, load_method=None, hash_method=None):
 		super().__init__(lib, path, route)
 
-		self._cache = None
+		self._cache = []
 		self._hash  = None
 
 		self._load_method = load_method
@@ -31,7 +31,7 @@ class File(FilesystemResource):
 	# Forget content after a successful filesystem mutation.
 	# ----------------------------------------------------------------------
 	def invalidate(self):
-		self._cache = None
+		self._cache = []
 		self._hash  = None
 
 	# Preserve the established public carrier-type predicate.
@@ -39,28 +39,22 @@ class File(FilesystemResource):
 	def is_directory(self):
 		return False
 
-	# Keep the loaded result independent of invalidation during source setup.
-	# A single cache entry distinguishes unloaded from a legitimate null result.
+	# Publish only completed loads. Invalidation replaces the cache generation,
+	# so an in-flight load cannot restore an invalidated cache.
 	# ----------------------------------------------------------------------
 	def load(self):
-		cached = self._cache
+		cache = self._cache
 
-		if cached is not None:
-			result = cached[0]
+		if cache:
+			result = cache[0]
 		elif self._load_method is not None:
-			result      = self._load_method()
-			cached      = (result,)
-			self._cache = cached
-			owner       = result if isinstance(result, type) else type(result)
+			result = self._load_method()
+			owner  = result if isinstance(result, type) else type(result)
 
-			try:
-				if hasattr(owner, '__on_load__'):
-					owner.__on_load__(self)
-			except BaseException:
-				if self._cache is cached:
-					self.invalidate()
+			if hasattr(owner, '__on_load__'):
+				owner.__on_load__(self)
 
-				raise
+			cache[:] = [result]
 		else:
 			result = None
 
