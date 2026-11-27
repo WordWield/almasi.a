@@ -3,6 +3,7 @@ import inspect
 import os
 import shutil
 import sys
+import typing as t
 
 from almasi import a
 
@@ -235,6 +236,51 @@ class TestModule(a.Tester):
 		assert child.__get_method__('fourth')(3) == 3
 		assert list(child.__list_methods__(exposed=True)) == [child.second]
 		assert child.__get_method_signature__(child.first).return_annotation is inspect.Signature.empty
+
+
+	# Matching must preserve actual types instead of coercing values.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_annotation_matches(cls):
+		for declaration, value, expected in (
+			(int, 3, True),
+			(int, '3', False),
+			(t.Any, object(), True),
+			(int | None, None, True),
+			(list[int | None], [1, None], True),
+			(list[int], ['1'], False),
+			(dict[str, list[int]], {'a': [1, 2]}, True),
+			(dict[str, int], {1: 2}, False),
+			(set[int], {1, 2}, True),
+			(frozenset[int], frozenset({'1'}), False),
+			(tuple[int, str], (1, 'a'), True),
+			(tuple[int, ...], (1, 2), True),
+			(tuple[int, ...], (1, '2'), False),
+			(t.Tuple, (1, 'a'), True),
+			(tuple[()], (), True),
+			(tuple[()], (1,), False),
+			(t.Literal[1], True, False),
+			(t.Literal['one', 'two'], 'one', True),
+			(t.Annotated[int, 'metadata'], 1, True),
+			(a.Resource[int], a.resources.Writable(1), True),
+		):
+			assert a.Annotation(declaration).matches(value) is expected, declaration
+
+		assert a.Annotation(int).cast('3') == 3
+		assert not a.Annotation(int).matches('3')
+		assert a.Annotation(dict[str, list[int]]).cast({'a': ['1']}) == {'a': [1]}
+
+	# Core source expressions round-trip without importing O.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_annotation_source(cls):
+		for declaration in (int, t.Any, list[int], dict[str, int | None], tuple[int, ...], tuple[()], t.Literal['x'], t.Annotated[int, 'tag']):
+			annotation = a.Annotation(declaration)
+			restored   = a.Annotation(annotation.to_source())
+
+			assert restored.annotation == annotation.annotation
+			assert restored.id == annotation.id
+			assert hash(restored) == hash(annotation)
 
 
 if __name__ == '__main__':
