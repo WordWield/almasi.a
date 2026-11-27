@@ -25,18 +25,8 @@ class Strict(a.Module):
 	# Invoke the original callable only after checking its typed arguments.
 	# ----------------------------------------------------------------------
 	def __call_method__(self, method, /, *args, **kwargs):
-		'''Check a synchronous result or return an awaitable checking its result.'''
-		bound      = self._strict_bind(method, *args, **kwargs)
-		annotation = bound.signature.return_annotation
-		value      = method(*bound.args, **bound.kwargs)
-
-		if inspect.iscoroutinefunction(method):
-			result = self._strict_await(value, annotation)
-		else:
-			self._check_type(value, annotation)
-			result = value
-
-		return result
+		'''Invoke a method with explicit runtime argument and result checks.'''
+		return self._call_method(method, self.__get_method_signature__(method), *args, **kwargs)
 
 	# ======================================================================
 	# PRIVATE METHODS
@@ -102,9 +92,7 @@ class Strict(a.Module):
 
 	# Bind and check all actual arguments, including defaults and variadics.
 	# ----------------------------------------------------------------------
-	def _strict_bind(self, method, /, *args, **kwargs):
-		'''Return checked BoundArguments without executing the method.'''
-		signature = self.__get_method_signature__(method)
+	def _strict_bind(self, signature, /, *args, **kwargs):
 
 		for parameter in signature.parameters.values():
 			if parameter.annotation is inspect.Parameter.empty:
@@ -129,3 +117,18 @@ class Strict(a.Module):
 				self._check_type(value, parameter.annotation)
 
 		return bound
+
+	# Execute a previously reflected signature without resolving it again.
+	# ----------------------------------------------------------------------
+	def _call_method(self, method, signature, /, *args, **kwargs):
+		bound      = self._strict_bind(signature, *args, **kwargs)
+		annotation = signature.return_annotation
+		value      = method(*bound.args, **bound.kwargs)
+
+		if inspect.iscoroutinefunction(method):
+			result = self._strict_await(value, annotation)
+		else:
+			self._check_type(value, annotation)
+			result = value
+
+		return result
