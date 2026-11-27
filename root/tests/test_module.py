@@ -156,6 +156,9 @@ class TestModule(a.Tester):
 			async def read(self, values: list[int | None]) -> dict[str, int]:
 				return {'count': len(values)}
 
+			def named(owner, method: str, self: str) -> str:
+				return method + self
+
 			def wrong(self) -> int:
 				return 'wrong'
 
@@ -166,6 +169,7 @@ class TestModule(a.Tester):
 		assert example.bind('untyped') == 'untyped'
 		assert example.strict_call(example.call, 3, offset=4) == 7
 		assert asyncio.run(example.strict_call(example.read, [1, None])) == {'count': 2}
+		assert example.strict_call(example.named, method='a', self='b') == 'ab'
 		assert Example.call is method
 		assert inspect.signature(example.call) == example.strict_signature(example.call)
 		assert example.calls == 2
