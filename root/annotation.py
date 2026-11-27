@@ -75,6 +75,8 @@ class Annotation(a.Module):
 			text = 'None'
 		elif self.is_union:
 			text = '|'.join(sorted(str(option) for option in self.options))
+		elif self.origin in (t.Annotated, t.Literal):
+			text = str(self.annotation)
 		elif self.args:
 			args = ','.join(str(type(self)(arg)) for arg in self.args)
 			text = f'{self.origin.__name__}[{args}]'
@@ -177,14 +179,9 @@ class Annotation(a.Module):
 		union_type = getattr(types, 'UnionType', None)
 
 		if origin in (t.Union, union_type):
-			for arg in t.get_args(self.annotation):
+			for arg in self.args:
 				option = type(self)(arg)
-
-				if option.is_union:
-					for nested in option.options:
-						options.add(nested)
-				else:
-					options.add(option)
+				options.update(option.options if option.is_union else (option,))
 
 		return options
 
@@ -193,23 +190,23 @@ class Annotation(a.Module):
 	def _get_key_value(self):
 		key   = None
 		value = None
-		args  = t.get_args(self.annotation)
+		args  = self.args
 
 		if self.is_list:
-			if len(args) not in (0, 1):
+			if len(args) in (0, 1):
+				key = type(self)(int)
+
+				if args:
+					value = type(self)(args[0])
+			else:
 				raise TypeError(f'Invalid list annotation: `{self.annotation}`')
-
-			key = type(self)(int)
-			if len(args) == 1:
-				value = type(self)(args[0])
-
 		elif self.is_dict:
-			if len(args) not in (0, 2):
+			if len(args) in (0, 2):
+				if args:
+					key   = type(self)(args[0])
+					value = type(self)(args[1])
+			else:
 				raise TypeError(f'Invalid dict annotation: `{self.annotation}`')
-
-			if len(args) == 2:
-				key   = type(self)(args[0])
-				value = type(self)(args[1])
 
 		return key, value
 
@@ -266,19 +263,17 @@ class Annotation(a.Module):
 		if self.value is not None and not isinstance(self.value, type(self)):
 			raise TypeError(f'Value must be `Annotation`, got `{type(self.value)}`')
 
-	# Validate JSON number
+	# Test the existing finite-number constraint for data inference and casting.
 	# ----------------------------------------------------------------------
-	@classmethod
-	def _validate_json_value(cls, value):
-		if isinstance(value, float):
-			if math.isnan(value) or math.isinf(value):
-				raise ValueError(f'Invalid JSON number: `{value}`')
+	@staticmethod
+	def _is_finite(value):
+		return not isinstance(value, float) or math.isfinite(value)
 
 	# ======================================================================
 	# PUBLIC METHODS
 	# ======================================================================
 
-	# Render a persistent expression without changing display or identity.
+	# Render a trusted type expression without changing display or identity.
 	# ----------------------------------------------------------------------
 	def to_source(self):
 		if self.annotation is None:
@@ -287,6 +282,12 @@ class Annotation(a.Module):
 			result = 'type(None)'
 		elif self.is_union:
 			result = '(' + ' | '.join(sorted(type(self)(arg).to_source() for arg in self.args)) + ')'
+		elif self.origin is t.Literal:
+			result = 't.Literal[' + ', '.join(repr(arg) for arg in self.args) + ']'
+		elif self.origin is t.Annotated:
+			result = 't.Annotated[' + ', '.join([type(self)(self.args[0]).to_source(), *map(repr, self.args[1:])]) + ']'
+		elif self.annotation == tuple[()]:
+			result = 'tuple[()]'
 		elif self.args:
 			args   = ', '.join(type(self)(arg).to_source() for arg in self.args)
 			result = f'{self.origin.__name__}[{args}]'
@@ -333,9 +334,10 @@ class Annotation(a.Module):
 				cls._join(value.keys()),
 				cls._join(value.values()),
 			]
-		else:
-			cls._validate_json_value(value)
+		elif cls._is_finite(value):
 			annotation = type(value)
+		else:
+			raise ValueError(f'Invalid JSON number: `{value}`')
 
 		return cls(annotation)
 
@@ -389,9 +391,10 @@ class Annotation(a.Module):
 		result = None
 
 		if self.is_none:
-			if value is not None:
+			if value is None:
+				result = None
+			else:
 				raise TypeError(f'Expected `None`, got `{type(value)}`')
-			result = None
 
 		elif self.is_union:
 			error = None
@@ -406,22 +409,18 @@ class Annotation(a.Module):
 				raise TypeError(f'Value `{value}` does not match annotation `{self}`')
 
 		elif self.is_list:
-			if not isinstance(value, list):
-				raise TypeError(f'Expected `list`, got `{type(value)}`')
-			if self.value is None:
-				result = list(value)
+			if isinstance(value, list):
+				result = list(value) if self.value is None else [self.value.cast(item) for item in value]
 			else:
-				result = [self.value.cast(item) for item in value]
+				raise TypeError(f'Expected `list`, got `{type(value)}`')
 
 		elif self.is_dict:
-			if not isinstance(value, dict):
-				raise TypeError(f'Expected `dict`, got `{type(value)}`')
-			if self.key is None or self.value is None:
-				result = dict(value)
+			if isinstance(value, dict):
+				result = dict(value) if self.key is None else {
+					self.key.cast(key): self.value.cast(item) for key, item in value.items()
+				}
 			else:
-				result = {}
-				for k, v in value.items():
-					result[self.key.cast(k)] = self.value.cast(v)
+				raise TypeError(f'Expected `dict`, got `{type(value)}`')
 
 		elif self.is_bool:
 			if value in (True, 'True', 1, '1'):
@@ -431,9 +430,9 @@ class Annotation(a.Module):
 			else:
 				raise TypeError(f'Expected `bool`, got `{value}`')
 
-		else:
-			if isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
-				raise ValueError(f'Invalid JSON number: `{value}`')
+		elif self._is_finite(value):
 			result = self.origin(value)
+		else:
+			raise ValueError(f'Invalid JSON number: `{value}`')
 
 		return result
