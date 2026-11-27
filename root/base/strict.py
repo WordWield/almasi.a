@@ -19,8 +19,36 @@ from almasi import a
 class Strict(a.Module):
 
 	# ======================================================================
+	# FRAMEWORK METHODS
+	# ======================================================================
+
+	# Invoke the original callable only after checking its typed arguments.
+	# ----------------------------------------------------------------------
+	def __call_method__(self, method, /, *args, **kwargs):
+		'''Check a synchronous result or return an awaitable checking its result.'''
+		bound      = self._strict_bind(method, *args, **kwargs)
+		annotation = bound.signature.return_annotation
+		value      = method(*bound.args, **bound.kwargs)
+
+		if inspect.iscoroutinefunction(method):
+			result = self._strict_await(value, annotation)
+		else:
+			self._check_type(value, annotation)
+			result = value
+
+		return result
+
+	# ======================================================================
 	# PRIVATE METHODS
 	# ======================================================================
+
+	# Check a value without coercion or mutation.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def _check_type(cls, value, annotation):
+		'''Raise TypeError if value does not satisfy the supported annotation.'''
+		if not cls._strict_match(value, annotation):
+			raise TypeError(f'Expected {annotation!r}, got {type(value)!r}')
 
 	# Support concrete classes and common inspectable typing forms.
 	# ----------------------------------------------------------------------
@@ -68,7 +96,7 @@ class Strict(a.Module):
 	# ----------------------------------------------------------------------
 	async def _strict_await(self, result, annotation):
 		value = await result
-		self.strict_check(value, annotation)
+		self._check_type(value, annotation)
 
 		return value
 
@@ -76,8 +104,16 @@ class Strict(a.Module):
 	# ----------------------------------------------------------------------
 	def _strict_bind(self, method, /, *args, **kwargs):
 		'''Return checked BoundArguments without executing the method.'''
-		signature = self.strict_signature(method)
-		bound     = signature.bind(*args, **kwargs)
+		signature = self.__get_method_signature__(method)
+
+		for parameter in signature.parameters.values():
+			if parameter.annotation is inspect.Parameter.empty:
+				raise TypeError(f'Missing annotation: {parameter.name}')
+
+		if signature.return_annotation is inspect.Signature.empty:
+			raise TypeError('Missing return annotation')
+
+		bound = signature.bind(*args, **kwargs)
 		bound.apply_defaults()
 
 		for name, value in bound.arguments.items():
@@ -85,59 +121,11 @@ class Strict(a.Module):
 
 			if parameter.kind is inspect.Parameter.VAR_POSITIONAL:
 				for item in value:
-					self.strict_check(item, parameter.annotation)
+					self._check_type(item, parameter.annotation)
 			elif parameter.kind is inspect.Parameter.VAR_KEYWORD:
 				for item in value.values():
-					self.strict_check(item, parameter.annotation)
+					self._check_type(item, parameter.annotation)
 			else:
-				self.strict_check(value, parameter.annotation)
+				self._check_type(value, parameter.annotation)
 
 		return bound
-
-	# ======================================================================
-	# PUBLIC METHODS
-	# ======================================================================
-
-	# Check a value without coercion or mutation.
-	# ----------------------------------------------------------------------
-	@classmethod
-	def strict_check(cls, value, annotation):
-		'''Raise TypeError if value does not satisfy the supported annotation.'''
-		if not cls._strict_match(value, annotation):
-			raise TypeError(f'Expected {annotation!r}, got {type(value)!r}')
-
-	# Resolve the real callable signature without replacing its declaration.
-	# ----------------------------------------------------------------------
-	@staticmethod
-	def strict_signature(method):
-		'''Return a resolved Signature, requiring parameter and result annotations.'''
-		signature  = inspect.signature(method)
-		hints      = typing.get_type_hints(method, include_extras=True)
-		parameters = []
-
-		for parameter in signature.parameters.values():
-			if parameter.name in hints:
-				parameters.append(parameter.replace(annotation=hints[parameter.name]))
-			else:
-				raise TypeError(f'Missing annotation: {parameter.name}')
-
-		if 'return' not in hints:
-			raise TypeError('Missing return annotation')
-
-		return signature.replace(parameters=parameters, return_annotation=hints['return'])
-
-	# Invoke the original callable only after checking its typed arguments.
-	# ----------------------------------------------------------------------
-	def strict_call(self, method, /, *args, **kwargs):
-		'''Check a synchronous result or return an awaitable checking its result.'''
-		bound      = self._strict_bind(method, *args, **kwargs)
-		annotation = bound.signature.return_annotation
-		value      = method(*bound.args, **bound.kwargs)
-
-		if inspect.iscoroutinefunction(method):
-			result = self._strict_await(value, annotation)
-		else:
-			self.strict_check(value, annotation)
-			result = value
-
-		return result
