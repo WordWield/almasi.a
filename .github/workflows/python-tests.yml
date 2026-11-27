@@ -2,12 +2,17 @@ name: Core Python tests
 
 on:
   push:
-  pull_request:
+    branches: [master, generic-resource]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   tests:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     strategy:
+      fail-fast: false
       matrix:
         python-version: ['3.11', '3.12']
 
@@ -15,23 +20,45 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: core
+          persist-credentials: false
       - uses: actions/checkout@v4
         with:
           repository: WordWield/almasi
-          ref: master
+          ref: 42f45c8912ea48e07797378a94b159ad78a4bb11
           path: loader
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-      - name: Install loader and Core dependencies
-        run: |
-          python -m pip install ./loader
-          python -m pip install -r ./core/requirements.txt
-      - name: Expose Core checkout without updating it
-        run: |
-          mkdir -p "$RUNNER_TEMP/almasi.a"
-          cp -a core/a.py core/lib core/root core/plugins core/requirements.txt "$RUNNER_TEMP/almasi.a/"
-      - name: Run Core tests
+          persist-credentials: false
+      - name: Run native Core tests in an isolated local environment
+        shell: bash
         env:
-          ALMASI_PATH: ${{ runner.temp }}
-        run: cd "$RUNNER_TEMP" && python -c 'from almasi import a; a.tester.run()'
+          PYTHON_VERSION: ${{ matrix.python-version }}
+        run: |
+          python_bin="$(command -v "python$PYTHON_VERSION" || true)"
+          if [ -z "$python_bin" ]; then
+            for candidate in \
+              /opt/homebrew/opt/"python@$PYTHON_VERSION"/bin/"python$PYTHON_VERSION" \
+              /usr/local/opt/"python@$PYTHON_VERSION"/bin/"python$PYTHON_VERSION" \
+              /Library/Frameworks/Python.framework/Versions/"$PYTHON_VERSION"/bin/"python$PYTHON_VERSION" \
+              "${PYENV_ROOT:-$HOME/.pyenv}"/versions/"$PYTHON_VERSION".*/bin/python; do
+              if [ -x "$candidate" ]; then
+                python_bin="$candidate"
+                break
+              fi
+            done
+          fi
+          if [ -z "$python_bin" ]; then
+            echo "Python $PYTHON_VERSION must already be installed on the self-hosted runner."
+            exit 1
+          fi
+
+          "$python_bin" -c 'import os, sys; assert ".".join(map(str, sys.version_info[:2])) == os.environ["PYTHON_VERSION"]; print(sys.version)'
+          work="$(mktemp -d "$RUNNER_TEMP/almasi-core.XXXXXX")"
+          trap 'rm -rf -- "$work"' EXIT
+          "$python_bin" -m venv "$work/venv"
+          export PATH="$work/venv/bin:$PATH"
+          export ALMASI_PATH="$work/libraries"
+
+          python -m pip install ./loader
+          mkdir -p "$ALMASI_PATH/almasi.a"
+          cp -a core/a.py core/lib core/root core/plugins core/assets core/requirements.txt "$ALMASI_PATH/almasi.a/"
+          cd "$work"
+          python -c 'from almasi import a; a.tester.run()'

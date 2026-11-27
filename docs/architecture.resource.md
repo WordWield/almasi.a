@@ -23,6 +23,35 @@ producer reconciles the resource's current subscription state under its
 existing source lock. No new worker or lock belongs to Resource. Inherited
 filesystem and computed resources supply their source's observation callable.
 
+## Optional value typing
+
+`a.Resource[T]` is a standard Python Generic annotation describing the
+value returned by read. T may be any Python type, including a class supplied
+by another library. It does not create another resource implementation,
+convert values, enforce a runtime type, or change subscription semantics.
+
+~~~python
+from almasi import a
+
+resource: a.Resource[int] = a.resources.Writable(42)
+assert resource.read() == 42
+~~~
+
+Existing unparameterized Resource subclasses and their public APIs remain
+valid. The declared type must describe the actual read result, including
+None or an invalidation sentinel when a specialized resource can return
+one. Bare Resource is appropriate when a source has no single declared
+read type or specializes read with multiple result forms. Existing
+Writable, File, Directory, Stream and Log implementations are unchanged.
+
+Use `isinstance(resource, a.Resource)` for runtime carrier checks.
+`typing.get_origin(a.Resource[int])` identifies Resource and
+`typing.get_args(a.Resource[int])` returns the declared content type.
+Do not use a parameterized alias in isinstance/issubclass; it is a typing
+annotation, not a runtime class. Resource remains a Module, with the
+additional standard-library Generic base. No new Almasi ancestor or
+runtime state is introduced.
+
 ## Filesystem specialization
 
 FilesystemResource provides carrier identity in its supplying and effective

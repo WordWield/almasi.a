@@ -10,11 +10,15 @@
 # ==============================================================================
 
 import logging
+from typing import Generic, TypeVar
 
 from .module import Module
 
 
-class Resource(Module):
+T = TypeVar('T')
+
+
+class Resource(Module, Generic[T]):
 
 	_observe       = None
 	_subscriptions = None
@@ -38,7 +42,7 @@ class Resource(Module):
 		self,
 		position : int | None = None,
 		length   : int | None = None
-	):
+	) -> T:
 		raise NotImplementedError
 
 	# Tell an external detector whether this resource needs observation.
