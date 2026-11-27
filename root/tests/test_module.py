@@ -1,3 +1,5 @@
+import asyncio
+import inspect
 import os
 import shutil
 import sys
@@ -133,6 +135,56 @@ class TestModule(a.Tester):
 		assert repr(RuntimeOnly) == '<class \'RuntimeOnly\'>'
 		assert repr(RuntimeOnly()) == '<Module \'RuntimeOnly\'>'
 		assert RuntimeOnly.value == 1
+
+
+	# Strict is opt-in and leaves existing methods and lifecycle unchanged.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_strict_mixin(cls):
+		class Example(a.base.Strict):
+
+			def __init__(self):
+				self.calls = 0
+
+			def call(self, value: int, offset: int = 1) -> int:
+				self.calls += 1
+				return value + offset
+
+			def bind(self, value):
+				return value
+
+			async def read(self, values: list[int | None]) -> dict[str, int]:
+				return {'count': len(values)}
+
+			def wrong(self) -> int:
+				return 'wrong'
+
+		example = Example()
+		method  = Example.call
+
+		assert example.call(2) == 3
+		assert example.bind('untyped') == 'untyped'
+		assert example.strict_call(example.call, 3, offset=4) == 7
+		assert asyncio.run(example.strict_call(example.read, [1, None])) == {'count': 2}
+		assert Example.call is method
+		assert inspect.signature(example.call) == example.strict_signature(example.call)
+		assert example.calls == 2
+
+		for target, arguments in (
+			(example.call, ('3',)),
+			(example.read, (['3'],)),
+			(example.bind, ('untyped',)),
+			(example.wrong, ())
+		):
+			try:
+				example.strict_call(target, *arguments)
+			except TypeError:
+				pass
+			else:
+				assert False, 'Invalid typed call accepted'
+
+		assert example.calls == 2
+		assert example.bind(9) == 9
 
 
 if __name__ == '__main__':
