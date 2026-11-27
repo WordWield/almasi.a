@@ -194,12 +194,19 @@ Python 3.11+; Apache-2.0. Core is acquired from Git by the [Almasi loader](https
 **Created by Alexander Podgorny** — AI systems architect and researcher. [Connect on LinkedIn](https://www.linkedin.com/in/podgorny/).
 
 
-## Strict method contracts
+## Method reflection and strict calls
 
-`a.base.Strict` is an opt-in mixin with no custom constructor,
-attribute interception, method decoration or additional instance state.
-Inherit it to expose explicit checked calls without changing existing
-ordinary Python calls.
+All `a.Module` instances provide reflection independently of typing:
+
+- `__get_method__(name, **attributes)` returns a public class-declared bound
+  method matching the declaration attributes, or None. Does not evaluate properties.
+- `__list_methods__(**attributes)` yields the same matching methods, including
+  inherited declarations. An ordinary override replaces the inherited declaration.
+- `__get_method_signature__(method)` returns an inspect.Signature with resolved
+  annotations; unannotated parameters are permitted.
+
+`a.base.Strict` adds one explicit checked-call API, without a custom
+constructor, attribute interception, method decoration or new instance state.
 
 ```python
 from almasi import a
@@ -212,19 +219,16 @@ class Calculator(a.base.Strict):
 
 
 calculator = Calculator()
-assert calculator.strict_call(calculator.add, 2) == 3
+assert calculator.__call_method__(calculator.add, 2) == 3
 ```
 
-- `strict_signature(method)` resolves all visible parameter and return annotations,
-  requiring each to be declared.
-- `strict_check(value, annotation)` checks without converting the value.
-- `strict_call(method, *args, **kwargs)` binds and checks arguments before
-  execution, then checks the result. Await its result for an async method.
+`__call_method__(method, *args, **kwargs)` requires all visible parameters
+and the result to have annotations. It checks arguments before execution
+and the result afterwards; await the returned coroutine for async methods.
+Ordinary calls are unchanged. No argument names are reserved.
 
 Supported checks: ordinary classes (Python subclass semantics), Any,
 unions, Annotated (underlying type), Literal, list/set/frozenset, dict,
 tuple, and native Resource carriers (carrier only, never a consuming read).
-Unsupported annotations raise TypeError when checked. The explicit
-`strict_*` namespace is reserved by this mixin; ordinary calls remain
-unchanged. No external data conversion, authorization or protocol
-semantics are implied.
+Unsupported annotations raise TypeError when checked. Reflection alone
+does not authorize or publish a method. No protocol semantics are implied.
