@@ -167,11 +167,11 @@ class TestModule(a.Tester):
 
 		assert example.call(2) == 3
 		assert example.bind('untyped') == 'untyped'
-		assert example.strict_call(example.call, 3, offset=4) == 7
-		assert asyncio.run(example.strict_call(example.read, [1, None])) == {'count': 2}
-		assert example.strict_call(example.named, method='a', self='b') == 'ab'
+		assert example.__call_method__(example.call, 3, offset=4) == 7
+		assert asyncio.run(example.__call_method__(example.read, [1, None])) == {'count': 2}
+		assert example.__call_method__(example.named, method='a', self='b') == 'ab'
 		assert Example.call is method
-		assert inspect.signature(example.call) == example.strict_signature(example.call)
+		assert inspect.signature(example.call) == example.__get_method_signature__(example.call)
 		assert example.calls == 2
 
 		for target, arguments in (
@@ -181,7 +181,7 @@ class TestModule(a.Tester):
 			(example.wrong, ())
 		):
 			try:
-				example.strict_call(target, *arguments)
+				example.__call_method__(target, *arguments)
 			except TypeError:
 				pass
 			else:
@@ -189,6 +189,52 @@ class TestModule(a.Tester):
 
 		assert example.calls == 2
 		assert example.bind(9) == 9
+
+
+	# Reflection is independent of typing and never executes a property.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_method_reflection(cls):
+		class Parent(a.Module):
+
+			def first(self, value):
+				return value
+
+			first.exposed = True
+
+			@property
+			def dangerous(self):
+				raise RuntimeError('Discovery evaluated a property')
+
+			@classmethod
+			def third(cls):
+				return cls
+
+			@staticmethod
+			def fourth(value):
+				return value
+
+		class Child(Parent):
+
+			def first(self, value):
+				return value + 1
+
+			def second(self, value: int) -> int:
+				return value
+
+			second.exposed = True
+
+		child = Child()
+
+		assert child.__get_method__('first')(1) == 2
+		assert child.__get_method__('first', exposed=True) is None
+		assert child.__get_method__('second', exposed=True) == child.second
+		assert child.__get_method__('dangerous') is None
+		assert child.__get_method__('__get_method__') is None
+		assert child.__get_method__('third')() is Child
+		assert child.__get_method__('fourth')(3) == 3
+		assert list(child.__list_methods__(exposed=True)) == [child.second]
+		assert child.__get_method_signature__(child.first).return_annotation is inspect.Signature.empty
 
 
 if __name__ == '__main__':
