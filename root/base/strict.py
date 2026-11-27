@@ -47,7 +47,7 @@ class Strict(a.Module):
 		elif origin is tuple:
 			result = isinstance(value, tuple)
 
-			if result:
+			if result and annotation is not typing.Tuple:
 				if len(args) == 2 and args[1] is Ellipsis:
 					result = all(cls._strict_match(item, args[0]) for item in value)
 				else:
@@ -74,7 +74,7 @@ class Strict(a.Module):
 
 	# Bind and check all actual arguments, including defaults and variadics.
 	# ----------------------------------------------------------------------
-	def _strict_bind(self, method, *args, **kwargs):
+	def _strict_bind(self, method, /, *args, **kwargs):
 		'''Return checked BoundArguments without executing the method.'''
 		signature = self.strict_signature(method)
 		bound     = signature.bind(*args, **kwargs)
@@ -128,7 +128,7 @@ class Strict(a.Module):
 
 	# Invoke the original callable only after checking its typed arguments.
 	# ----------------------------------------------------------------------
-	def strict_call(self, method, *args, **kwargs):
+	def strict_call(self, method, /, *args, **kwargs):
 		'''Check a synchronous result or return an awaitable checking its result.'''
 		bound      = self._strict_bind(method, *args, **kwargs)
 		annotation = bound.signature.return_annotation
