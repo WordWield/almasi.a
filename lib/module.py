@@ -1,5 +1,6 @@
 import inspect
 import sys
+import typing
 
 from .function import Function
 # from .events   import Events
@@ -155,6 +156,22 @@ class Module(metaclass=ModuleMeta):
 
 			if method is not None:
 				yield method
+
+	# Reflect the actual signature, resolving annotations without requiring them.
+	# ----------------------------------------------------------------------
+	@staticmethod
+	def __get_method_signature__(method):
+		signature  = inspect.signature(method)
+		hints      = typing.get_type_hints(method, include_extras=True)
+		parameters = [
+			parameter.replace(annotation=hints.get(parameter.name, parameter.annotation))
+			for parameter in signature.parameters.values()
+		]
+
+		return signature.replace(
+			parameters        = parameters,
+			return_annotation = hints.get('return', signature.return_annotation)
+		)
 
 	# Attach callback to foreign method execution
 	# ----------------------------------------------------------------------
