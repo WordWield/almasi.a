@@ -192,3 +192,39 @@ This is relevant to AI-native applications, agent infrastructure, developer tool
 Python 3.11+; Apache-2.0. Core is acquired from Git by the [Almasi loader](https://github.com/WordWield/almasi). Install the loader with `pip install almasi`, then use `from almasi import a`. The split requires loader 0.2.0 or later.
 
 **Created by Alexander Podgorny** — AI systems architect and researcher. [Connect on LinkedIn](https://www.linkedin.com/in/podgorny/).
+
+
+## Strict method contracts
+
+`a.base.Strict` is an opt-in mixin with no custom constructor,
+attribute interception, method decoration or additional instance state.
+Inherit it to expose explicit checked calls without changing existing
+ordinary Python calls.
+
+```python
+from almasi import a
+
+
+class Calculator(a.base.Strict):
+
+	def add(self, left: int, right: int = 1) -> int:
+		return left + right
+
+
+calculator = Calculator()
+assert calculator.strict_call(calculator.add, 2) == 3
+```
+
+- `strict_signature(method)` resolves all visible parameter and return annotations,
+  requiring each to be declared.
+- `strict_check(value, annotation)` checks without converting the value.
+- `strict_call(method, *args, **kwargs)` binds and checks arguments before
+  execution, then checks the result. Await its result for an async method.
+
+Supported checks: ordinary classes (Python subclass semantics), Any,
+unions, Annotated (underlying type), Literal, list/set/frozenset, dict,
+tuple, and native Resource carriers (carrier only, never a consuming read).
+Unsupported annotations raise TypeError when checked. The explicit
+`strict_*` namespace is reserved by this mixin; ordinary calls remain
+unchanged. No external data conversion, authorization or protocol
+semantics are implied.
