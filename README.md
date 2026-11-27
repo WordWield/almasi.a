@@ -232,3 +232,28 @@ unions, Annotated (underlying type), Literal, list/set/frozenset, dict,
 tuple, and native Resource carriers (carrier only, never a consuming read).
 Unsupported annotations raise TypeError when checked. Reflection alone
 does not authorize or publish a method. No protocol semantics are implied.
+
+### Python annotations
+
+`a.Annotation(declaration)` interprets Python type declarations independently
+of O. `matches(value)` checks without coercion or resource reads; `cast(value)`
+performs the existing explicit data conversion (including coercive primitive,
+list, dictionary and union casts). `annotate(value)` infers the declaration of
+ordinary Python values. Inference and casts retain the existing finite-number
+restriction for data values.
+
+`to_source()` renders the supported annotation forms as trusted Python
+expressions. Constructing Annotation from a string evaluates a trusted
+expression in the owning namespace; never pass untrusted strings to this API.
+An O-specific descendant resolves persistent O addresses. Display, canonical
+IDs and deterministic hashes retain their established notation; do not use
+annotation IDs as a substitute for runtime type checks.
+
+```python
+from almasi import a
+
+annotation = a.Annotation(list[int])
+assert annotation.matches([1, 2])
+assert not annotation.matches(['1'])
+assert annotation.cast(['1']) == [1]
+```
