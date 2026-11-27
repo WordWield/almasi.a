@@ -18,9 +18,8 @@ class File(FilesystemResource):
 	def __init__(self, lib, path, route, load_method=None, hash_method=None):
 		super().__init__(lib, path, route)
 
-		self._data   = None
-		self._hash   = None
-		self._loaded = False
+		self._cache = None
+		self._hash  = None
 
 		self._load_method = load_method
 		self._hash_method = hash_method
@@ -32,26 +31,40 @@ class File(FilesystemResource):
 	# Forget content after a successful filesystem mutation.
 	# ----------------------------------------------------------------------
 	def invalidate(self):
-		self._data   = None
-		self._hash   = None
-		self._loaded = False
+		self._cache = None
+		self._hash  = None
 
 	# Preserve the established public carrier-type predicate.
 	# ----------------------------------------------------------------------
 	def is_directory(self):
 		return False
 
-	# Memoize legitimate null values as well as other plugin results.
+	# Keep the loaded result independent of invalidation during source setup.
+	# A single cache entry distinguishes unloaded from a legitimate null result.
 	# ----------------------------------------------------------------------
 	def load(self):
-		if not self._loaded and self._load_method is not None:
-			self._data   = self._load_method()
-			owner        = self._data if isinstance(self._data, type) else type(self._data)
-			if hasattr(owner, '__on_load__'):
-				owner.__on_load__(self)
-			self._loaded = True
+		cached = self._cache
 
-		return self._data
+		if cached is not None:
+			result = cached[0]
+		elif self._load_method is not None:
+			result      = self._load_method()
+			cached      = (result,)
+			self._cache = cached
+			owner       = result if isinstance(result, type) else type(result)
+
+			try:
+				if hasattr(owner, '__on_load__'):
+					owner.__on_load__(self)
+			except BaseException:
+				if self._cache is cached:
+					self.invalidate()
+
+				raise
+		else:
+			result = None
+
+		return result
 
 	# Read the file through its memoized format loader.
 	# ----------------------------------------------------------------------
