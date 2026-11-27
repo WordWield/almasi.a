@@ -1,3 +1,4 @@
+import inspect
 import sys
 
 from .function import Function
@@ -125,6 +126,35 @@ class Module(metaclass=ModuleMeta):
 			text = route
 
 		return f'<Module \'{text}\'>'
+
+	# Resolve public declarations without evaluating arbitrary descriptors.
+	# ----------------------------------------------------------------------
+	def __get_method__(self, name, **attributes):
+		declaration = inspect.getattr_static(type(self), name, None)
+		method      = None
+
+		if isinstance(declaration, (classmethod, staticmethod)):
+			function = declaration.__func__
+		else:
+			function = declaration
+
+		if (
+			not name.startswith('_')
+			and inspect.isfunction(function)
+			and all(getattr(function, key, None) == value for key, value in attributes.items())
+		):
+			method = declaration.__get__(self, type(self))
+
+		return method
+
+	# Enumerate exactly the same public declarations as individual lookup.
+	# ----------------------------------------------------------------------
+	def __list_methods__(self, **attributes):
+		for name in dir(type(self)):
+			method = self.__get_method__(name, **attributes)
+
+			if method is not None:
+				yield method
 
 	# Attach callback to foreign method execution
 	# ----------------------------------------------------------------------
