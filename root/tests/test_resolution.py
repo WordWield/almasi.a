@@ -72,7 +72,7 @@ class TestResolution(a.Tester):
 			assert EagerCarrier.value == 11
 			assert isinstance(directory, a.Directory)
 			assert isinstance(carrier, a.File)
-			assert carrier._cache == (EagerCarrier,)
+			assert carrier._cache == [EagerCarrier]
 		finally:
 			cls._remove_runtime()
 
@@ -108,7 +108,7 @@ class TestResolution(a.Tester):
 				'almasi.a.tests_runtime.IterTwo',
 			]
 			assert all(isinstance(child, a.File) for child in children)
-			assert all(child._cache is None for child in children)
+			assert all(not child._cache for child in children)
 		finally:
 			cls._remove_runtime()
 
