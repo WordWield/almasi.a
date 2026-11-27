@@ -157,6 +157,27 @@ if __name__ == '__main__':
 			assert app.started is True
 			assert app.__name__ == 'extend_app'
 
+	# Accept an underscore-prefixed entry while preserving standalone publication.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_extend_from_prefixed_main(cls):
+		with cls._runtime() as root:
+			app_dir = cls._source(root, 'extend_app', '''from almasi import a
+
+extend_app = a.extend('extend_app')
+''')
+			entry = os.path.join(app_dir, '_extend_app.py')
+			os.rename(os.path.join(app_dir, 'extend_app.py'), entry)
+
+			main   = sys.modules['__main__']
+			result = runpy.run_path(entry, run_name='__main__')
+			app    = result['extend_app']
+
+			assert sys.modules['__main__'] is main
+			assert sys.modules['extend_app'] is app
+			assert app.__name__ == 'extend_app'
+			assert app.__path__ == os.path.join(os.path.realpath(app_dir), 'root')
+
 	# Reject names unrelated to the source module.
 	# ----------------------------------------------------------------------
 	@classmethod

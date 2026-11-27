@@ -47,10 +47,8 @@ class AMeta(type):
 		module       = sys.modules[module_name]
 		lib_file     = os.path.realpath(module.__file__)
 		lib_path     = os.path.dirname(lib_file)
-		nested_entry = module_name.startswith('almasi.') and os.path.basename(lib_path) == 'almasi'
-		repo_path    = os.path.dirname(lib_path) if nested_entry else lib_path
-		path         = os.path.join(repo_path, 'root')
-		plugins_path = os.path.join(repo_path, 'plugins')
+		path         = os.path.join(lib_path, 'root')
+		plugins_path = os.path.join(lib_path, 'plugins')
 
 		# Only the bootstrap A class may be declared directly.
 		# ----------------------------------------------------------------------
@@ -289,7 +287,7 @@ class A(metaclass=AMeta, plugins=['Py', 'Json', 'Text', 'Bytes']):
 		if not _Libraries.is_valid_name(name):
 			raise ValueError(f'Invalid library name: `{name}`')
 
-		if source_name != name:
+		if source_name not in (name, '_' + name):
 			raise ValueError(f'Library `{name}` must match its Python module name')
 
 		full_name         = name if is_main else module_name
