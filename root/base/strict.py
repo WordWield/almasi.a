@@ -38,12 +38,12 @@ class Strict(a.Module):
 		elif origin is typing.Literal:
 			result = any(type(value) is type(item) and value == item for item in args)
 		elif origin in (list, set, frozenset):
-			result = isinstance(value, origin) and all(cls._strict_match(item, args[0]) for item in value)
+			result = isinstance(value, origin) and (not args or all(cls._strict_match(item, args[0]) for item in value))
 		elif origin is dict:
-			result = isinstance(value, dict) and all(
+			result = isinstance(value, dict) and (not args or all(
 				cls._strict_match(key, args[0]) and cls._strict_match(item, args[1])
 				for key, item in value.items()
-			)
+			))
 		elif origin is tuple:
 			result = isinstance(value, tuple)
 
@@ -71,6 +71,28 @@ class Strict(a.Module):
 		self.strict_check(value, annotation)
 
 		return value
+
+	# Bind and check all actual arguments, including defaults and variadics.
+	# ----------------------------------------------------------------------
+	def _strict_bind(self, method, *args, **kwargs):
+		'''Return checked BoundArguments without executing the method.'''
+		signature = self.strict_signature(method)
+		bound     = signature.bind(*args, **kwargs)
+		bound.apply_defaults()
+
+		for name, value in bound.arguments.items():
+			parameter = signature.parameters[name]
+
+			if parameter.kind is inspect.Parameter.VAR_POSITIONAL:
+				for item in value:
+					self.strict_check(item, parameter.annotation)
+			elif parameter.kind is inspect.Parameter.VAR_KEYWORD:
+				for item in value.values():
+					self.strict_check(item, parameter.annotation)
+			else:
+				self.strict_check(value, parameter.annotation)
+
+		return bound
 
 	# ======================================================================
 	# PUBLIC METHODS
@@ -104,33 +126,11 @@ class Strict(a.Module):
 
 		return signature.replace(parameters=parameters, return_annotation=hints['return'])
 
-	# Bind and check all actual arguments, including defaults and variadics.
-	# ----------------------------------------------------------------------
-	def strict_bind(self, method, *args, **kwargs):
-		'''Return checked BoundArguments without executing the method.'''
-		signature = self.strict_signature(method)
-		bound     = signature.bind(*args, **kwargs)
-		bound.apply_defaults()
-
-		for name, value in bound.arguments.items():
-			parameter = signature.parameters[name]
-
-			if parameter.kind is inspect.Parameter.VAR_POSITIONAL:
-				for item in value:
-					self.strict_check(item, parameter.annotation)
-			elif parameter.kind is inspect.Parameter.VAR_KEYWORD:
-				for item in value.values():
-					self.strict_check(item, parameter.annotation)
-			else:
-				self.strict_check(value, parameter.annotation)
-
-		return bound
-
 	# Invoke the original callable only after checking its typed arguments.
 	# ----------------------------------------------------------------------
 	def strict_call(self, method, *args, **kwargs):
 		'''Check a synchronous result or return an awaitable checking its result.'''
-		bound      = self.strict_bind(method, *args, **kwargs)
+		bound      = self._strict_bind(method, *args, **kwargs)
 		annotation = bound.signature.return_annotation
 		value      = method(*bound.args, **bound.kwargs)
 
