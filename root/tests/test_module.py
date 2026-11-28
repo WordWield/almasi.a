@@ -191,7 +191,7 @@ class TestModule(a.Tester):
 			},
 			'output': {'type': int},
 		}
-		assert example.__get_method_signature__(example.call) is Example.call.__signature__
+		assert example.__get_method_signature__('call') is Example.call.__signature__
 		assert Example.total.__signature__['inputs'] == {
 			'values': {'type': int, 'kind': 'var_positional'},
 			'named' : {'type': int, 'kind': 'var_keyword'},
@@ -216,6 +216,62 @@ class TestModule(a.Tester):
 				assert False, 'Invalid typed call accepted'
 
 		assert example.calls == 2
+
+	# Resolve string annotations and receivers from the defining class.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_signature_owner(cls):
+		class Parent(a.Module):
+			Value = int
+
+			def echo(receiver, value: 'Value') -> 'Parent':
+				return receiver
+
+			@classmethod
+			def read(owner, value: 'Value') -> 'Value':
+				return value
+
+			@staticmethod
+			def static(self: 'Value') -> 'Value':
+				return self
+
+			@property
+			def dangerous(self):
+				raise RuntimeError('Reflection evaluated a property')
+
+		class Child(Parent):
+			Value = str
+
+		class Checked(a.base.Strict):
+
+			def clone(self) -> 'Checked':
+				return self
+
+		assert Child.__get_method_signature__('echo') == {
+			'inputs': {'value': {'type': int}},
+			'output': {'type': Parent},
+		}
+		assert Child().__get_method_signature__('read') == {
+			'inputs': {'value': {'type': int}},
+			'output': {'type': int},
+		}
+		assert Child.__get_method_signature__('static') == {
+			'inputs': {'self': {'type': int}},
+			'output': {'type': int},
+		}
+
+		checked = Checked()
+		assert checked.clone() is checked
+		assert Checked.__get_method_signature__('clone') is Checked.clone.__signature__
+		assert Checked.clone.__signature__['output'] == {'type': Checked}
+
+		for name, error in (('dangerous', TypeError), ('missing', AttributeError)):
+			try:
+				Child.__get_method_signature__(name)
+			except error:
+				assert True
+			else:
+				assert False, 'Invalid method was reflected'
 
 	# Reject missing annotations during class definition, not on first call.
 	# ----------------------------------------------------------------------
@@ -275,7 +331,7 @@ class TestModule(a.Tester):
 		assert child.__get_method__('third')() is Child
 		assert child.__get_method__('fourth')(3) == 3
 		assert list(child.__list_methods__(exposed=True)) == [child.second]
-		assert child.__get_method_signature__(child.first) == {'inputs': {'value': {}}, 'output': {}}
+		assert child.__get_method_signature__('first') == {'inputs': {'value': {}}, 'output': {}}
 
 
 	# Matching must preserve actual types instead of coercing values.

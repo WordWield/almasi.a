@@ -26,19 +26,13 @@ class Strict(a.Module):
 	def __init_subclass__(cls, **kwargs):
 		super().__init_subclass__(**kwargs)
 
-		localns = {**vars(cls), cls.__name__: cls}
-
 		for name, declaration in tuple(vars(cls).items()):
 			if not name.startswith('_'):
 				is_descriptor = isinstance(declaration, (classmethod, staticmethod))
 				method        = declaration.__func__ if is_descriptor else declaration
 
 				if inspect.isfunction(method):
-					signature = cls.__get_method_signature__(
-						method,
-						localns    = localns,
-						skip_owner = not isinstance(declaration, staticmethod)
-					)
+					signature = cls.__get_method_signature__(name)
 
 					is_typed = (
 						all('type' in parameter for parameter in signature['inputs'].values())

@@ -179,38 +179,53 @@ class Module(metaclass=ModuleMeta):
 			if method is not None:
 				yield method
 
-	# Describe method inputs and output without exposing inspect objects.
+	# Describe the class-declared method using its defining namespace.
 	# ----------------------------------------------------------------------
-	@staticmethod
-	def __get_method_signature__(method, localns=None, skip_owner=False):
-		result = getattr(method, '__signature__', None)
+	@classmethod
+	def __get_method_signature__(cls, name):
+		owner = next((base for base in cls.__mro__ if name in vars(base)), None)
 
-		if not isinstance(result, dict):
-			signature  = inspect.signature(method)
-			hints      = typing.get_type_hints(method, localns=localns, include_extras=True)
-			parameters = tuple(signature.parameters.values())[1 if skip_owner else 0:]
-			inputs     = {}
+		if owner is not None:
+			declaration = vars(owner)[name]
+			method      = declaration.__func__ if isinstance(declaration, (classmethod, staticmethod)) else declaration
 
-			for parameter in parameters:
-				field      = {}
-				annotation = hints.get(parameter.name, parameter.annotation)
+			if inspect.isfunction(method):
+				result = getattr(method, '__signature__', None)
 
-				if annotation is not inspect.Parameter.empty:
-					field['type'] = annotation
-				if parameter.default is not inspect.Parameter.empty:
-					field['default'] = parameter.default
-				if parameter.kind is not inspect.Parameter.POSITIONAL_OR_KEYWORD:
-					field['kind'] = parameter.kind.name.lower()
+				if not isinstance(result, dict):
+					signature  = inspect.signature(method)
+					localns    = {**vars(owner), owner.__name__: owner}
+					hints      = typing.get_type_hints(method, localns=localns, include_extras=True)
+					parameters = tuple(signature.parameters.values())
+					inputs     = {}
 
-				inputs[parameter.name] = field
+					if not isinstance(declaration, staticmethod):
+						parameters = parameters[1:]
 
-			output = {}
-			annotation = hints.get('return', signature.return_annotation)
+					for parameter in parameters:
+						field      = {}
+						annotation = hints.get(parameter.name, parameter.annotation)
 
-			if annotation is not inspect.Signature.empty:
-				output['type'] = annotation
+						if annotation is not inspect.Parameter.empty:
+							field['type'] = annotation
+						if parameter.default is not inspect.Parameter.empty:
+							field['default'] = parameter.default
+						if parameter.kind is not inspect.Parameter.POSITIONAL_OR_KEYWORD:
+							field['kind'] = parameter.kind.name.lower()
 
-			result = {'inputs': inputs, 'output': output}
+						inputs[parameter.name] = field
+
+					output     = {}
+					annotation = hints.get('return', signature.return_annotation)
+
+					if annotation is not inspect.Signature.empty:
+						output['type'] = annotation
+
+					result = {'inputs': inputs, 'output': output}
+			else:
+				raise TypeError(f'Not a method: {cls.__name__}.{name}')
+		else:
+			raise AttributeError(f'Method not found: {cls.__name__}.{name}')
 
 		return result
 

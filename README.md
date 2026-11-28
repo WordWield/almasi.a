@@ -202,8 +202,12 @@ All `a.Module` instances provide reflection independently of typing:
   method matching the declaration attributes, or None. Does not evaluate properties.
 - `__list_methods__(**attributes)` yields the same matching methods, including
   inherited declarations. An ordinary override replaces the inherited declaration.
-- `__get_method_signature__(method)` returns a dictionary with resolved annotations in
-  `inputs` and `output`; unannotated values have no `type` key.
+- `__get_method_signature__(name)` is a class method returning a dictionary with resolved
+  annotations in `inputs` and `output`. Call on a class or instance with the
+  method name. The defining class supplies annotation names and the descriptor
+  determines the implicit receiver. Unannotated values have no `type` key.
+  Missing methods raise AttributeError; non-method declarations raise TypeError.
+  Properties and other arbitrary descriptors are not executed.
 
 `a.base.Strict` checks and decorates public methods declared by its subclasses
 at class definition. Inherited checked methods remain decorated; public methods
@@ -232,7 +236,7 @@ and optional `kind` (`positional_only`, `keyword_only`, `var_positional`, or
 `var_keyword`; omitted means positional-or-keyword). `output` is a descriptor
 with `type`. Python binding checks call syntax and supplies defaults; the dict
 controls type checks through `__validate_input__(signature, arguments)` and
-`__validate_output__(signature, output)`. Use `__get_method_signature__(method)`
+`__validate_output__(signature, output)`. Use `__get_method_signature__(name)`
 for reflection, not `inspect.signature`, which rejects a dict in `__signature__`.
 Treat published signature dictionaries as read-only. Sync, async, class and static
 methods retain their ordinary call semantics. No argument names are reserved.
