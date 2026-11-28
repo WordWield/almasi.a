@@ -34,7 +34,11 @@ class Strict(a.Module):
 				method        = declaration.__func__ if is_descriptor else declaration
 
 				if inspect.isfunction(method):
-					signature = cls.__get_method_signature__(method, localns=localns, skip_owner=not isinstance(declaration, staticmethod))
+					signature = cls.__get_method_signature__(
+						method,
+						localns    = localns,
+						skip_owner = not isinstance(declaration, staticmethod)
+					)
 
 					is_typed = (
 						all('type' in parameter for parameter in signature['inputs'].values())
