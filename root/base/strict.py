@@ -35,25 +35,18 @@ class Strict(a.Module):
 
 				if inspect.isfunction(method):
 					signature = cls.__get_method_signature__(method, localns=localns)
-					inputs    = tuple(signature.parameters.values())
+					inputs    = tuple(signature.parameters.values())[0 if isinstance(declaration, staticmethod) else 1:]
 
-					if not isinstance(declaration, staticmethod):
-						inputs = inputs[1:]
-
-					is_typed = all(parameter.annotation is not inspect.Parameter.empty for parameter in inputs)
+					is_typed = (
+						all(parameter.annotation is not inspect.Parameter.empty for parameter in inputs)
+						and signature.return_annotation is not inspect.Signature.empty
+					)
 
 					if is_typed:
-						if signature.return_annotation is not inspect.Signature.empty:
-							wrapped = cls._decorate_method(method, signature)
-
-							if is_descriptor:
-								wrapped = type(declaration)(wrapped)
-
-							setattr(cls, name, wrapped)
-						else:
-							raise TypeError(f'Missing return annotation: {cls.__name__}.{name}')
+						wrapped = cls._decorate_method(method, signature)
+						setattr(cls, name, type(declaration)(wrapped) if is_descriptor else wrapped)
 					else:
-						raise TypeError(f'Missing input annotation: {cls.__name__}.{name}')
+						raise TypeError(f'Incomplete annotations: {cls.__name__}.{name}')
 
 	# Validate bound arguments, including defaults and variadic values.
 	# ----------------------------------------------------------------------
@@ -63,10 +56,9 @@ class Strict(a.Module):
 		bound.apply_defaults()
 
 		for name, value in bound.arguments.items():
-			parameter  = signature.parameters[name]
-			annotation = parameter.annotation
+			parameter = signature.parameters[name]
 
-			if annotation is not inspect.Parameter.empty:
+			if parameter.annotation is not inspect.Parameter.empty:
 				if parameter.kind is inspect.Parameter.VAR_POSITIONAL:
 					values = value
 				elif parameter.kind is inspect.Parameter.VAR_KEYWORD:
@@ -75,7 +67,7 @@ class Strict(a.Module):
 					values = (value,)
 
 				for item in values:
-					cls._check_type(item, annotation)
+					cls._check_type(item, parameter.annotation)
 
 	# Validate the completed result without coercion or resource consumption.
 	# ----------------------------------------------------------------------
