@@ -184,8 +184,18 @@ class TestModule(a.Tester):
 		assert example.name() == 'Child'
 		assert example.total(1, 2, last=3) == 6
 		assert Child.call is Example.call
-		assert isinstance(Example.call.__signature__, inspect.Signature)
-		assert inspect.signature(example.call) == example.__get_method_signature__(example.call)
+		assert Example.call.__signature__ == {
+			'inputs': {
+				'value' : {'type': int},
+				'offset': {'type': int, 'default': 1},
+			},
+			'output': {'type': int},
+		}
+		assert example.__get_method_signature__(example.call) is Example.call.__signature__
+		assert Example.total.__signature__['inputs'] == {
+			'values': {'type': int, 'kind': 'var_positional'},
+			'named' : {'type': int, 'kind': 'var_keyword'},
+		}
 		assert inspect.iscoroutinefunction(example.read)
 		assert example.calls == 2
 
@@ -265,7 +275,7 @@ class TestModule(a.Tester):
 		assert child.__get_method__('third')() is Child
 		assert child.__get_method__('fourth')(3) == 3
 		assert list(child.__list_methods__(exposed=True)) == [child.second]
-		assert child.__get_method_signature__(child.first).return_annotation is inspect.Signature.empty
+		assert child.__get_method_signature__(child.first) == {'inputs': {'value': {}}, 'output': {}}
 
 
 	# Matching must preserve actual types instead of coercing values.

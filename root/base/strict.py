@@ -34,12 +34,11 @@ class Strict(a.Module):
 				method        = declaration.__func__ if is_descriptor else declaration
 
 				if inspect.isfunction(method):
-					signature = cls.__get_method_signature__(method, localns=localns)
-					inputs    = tuple(signature.parameters.values())[0 if isinstance(declaration, staticmethod) else 1:]
+					signature = cls.__get_method_signature__(method, localns=localns, skip_owner=not isinstance(declaration, staticmethod))
 
 					is_typed = (
-						all(parameter.annotation is not inspect.Parameter.empty for parameter in inputs)
-						and signature.return_annotation is not inspect.Signature.empty
+						all('type' in parameter for parameter in signature['inputs'].values())
+						and 'type' in signature['output']
 					)
 
 					if is_typed:
@@ -51,29 +50,26 @@ class Strict(a.Module):
 	# Validate bound arguments, including defaults and variadic values.
 	# ----------------------------------------------------------------------
 	@classmethod
-	def __validate_input__(cls, signature, args, kwargs):
-		bound = signature.bind(*args, **kwargs)
-		bound.apply_defaults()
+	def __validate_input__(cls, signature, arguments):
+		for name, parameter in signature['inputs'].items():
+			value = arguments[name]
+			kind  = parameter.get('kind')
 
-		for name, value in bound.arguments.items():
-			parameter = signature.parameters[name]
+			if kind == 'var_positional':
+				values = value
+			elif kind == 'var_keyword':
+				values = value.values()
+			else:
+				values = (value,)
 
-			if parameter.annotation is not inspect.Parameter.empty:
-				if parameter.kind is inspect.Parameter.VAR_POSITIONAL:
-					values = value
-				elif parameter.kind is inspect.Parameter.VAR_KEYWORD:
-					values = value.values()
-				else:
-					values = (value,)
-
-				for item in values:
-					cls._check_type(item, parameter.annotation)
+			for item in values:
+				cls._check_type(item, parameter['type'])
 
 	# Validate the completed result without coercion or resource consumption.
 	# ----------------------------------------------------------------------
 	@classmethod
 	def __validate_output__(cls, signature, output):
-		cls._check_type(output, signature.return_annotation)
+		cls._check_type(output, signature['output']['type'])
 
 	# ======================================================================
 	# PRIVATE METHODS
@@ -83,10 +79,14 @@ class Strict(a.Module):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def _decorate_method(cls, method, signature):
+		bind = inspect.signature(method).bind
+
 		if inspect.iscoroutinefunction(method):
 			@wraps(method)
 			async def wrapped(*args, **kwargs):
-				cls.__validate_input__(signature, args, kwargs)
+				bound = bind(*args, **kwargs)
+				bound.apply_defaults()
+				cls.__validate_input__(signature, bound.arguments)
 
 				output = await method(*args, **kwargs)
 				cls.__validate_output__(signature, output)
@@ -95,7 +95,9 @@ class Strict(a.Module):
 		else:
 			@wraps(method)
 			def wrapped(*args, **kwargs):
-				cls.__validate_input__(signature, args, kwargs)
+				bound = bind(*args, **kwargs)
+				bound.apply_defaults()
+				cls.__validate_input__(signature, bound.arguments)
 
 				output = method(*args, **kwargs)
 				cls.__validate_output__(signature, output)
@@ -110,6 +112,9 @@ class Strict(a.Module):
 	# ----------------------------------------------------------------------
 	@staticmethod
 	def _check_type(value, annotation):
-		if not a.Annotation(annotation).matches(value):
+		if a.Annotation(annotation).matches(value):
+			result = value
+		else:
 			raise TypeError(f'Expected {annotation!r}, got {type(value)!r}')
-		return value
+
+		return result

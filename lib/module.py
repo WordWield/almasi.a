@@ -179,25 +179,40 @@ class Module(metaclass=ModuleMeta):
 			if method is not None:
 				yield method
 
-	# Reflect the actual signature, resolving annotations without requiring them.
+	# Describe method inputs and output without exposing inspect objects.
 	# ----------------------------------------------------------------------
 	@staticmethod
-	def __get_method_signature__(method, localns=None):
-		signature = inspect.signature(method)
+	def __get_method_signature__(method, localns=None, skip_owner=False):
+		result = getattr(method, '__signature__', None)
 
-		if getattr(method, '__signature__', None) is None:
+		if not isinstance(result, dict):
+			signature  = inspect.signature(method)
 			hints      = typing.get_type_hints(method, localns=localns, include_extras=True)
-			parameters = [
-				parameter.replace(annotation=hints.get(parameter.name, parameter.annotation))
-				for parameter in signature.parameters.values()
-			]
+			parameters = tuple(signature.parameters.values())[1 if skip_owner else 0:]
+			inputs     = {}
 
-			signature = signature.replace(
-				parameters        = parameters,
-				return_annotation = hints.get('return', signature.return_annotation)
-			)
+			for parameter in parameters:
+				field      = {}
+				annotation = hints.get(parameter.name, parameter.annotation)
 
-		return signature
+				if annotation is not inspect.Parameter.empty:
+					field['type'] = annotation
+				if parameter.default is not inspect.Parameter.empty:
+					field['default'] = parameter.default
+				if parameter.kind is not inspect.Parameter.POSITIONAL_OR_KEYWORD:
+					field['kind'] = parameter.kind.name.lower()
+
+				inputs[parameter.name] = field
+
+			output = {}
+			annotation = hints.get('return', signature.return_annotation)
+
+			if annotation is not inspect.Signature.empty:
+				output['type'] = annotation
+
+			result = {'inputs': inputs, 'output': output}
+
+		return result
 
 	# ======================================================================
 	# PUBLIC METHODS
