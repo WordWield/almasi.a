@@ -13,6 +13,8 @@ from types import SimpleNamespace
 from almasi import _libraries
 
 from .lib.imports             import Imports
+from .lib.reflection          import Reflection
+from .lib.reflection_meta     import ReflectionMeta
 from .lib.module              import Module, ModuleMeta
 from .lib.singleton           import Singleton
 from .lib.reloadable          import Reloadable, ReloadableModule, ReloadableSingleton
@@ -105,6 +107,8 @@ class AMeta(type):
 
 
 class A(metaclass=AMeta, plugins=['Py', 'Json', 'Text', 'Bytes']):
+	ReflectionMeta = ReflectionMeta
+	Reflection     = Reflection
 	ModuleMeta    = ModuleMeta
 	Module        = Module
 	Logger        = Logger

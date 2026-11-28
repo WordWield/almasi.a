@@ -1,67 +1,26 @@
-import inspect
-import sys
-import typing
+# ==============================================================================
+# MODULE
+# ==============================================================================
+# PURPOSE:
+# Provide Almasi module identity, application context and instance behavior.
+#
+# RESPONSIBILITY BOUNDARIES:
+# Owns: Publishing source metadata and module instance behavior.
+# Delegates: Class and method reflection to ReflectionMeta and Reflection.
+# ==============================================================================
 
-from .function import Function
+import sys
+
+from .function        import Function
+from .reflection      import Reflection
+from .reflection_meta import ReflectionMeta
 # from .events   import Events
 
 
 # ==============================================================================
 # CLASS MODULE META
 # ==============================================================================
-class ModuleMeta(type):
-
-	# ======================================================================
-	# REFLECTION METHODS
-	# ======================================================================
-
-	# Get module object
-	# ----------------------------------------------------------------------
-	@classmethod
-	def module(mcls, namespace):
-		return sys.modules.get(namespace.get('__module__'))
-
-	# Get current library
-	# ----------------------------------------------------------------------
-	@classmethod
-	def module_lib(mcls, namespace):
-		return getattr(mcls.module(namespace), '__lib__', None)
-
-	# Get carrier class name from route
-	# ----------------------------------------------------------------------
-	@classmethod
-	def module_class_name(mcls, namespace):
-		class_name = None
-		route      = mcls.module_route(namespace)
-
-		if route is not None:
-			class_name = route.split('.')[-1]
-
-		return class_name
-
-	# Get module route from library resolver
-	# ----------------------------------------------------------------------
-	@classmethod
-	def module_route(mcls, namespace):
-		return getattr(mcls.module(namespace), '__route__', None)
-
-	# Get module mtime from loader
-	# ----------------------------------------------------------------------
-	@classmethod
-	def module_mtime(mcls, namespace):
-		return getattr(mcls.module(namespace), '__mtime__', None)
-
-	# Does class come from source file?
-	# ----------------------------------------------------------------------
-	@classmethod
-	def has_own_module(mcls, namespace):
-		class_name = mcls.module_class_name(namespace)
-		short_name = namespace.get('__qualname__', '').split('.')[-1]
-
-		if class_name is not None:
-			return short_name == class_name
-
-		return False
+class ModuleMeta(ReflectionMeta):
 
 	# ======================================================================
 	# FRAMEWORK METHODS
@@ -95,7 +54,7 @@ class ModuleMeta(type):
 # ==============================================================================
 # CLASS MODULE
 # ==============================================================================
-class Module(metaclass=ModuleMeta):
+class Module(Reflection, metaclass=ModuleMeta):
 
 	_instance_counter = 0
 
@@ -145,89 +104,6 @@ class Module(metaclass=ModuleMeta):
 			text = route
 
 		return f'<Module \'{text}\'>'
-
-	# ======================================================================
-	# REFLECTION METHODS
-	# ======================================================================
-
-	# Resolve public declarations without evaluating arbitrary descriptors.
-	# ----------------------------------------------------------------------
-	def __get_method__(self, name, **attributes):
-		declaration = inspect.getattr_static(type(self), name, None)
-		method      = None
-
-		if isinstance(declaration, (classmethod, staticmethod)):
-			function = declaration.__func__
-		else:
-			function = declaration
-
-		if (
-			not name.startswith('_')
-			and inspect.isfunction(function)
-			and all(getattr(function, key, None) == value for key, value in attributes.items())
-		):
-			method = declaration.__get__(self, type(self))
-
-		return method
-
-	# Enumerate exactly the same public declarations as individual lookup.
-	# ----------------------------------------------------------------------
-	def __list_methods__(self, **attributes):
-		for name in dir(type(self)):
-			method = self.__get_method__(name, **attributes)
-
-			if method is not None:
-				yield method
-
-	# Describe the class-declared method using its defining namespace.
-	# ----------------------------------------------------------------------
-	@classmethod
-	def __get_method_signature__(cls, name):
-		owner = next((base for base in cls.__mro__ if name in vars(base)), None)
-
-		if owner is not None:
-			declaration = vars(owner)[name]
-			method      = declaration.__func__ if isinstance(declaration, (classmethod, staticmethod)) else declaration
-
-			if inspect.isfunction(method):
-				result = getattr(method, '__signature__', None)
-
-				if not isinstance(result, dict):
-					signature  = inspect.signature(method)
-					localns    = {**vars(owner), owner.__name__: owner}
-					hints      = typing.get_type_hints(method, localns=localns, include_extras=True)
-					parameters = tuple(signature.parameters.values())
-					inputs     = {}
-
-					if not isinstance(declaration, staticmethod):
-						parameters = parameters[1:]
-
-					for parameter in parameters:
-						field      = {}
-						annotation = hints.get(parameter.name, parameter.annotation)
-
-						if annotation is not inspect.Parameter.empty:
-							field['type'] = annotation
-						if parameter.default is not inspect.Parameter.empty:
-							field['default'] = parameter.default
-						if parameter.kind is not inspect.Parameter.POSITIONAL_OR_KEYWORD:
-							field['kind'] = parameter.kind.name.lower()
-
-						inputs[parameter.name] = field
-
-					output     = {}
-					annotation = hints.get('return', signature.return_annotation)
-
-					if annotation is not inspect.Signature.empty:
-						output['type'] = annotation
-
-					result = {'inputs': inputs, 'output': output}
-			else:
-				raise TypeError(f'Not a method: {cls.__name__}.{name}')
-		else:
-			raise AttributeError(f'Method not found: {cls.__name__}.{name}')
-
-		return result
 
 	# ======================================================================
 	# PUBLIC METHODS

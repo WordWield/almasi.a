@@ -217,11 +217,28 @@ class TestModule(a.Tester):
 
 		assert example.calls == 2
 
+	# Ensure reflection is reusable without creating a library-bound Module.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_reflection_lineage(cls):
+		assert a.Module.__bases__ == (a.Reflection,)
+		assert type(a.Reflection) is a.ReflectionMeta
+		assert type(a.Module) is a.ModuleMeta
+		assert a.ModuleMeta.__bases__ == (a.ReflectionMeta,)
+
+		assert a.Module.__get_method__ is a.Reflection.__get_method__
+		assert a.Module.__get_method_signature__.__func__ is a.Reflection.__get_method_signature__.__func__
+		assert a.ModuleMeta.module.__func__ is a.ReflectionMeta.module.__func__
+
+		instance = a.Reflection()
+		assert not isinstance(instance, a.Module)
+		assert not hasattr(instance, '__instance_id__')
+
 	# Resolve string annotations and receivers from the defining class.
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_signature_owner(cls):
-		class Parent(a.Module):
+		class Parent(a.Reflection):
 			Value = int
 
 			def echo(receiver, value: 'Value') -> 'Parent':
@@ -292,7 +309,7 @@ class TestModule(a.Tester):
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_method_reflection(cls):
-		class Parent(a.Module):
+		class Parent(a.Reflection):
 
 			def first(self, value):
 				return value
