@@ -2,14 +2,15 @@
 # STRICT
 # ==============================================================================
 # PURPOSE:
-# Check explicitly invoked Python methods against their declared types.
+# Enforce declared types on ordinary calls to public methods of subclasses.
 #
 # RESPONSIBILITY BOUNDARIES:
-# Owns: Binding and enforcement of typed method contracts.
-# Delegates: Value matching to Annotation and execution to the original method.
+# Owns: Declaration validation and automatic checked execution.
+# Delegates: Reflection to Module and value matching to Annotation.
 # ==============================================================================
 
 import inspect
+from functools import wraps
 
 from almasi import a
 
@@ -20,71 +21,103 @@ class Strict(a.Module):
 	# FRAMEWORK METHODS
 	# ======================================================================
 
-	# Invoke the original callable only after checking its typed arguments.
+	# Check and decorate new public declarations once, before use.
 	# ----------------------------------------------------------------------
-	def __call_method__(self, method, /, *args, **kwargs):
-		'''Invoke a method with explicit runtime argument and result checks.'''
-		return self._call_method(method, self.__get_method_signature__(method), *args, **kwargs)
+	def __init_subclass__(cls, **kwargs):
+		super().__init_subclass__(**kwargs)
+
+		localns = {**vars(cls), cls.__name__: cls}
+
+		for name, declaration in tuple(vars(cls).items()):
+			if not name.startswith('_'):
+				if isinstance(declaration, (classmethod, staticmethod)):
+					method = declaration.__func__
+				else:
+					method = declaration
+
+				if inspect.isfunction(method):
+					signature = cls.__get_method_signature__(method, localns=localns)
+					inputs    = tuple(signature.parameters.values())
+					has_owner = not isinstance(declaration, staticmethod)
+
+					if has_owner:
+						inputs = inputs[1:]
+
+					for parameter in inputs:
+						if parameter.annotation is inspect.Parameter.empty:
+							raise TypeError(f'Missing annotation: {cls.__name__}.{name}.{parameter.name}')
+
+					if signature.return_annotation is inspect.Signature.empty:
+						raise TypeError(f'Missing return annotation: {cls.__name__}.{name}')
+
+					wrapped = cls._decorate_method(method, signature)
+
+					if isinstance(declaration, classmethod):
+						wrapped = classmethod(wrapped)
+					elif isinstance(declaration, staticmethod):
+						wrapped = staticmethod(wrapped)
+
+					setattr(cls, name, wrapped)
+
+	# Validate all actual input values using the stored native signature.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def __validate_input__(cls, signature, args, kwargs):
+		bound = signature.bind(*args, **kwargs)
+		bound.apply_defaults()
+
+		for name, value in bound.arguments.items():
+			parameter  = signature.parameters[name]
+			annotation = parameter.annotation
+
+			if annotation is not inspect.Parameter.empty:
+				if parameter.kind is inspect.Parameter.VAR_POSITIONAL:
+					for item in value:
+						cls._check_type(item, annotation)
+				elif parameter.kind is inspect.Parameter.VAR_KEYWORD:
+					for item in value.values():
+						cls._check_type(item, annotation)
+				else:
+					cls._check_type(value, annotation)
+
+	# Validate the completed result without coercion or consumption.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def __validate_output__(cls, signature, output):
+		cls._check_type(output, signature.return_annotation)
 
 	# ======================================================================
 	# PRIVATE METHODS
 	# ======================================================================
 
-	# Check a value without coercion or mutation.
+	# Keep native method binding, coroutine identity and decorator metadata.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def _decorate_method(cls, method, signature):
+		if inspect.iscoroutinefunction(method):
+			@wraps(method)
+			async def wrapped(*args, **kwargs):
+				cls.__validate_input__(signature, args, kwargs)
+				output = await method(*args, **kwargs)
+				cls.__validate_output__(signature, output)
+
+				return output
+		else:
+			@wraps(method)
+			def wrapped(*args, **kwargs):
+				cls.__validate_input__(signature, args, kwargs)
+				output = method(*args, **kwargs)
+				cls.__validate_output__(signature, output)
+
+				return output
+
+		wrapped.__signature__ = signature
+
+		return wrapped
+
+	# Check a value without changing its type or state.
 	# ----------------------------------------------------------------------
 	@staticmethod
 	def _check_type(value, annotation):
-		'''Raise TypeError if value does not satisfy the supported annotation.'''
 		if not a.Annotation(annotation).matches(value):
 			raise TypeError(f'Expected {annotation!r}, got {type(value)!r}')
-
-	# Complete a checked async call without replacing the declared method.
-	# ----------------------------------------------------------------------
-	async def _strict_await(self, result, annotation):
-		value = await result
-		self._check_type(value, annotation)
-
-		return value
-
-	# Bind and check all actual arguments, including defaults and variadics.
-	# ----------------------------------------------------------------------
-	def _strict_bind(self, signature, /, *args, **kwargs):
-
-		for parameter in signature.parameters.values():
-			if parameter.annotation is inspect.Parameter.empty:
-				raise TypeError(f'Missing annotation: {parameter.name}')
-
-		if signature.return_annotation is inspect.Signature.empty:
-			raise TypeError('Missing return annotation')
-
-		bound = signature.bind(*args, **kwargs)
-		bound.apply_defaults()
-
-		for name, value in bound.arguments.items():
-			parameter = signature.parameters[name]
-
-			if parameter.kind is inspect.Parameter.VAR_POSITIONAL:
-				for item in value:
-					self._check_type(item, parameter.annotation)
-			elif parameter.kind is inspect.Parameter.VAR_KEYWORD:
-				for item in value.values():
-					self._check_type(item, parameter.annotation)
-			else:
-				self._check_type(value, parameter.annotation)
-
-		return bound
-
-	# Execute a previously reflected signature without resolving it again.
-	# ----------------------------------------------------------------------
-	def _call_method(self, method, signature, /, *args, **kwargs):
-		bound      = self._strict_bind(signature, *args, **kwargs)
-		annotation = signature.return_annotation
-		value      = method(*bound.args, **bound.kwargs)
-
-		if inspect.iscoroutinefunction(method):
-			result = self._strict_await(value, annotation)
-		else:
-			self._check_type(value, annotation)
-			result = value
-
-		return result
