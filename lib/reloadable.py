@@ -15,8 +15,9 @@ import os
 import sys
 import types
 
-from .module    import Module, ModuleMeta
-from .singleton import Singleton
+from .module      import Module
+from .module_meta import ModuleMeta
+from .singleton   import Singleton
 
 
 class ReloadableMeta(ModuleMeta):

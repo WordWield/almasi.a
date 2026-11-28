@@ -192,3 +192,89 @@ This is relevant to AI-native applications, agent infrastructure, developer tool
 Python 3.11+; Apache-2.0. Core is acquired from Git by the [Almasi loader](https://github.com/WordWield/almasi). Install the loader with `pip install almasi`, then use `from almasi import a`. The split requires loader 0.2.0 or later.
 
 **Created by Alexander Podgorny** — AI systems architect and researcher. [Connect on LinkedIn](https://www.linkedin.com/in/podgorny/).
+
+
+## Method reflection and strict calls
+
+Reflection is available independently of module lifecycle through
+`a.Reflection`. `a.Module` inherits `a.Reflection`, and its metaclass
+`a.ModuleMeta` inherits `a.ReflectionMeta`. ReflectionMeta resolves Python modules independently of Almasi metadata.
+ModuleMeta alone interprets library, route, modification time and carrier
+identity, and publishes that metadata during class creation. Reflection does not allocate Module instance IDs or require an
+active application. Source-backed Almasi components still derive from Module.
+
+Both Reflection and Module instances provide the same reflection API:
+
+- `__get_method__(name, **attributes)` returns a public class-declared bound
+  method matching the declaration attributes, or None. Does not evaluate properties.
+- `__list_methods__(**attributes)` yields the same matching methods, including
+  inherited declarations. An ordinary override replaces the inherited declaration.
+- `__get_method_signature__(name)` is a class method returning a dictionary with resolved
+  annotations in `inputs` and `output`. Call on a class or instance with the
+  method name. The defining class supplies annotation names and the descriptor
+  determines the implicit receiver. Unannotated values have no `type` key.
+  Missing methods raise AttributeError; non-method declarations raise TypeError.
+  Properties and other arbitrary descriptors are not executed.
+
+`a.base.Strict` checks and decorates public methods declared by its subclasses
+at class definition. Inherited checked methods remain decorated; public methods
+in non-Strict base classes remain unchanged. Private and framework methods
+(names beginning with `_`) are excluded. No explicit invocation API is needed.
+
+```python
+from almasi import a
+
+
+class Calculator(a.base.Strict):
+
+	def add(self, left: int, right: int = 1) -> int:
+		return left + right
+
+
+calculator = Calculator()
+assert calculator.add(2) == 3
+```
+
+Public method declarations require annotations on every input except the
+implicit receiver and on the result. Missing annotations fail at definition.
+The wrapper stores an ordered `__signature__` dictionary, excluding the implicit
+receiver. `inputs` maps names to descriptors with `type`, optional `default`,
+and optional `kind` (`positional_only`, `keyword_only`, `var_positional`, or
+`var_keyword`; omitted means positional-or-keyword). `output` is a descriptor
+with `type`. Python binding checks call syntax and supplies defaults; the dict
+controls type checks through `__validate_input__(signature, arguments)` and
+`__validate_output__(signature, output)`. Use `__get_method_signature__(name)`
+for reflection, not `inspect.signature`, which rejects a dict in `__signature__`.
+Treat published signature dictionaries as read-only. Sync, async, class and static
+methods retain their ordinary call semantics. No argument names are reserved.
+
+Supported checks: ordinary classes (Python subclass semantics), Any,
+unions, Annotated (underlying type), Literal, list/set/frozenset, dict,
+tuple, and native Resource carriers (carrier only, never a consuming read).
+Unsupported annotations raise TypeError when checked. Reflection alone
+does not authorize or publish a method. No protocol semantics are implied.
+
+### Python annotations
+
+`a.Annotation(declaration)` interprets Python type declarations independently
+of O. `matches(value)` checks without coercion or resource reads; `cast(value)`
+performs the existing explicit data conversion (including coercive primitive,
+list, dictionary and union casts). `annotate(value)` infers the declaration of
+ordinary Python values. Inference and casts retain the existing finite-number
+restriction for data values.
+
+`to_source()` renders the supported annotation forms as trusted Python
+expressions. Constructing Annotation from a string evaluates a trusted
+expression in the owning namespace; never pass untrusted strings to this API.
+An O-specific descendant resolves persistent O addresses. Display, canonical
+IDs and deterministic hashes retain their established notation; do not use
+annotation IDs as a substitute for runtime type checks.
+
+```python
+from almasi import a
+
+annotation = a.Annotation(list[int])
+assert annotation.matches([1, 2])
+assert not annotation.matches(['1'])
+assert annotation.cast(['1']) == [1]
+```

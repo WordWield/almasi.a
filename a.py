@@ -13,7 +13,10 @@ from types import SimpleNamespace
 from almasi import _libraries
 
 from .lib.imports             import Imports
-from .lib.module              import Module, ModuleMeta
+from .lib.reflection          import Reflection
+from .lib.reflection_meta     import ReflectionMeta
+from .lib.module              import Module
+from .lib.module_meta         import ModuleMeta
 from .lib.singleton           import Singleton
 from .lib.reloadable          import Reloadable, ReloadableModule, ReloadableSingleton
 from .lib.logger              import Logger
@@ -105,27 +108,29 @@ class AMeta(type):
 
 
 class A(metaclass=AMeta, plugins=['Py', 'Json', 'Text', 'Bytes']):
-	ModuleMeta    = ModuleMeta
-	Module        = Module
-	Logger        = Logger
-	Process       = Process
-	Resource           = Resource
-	FilesystemResource = FilesystemResource
-	File          = File
-	Directory     = Directory
-	Plugin        = Plugin
-	Singleton     = Singleton
+	ReflectionMeta      = ReflectionMeta
+	Reflection          = Reflection
+	ModuleMeta          = ModuleMeta
+	Module              = Module
+	Logger              = Logger
+	Process             = Process
+	Resource            = Resource
+	FilesystemResource  = FilesystemResource
+	File                = File
+	Directory           = Directory
+	Plugin              = Plugin
+	Singleton           = Singleton
 	Reloadable          = Reloadable
 	ReloadableModule    = ReloadableModule
 	ReloadableSingleton = ReloadableSingleton
-	Imports       = Imports
-	Undefined     = Undefined
-	String        = String
-	Timer         = Timer
-	Progress      = Progress
+	Imports             = Imports
+	Undefined           = Undefined
+	String              = String
+	Timer               = Timer
+	Progress            = Progress
 
-	__app__       = None
-	__fallback__  = None
+	__app__      = None
+	__fallback__ = None
 
 	dual_method   = DualMethod
 	dual_property = DualProperty

@@ -35,3 +35,41 @@ jobs:
         env:
           ALMASI_PATH: ${{ runner.temp }}
         run: cd "$RUNNER_TEMP" && python -c 'from almasi import a; a.tester.run()'
+
+      - name: Verify concurrent File publication during on-load setup
+        env:
+          ALMASI_PATH: ${{ runner.temp }}
+        run: |
+          python - <<'PY'
+          import threading
+          from concurrent.futures import ThreadPoolExecutor
+          from almasi import a
+
+          entered = threading.Event()
+          release = threading.Event()
+          ready = threading.Event()
+
+          class Source(a.Module):
+              @classmethod
+              def __on_load__(cls, file):
+                  entered.set()
+                  assert release.wait(5)
+                  ready.set()
+
+          file = a.File(a, __file__, 'almasi.concurrent_probe', lambda: Source)
+
+          with ThreadPoolExecutor(max_workers=2) as executor:
+              first = executor.submit(file.load)
+              try:
+                  assert entered.wait(5)
+                  second = executor.submit(file.load)
+                  try:
+                      result = second.result(timeout=0.5)
+                  except TimeoutError:
+                      result = None
+                  assert result is None or ready.is_set(), 'Concurrent reader observed a class before on-load completed'
+              finally:
+                  release.set()
+              assert first.result(timeout=5) is Source
+              assert second.result(timeout=5) is Source
+          PY

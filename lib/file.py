@@ -18,9 +18,8 @@ class File(FilesystemResource):
 	def __init__(self, lib, path, route, load_method=None, hash_method=None):
 		super().__init__(lib, path, route)
 
-		self._data   = None
-		self._hash   = None
-		self._loaded = False
+		self._cache = []
+		self._hash  = None
 
 		self._load_method = load_method
 		self._hash_method = hash_method
@@ -32,26 +31,34 @@ class File(FilesystemResource):
 	# Forget content after a successful filesystem mutation.
 	# ----------------------------------------------------------------------
 	def invalidate(self):
-		self._data   = None
-		self._hash   = None
-		self._loaded = False
+		self._cache = []
+		self._hash  = None
 
 	# Preserve the established public carrier-type predicate.
 	# ----------------------------------------------------------------------
 	def is_directory(self):
 		return False
 
-	# Memoize legitimate null values as well as other plugin results.
+	# Publish only completed loads. Invalidation replaces the cache generation,
+	# so an in-flight load cannot restore an invalidated cache.
 	# ----------------------------------------------------------------------
 	def load(self):
-		if not self._loaded and self._load_method is not None:
-			self._data   = self._load_method()
-			owner        = self._data if isinstance(self._data, type) else type(self._data)
+		cache = self._cache
+
+		if cache:
+			result = cache[0]
+		elif self._load_method is not None:
+			result = self._load_method()
+			owner  = result if isinstance(result, type) else type(result)
+
 			if hasattr(owner, '__on_load__'):
 				owner.__on_load__(self)
-			self._loaded = True
 
-		return self._data
+			cache[:] = [result]
+		else:
+			result = None
+
+		return result
 
 	# Read the file through its memoized format loader.
 	# ----------------------------------------------------------------------
