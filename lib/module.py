@@ -182,18 +182,22 @@ class Module(metaclass=ModuleMeta):
 	# Reflect the actual signature, resolving annotations without requiring them.
 	# ----------------------------------------------------------------------
 	@staticmethod
-	def __get_method_signature__(method):
-		signature  = inspect.signature(method)
-		hints      = typing.get_type_hints(method, include_extras=True)
-		parameters = [
-			parameter.replace(annotation=hints.get(parameter.name, parameter.annotation))
-			for parameter in signature.parameters.values()
-		]
+	def __get_method_signature__(method, localns=None):
+		signature = inspect.signature(method)
 
-		return signature.replace(
-			parameters        = parameters,
-			return_annotation = hints.get('return', signature.return_annotation)
-		)
+		if getattr(method, '__signature__', None) is None:
+			hints      = typing.get_type_hints(method, localns=localns, include_extras=True)
+			parameters = [
+				parameter.replace(annotation=hints.get(parameter.name, parameter.annotation))
+				for parameter in signature.parameters.values()
+			]
+
+			signature = signature.replace(
+				parameters        = parameters,
+				return_annotation = hints.get('return', signature.return_annotation)
+			)
+
+		return signature
 
 	# ======================================================================
 	# PUBLIC METHODS
