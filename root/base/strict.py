@@ -110,9 +110,7 @@ class Strict(a.Module):
 	# ----------------------------------------------------------------------
 	@staticmethod
 	def _check_type(value, annotation):
-		if a.Annotation(annotation).matches(value):
-			result = value
-		else:
+		if not a.Annotation(annotation).matches(value):
 			raise TypeError(f'Expected {annotation!r}, got {type(value)!r}')
 
-		return result
+		return value
