@@ -108,29 +108,29 @@ class AMeta(type):
 
 
 class A(metaclass=AMeta, plugins=['Py', 'Json', 'Text', 'Bytes']):
-	ReflectionMeta = ReflectionMeta
-	Reflection     = Reflection
-	ModuleMeta    = ModuleMeta
-	Module        = Module
-	Logger        = Logger
-	Process       = Process
-	Resource           = Resource
-	FilesystemResource = FilesystemResource
-	File          = File
-	Directory     = Directory
-	Plugin        = Plugin
-	Singleton     = Singleton
+	ReflectionMeta      = ReflectionMeta
+	Reflection          = Reflection
+	ModuleMeta          = ModuleMeta
+	Module              = Module
+	Logger              = Logger
+	Process             = Process
+	Resource            = Resource
+	FilesystemResource  = FilesystemResource
+	File                = File
+	Directory           = Directory
+	Plugin              = Plugin
+	Singleton           = Singleton
 	Reloadable          = Reloadable
 	ReloadableModule    = ReloadableModule
 	ReloadableSingleton = ReloadableSingleton
-	Imports       = Imports
-	Undefined     = Undefined
-	String        = String
-	Timer         = Timer
-	Progress      = Progress
+	Imports             = Imports
+	Undefined           = Undefined
+	String              = String
+	Timer               = Timer
+	Progress            = Progress
 
-	__app__       = None
-	__fallback__  = None
+	__app__      = None
+	__fallback__ = None
 
 	dual_method   = DualMethod
 	dual_property = DualProperty
