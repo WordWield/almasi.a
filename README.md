@@ -205,8 +205,10 @@ All `a.Module` instances provide reflection independently of typing:
 - `__get_method_signature__(method)` returns an inspect.Signature with resolved
   annotations; unannotated parameters are permitted.
 
-`a.base.Strict` adds one explicit checked-call API, without a custom
-constructor, attribute interception, method decoration or new instance state.
+`a.base.Strict` checks and decorates public methods declared by its subclasses
+at class definition. Inherited checked methods remain decorated; public methods
+in non-Strict base classes remain unchanged. Private and framework methods
+(names beginning with `_`) are excluded. No explicit invocation API is needed.
 
 ```python
 from almasi import a
@@ -219,13 +221,16 @@ class Calculator(a.base.Strict):
 
 
 calculator = Calculator()
-assert calculator.__call_method__(calculator.add, 2) == 3
+assert calculator.add(2) == 3
 ```
 
-`__call_method__(method, *args, **kwargs)` requires all visible parameters
-and the result to have annotations. It checks arguments before execution
-and the result afterwards; await the returned coroutine for async methods.
-Ordinary calls are unchanged. No argument names are reserved.
+Public method declarations require annotations on every input except the
+implicit receiver and on the result. Missing annotations fail at definition.
+The wrapper stores the resolved native `__signature__`, preserves metadata
+and checks arguments (including defaults and variadics) before execution and
+the result afterwards through `__validate_input__(signature, args, kwargs)`
+and `__validate_output__(signature, output)`. Sync, async, class and static
+methods retain their ordinary call semantics. No argument names are reserved.
 
 Supported checks: ordinary classes (Python subclass semantics), Any,
 unions, Annotated (underlying type), Literal, list/set/frozenset, dict,
