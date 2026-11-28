@@ -1,6 +1,7 @@
 # Future: Unified Resources and Data Tracking
 
 **Status:** Architectural agreement from the discussion of 2026-11-28. Not implemented.
+**Upon implementation:** Rename this document to `docs/architecture.resources.md` and update it to describe the implemented architecture.
 **Scope:** `almasi.a` and `almasi.o`. MCP and Web are subsequent consumers.
 **Baseline:** A master at `bc166d0edf63d202e002abe4dda4df62bc5b882b`; O Changes rename in [PR #25](https://github.com/WordWield/almasi.o/pull/25), head `8aa5f2f533062d9da0d74ea0baa45d428d22e473`.
 
