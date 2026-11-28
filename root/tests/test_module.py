@@ -138,7 +138,7 @@ class TestModule(a.Tester):
 		assert RuntimeOnly.value == 1
 
 
-	# Strict is opt-in and leaves existing methods and lifecycle unchanged.
+	# Check direct calls, cached signatures, descriptors and inherited declarations.
 	# ----------------------------------------------------------------------
 	@classmethod
 	def test_strict_mixin(cls):
@@ -151,7 +151,7 @@ class TestModule(a.Tester):
 				self.calls += 1
 				return value + offset
 
-			def bind(self, value):
+			def _bind(self, value):
 				return value
 
 			async def read(self, values: list[int | None]) -> dict[str, int]:
@@ -163,34 +163,64 @@ class TestModule(a.Tester):
 			def wrong(self) -> int:
 				return 'wrong'
 
-		example = Example()
-		method  = Example.call
+			@classmethod
+			def name(cls) -> str:
+				return cls.__name__
+
+			@staticmethod
+			def total(*values: int, **named: int) -> int:
+				return sum(values) + sum(named.values())
+
+		class Child(Example):
+			'''Inherit the same decorated methods without rewrapping them.'''
+
+		example = Child()
 
 		assert example.call(2) == 3
-		assert example.bind('untyped') == 'untyped'
-		assert example.__call_method__(example.call, 3, offset=4) == 7
-		assert asyncio.run(example.__call_method__(example.read, [1, None])) == {'count': 2}
-		assert example.__call_method__(example.named, method='a', self='b') == 'ab'
-		assert Example.call is method
+		assert example.call(3, offset=4) == 7
+		assert example._bind('untyped') == 'untyped'
+		assert asyncio.run(example.read([1, None])) == {'count': 2}
+		assert example.named(method='a', self='b') == 'ab'
+		assert example.name() == 'Child'
+		assert example.total(1, 2, last=3) == 6
+		assert Child.call is Example.call
+		assert isinstance(Example.call.__signature__, inspect.Signature)
 		assert inspect.signature(example.call) == example.__get_method_signature__(example.call)
+		assert inspect.iscoroutinefunction(example.read)
 		assert example.calls == 2
 
 		for target, arguments in (
 			(example.call, ('3',)),
 			(example.read, (['3'],)),
-			(example.bind, ('untyped',)),
-			(example.wrong, ())
+			(example.wrong, ()),
+			(example.total, ('3',))
 		):
 			try:
-				example.__call_method__(target, *arguments)
+				result = target(*arguments)
+
+				if inspect.isawaitable(result):
+					asyncio.run(result)
 			except TypeError:
-				pass
+				assert True
 			else:
 				assert False, 'Invalid typed call accepted'
 
 		assert example.calls == 2
-		assert example.bind(9) == 9
 
+	# Reject missing annotations during class definition, not on first call.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def test_strict_declarations(cls):
+		for source in (
+			'def public(self, value) -> int: return value',
+			'def public(self, value: int): return value'
+		):
+			try:
+				exec('class Invalid(a.base.Strict):\\n\\t' + source, {'a': a})
+			except TypeError:
+				assert True
+			else:
+				assert False, 'Untyped public method accepted'
 
 	# Reflection is independent of typing and never executes a property.
 	# ----------------------------------------------------------------------
