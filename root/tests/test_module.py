@@ -216,7 +216,7 @@ class TestModule(a.Tester):
 			'def public(self, value: int): return value'
 		):
 			try:
-				exec('class Invalid(a.base.Strict):\\n\\t' + source, {'a': a})
+				exec('class Invalid(a.base.Strict):\n\t' + source, {'a': a})
 			except TypeError:
 				assert True
 			else:
