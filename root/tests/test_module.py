@@ -230,6 +230,10 @@ class TestModule(a.Tester):
 		assert a.Module.__get_method_signature__.__func__ is a.Reflection.__get_method_signature__.__func__
 		assert a.ModuleMeta.module.__func__ is a.ReflectionMeta.module.__func__
 
+		for name in ('module_lib', 'module_class_name', 'module_route', 'module_mtime', 'has_own_module'):
+			assert name in vars(a.ModuleMeta)
+			assert not hasattr(a.ReflectionMeta, name)
+
 		instance = a.Reflection()
 		assert not isinstance(instance, a.Module)
 		assert not hasattr(instance, '__instance_id__')

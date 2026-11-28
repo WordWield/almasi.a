@@ -198,9 +198,9 @@ Python 3.11+; Apache-2.0. Core is acquired from Git by the [Almasi loader](https
 
 Reflection is available independently of module lifecycle through
 `a.Reflection`. `a.Module` inherits `a.Reflection`, and its metaclass
-`a.ModuleMeta` inherits `a.ReflectionMeta`. ReflectionMeta reads source
-metadata without publishing it; ModuleMeta owns its publication during class
-creation. Reflection does not allocate Module instance IDs or require an
+`a.ModuleMeta` inherits `a.ReflectionMeta`. ReflectionMeta resolves Python modules independently of Almasi metadata.
+ModuleMeta alone interprets library, route, modification time and carrier
+identity, and publishes that metadata during class creation. Reflection does not allocate Module instance IDs or require an
 active application. Source-backed Almasi components still derive from Module.
 
 Both Reflection and Module instances provide the same reflection API:

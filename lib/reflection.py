@@ -6,7 +6,7 @@
 #
 # RESPONSIBILITY BOUNDARIES:
 # Owns: Method lookup, binding, enumeration and signature reflection.
-# Delegates: Module metadata inspection to ReflectionMeta.
+# Delegates: Python module lookup to ReflectionMeta.
 # ==============================================================================
 
 import inspect

@@ -5,7 +5,7 @@
 # Provide Almasi module identity, application context and instance behavior.
 #
 # RESPONSIBILITY BOUNDARIES:
-# Owns: Publishing source metadata and module instance behavior.
+# Owns: Almasi source metadata, its publication and module instance behavior.
 # Delegates: Class and method reflection to ReflectionMeta and Reflection.
 # ==============================================================================
 
@@ -49,6 +49,50 @@ class ModuleMeta(ReflectionMeta):
 			text = route
 
 		return f'<class \'{text}\'>'
+
+
+	# ======================================================================
+	# PUBLIC METHODS
+	# ======================================================================
+
+	# Get current library
+	# ----------------------------------------------------------------------
+	@classmethod
+	def module_lib(mcls, namespace):
+		return getattr(mcls.module(namespace), '__lib__', None)
+
+	# Get carrier class name from route
+	# ----------------------------------------------------------------------
+	@classmethod
+	def module_class_name(mcls, namespace):
+		class_name = None
+		route      = mcls.module_route(namespace)
+
+		if route is not None:
+			class_name = route.split('.')[-1]
+
+		return class_name
+
+	# Get module route from library resolver
+	# ----------------------------------------------------------------------
+	@classmethod
+	def module_route(mcls, namespace):
+		return getattr(mcls.module(namespace), '__route__', None)
+
+	# Get module mtime from loader
+	# ----------------------------------------------------------------------
+	@classmethod
+	def module_mtime(mcls, namespace):
+		return getattr(mcls.module(namespace), '__mtime__', None)
+
+	# Does class come from source file?
+	# ----------------------------------------------------------------------
+	@classmethod
+	def has_own_module(mcls, namespace):
+		class_name = mcls.module_class_name(namespace)
+		short_name = namespace.get('__qualname__', '').split('.')[-1]
+
+		return class_name is not None and short_name == class_name
 
 
 # ==============================================================================
