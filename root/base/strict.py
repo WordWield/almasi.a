@@ -21,7 +21,7 @@ class Strict(a.Module):
 	# FRAMEWORK METHODS
 	# ======================================================================
 
-	# Check and decorate new public declarations once, before use.
+	# Check new public declarations before making the class available.
 	# ----------------------------------------------------------------------
 	def __init_subclass__(cls, **kwargs):
 		super().__init_subclass__(**kwargs)
@@ -30,36 +30,32 @@ class Strict(a.Module):
 
 		for name, declaration in tuple(vars(cls).items()):
 			if not name.startswith('_'):
-				if isinstance(declaration, (classmethod, staticmethod)):
-					method = declaration.__func__
-				else:
-					method = declaration
+				is_descriptor = isinstance(declaration, (classmethod, staticmethod))
+				method        = declaration.__func__ if is_descriptor else declaration
 
 				if inspect.isfunction(method):
 					signature = cls.__get_method_signature__(method, localns=localns)
 					inputs    = tuple(signature.parameters.values())
-					has_owner = not isinstance(declaration, staticmethod)
 
-					if has_owner:
+					if not isinstance(declaration, staticmethod):
 						inputs = inputs[1:]
 
-					for parameter in inputs:
-						if parameter.annotation is inspect.Parameter.empty:
-							raise TypeError(f'Missing annotation: {cls.__name__}.{name}.{parameter.name}')
+					is_typed = all(parameter.annotation is not inspect.Parameter.empty for parameter in inputs)
 
-					if signature.return_annotation is inspect.Signature.empty:
-						raise TypeError(f'Missing return annotation: {cls.__name__}.{name}')
+					if is_typed:
+						if signature.return_annotation is not inspect.Signature.empty:
+							wrapped = cls._decorate_method(method, signature)
 
-					wrapped = cls._decorate_method(method, signature)
+							if is_descriptor:
+								wrapped = type(declaration)(wrapped)
 
-					if isinstance(declaration, classmethod):
-						wrapped = classmethod(wrapped)
-					elif isinstance(declaration, staticmethod):
-						wrapped = staticmethod(wrapped)
+							setattr(cls, name, wrapped)
+						else:
+							raise TypeError(f'Missing return annotation: {cls.__name__}.{name}')
+					else:
+						raise TypeError(f'Missing input annotation: {cls.__name__}.{name}')
 
-					setattr(cls, name, wrapped)
-
-	# Validate all actual input values using the stored native signature.
+	# Validate bound arguments, including defaults and variadic values.
 	# ----------------------------------------------------------------------
 	@classmethod
 	def __validate_input__(cls, signature, args, kwargs):
@@ -72,15 +68,16 @@ class Strict(a.Module):
 
 			if annotation is not inspect.Parameter.empty:
 				if parameter.kind is inspect.Parameter.VAR_POSITIONAL:
-					for item in value:
-						cls._check_type(item, annotation)
+					values = value
 				elif parameter.kind is inspect.Parameter.VAR_KEYWORD:
-					for item in value.values():
-						cls._check_type(item, annotation)
+					values = value.values()
 				else:
-					cls._check_type(value, annotation)
+					values = (value,)
 
-	# Validate the completed result without coercion or consumption.
+				for item in values:
+					cls._check_type(item, annotation)
+
+	# Validate the completed result without coercion or resource consumption.
 	# ----------------------------------------------------------------------
 	@classmethod
 	def __validate_output__(cls, signature, output):
@@ -90,7 +87,7 @@ class Strict(a.Module):
 	# PRIVATE METHODS
 	# ======================================================================
 
-	# Keep native method binding, coroutine identity and decorator metadata.
+	# Preserve native binding, coroutine identity and declaration metadata.
 	# ----------------------------------------------------------------------
 	@classmethod
 	def _decorate_method(cls, method, signature):
@@ -98,6 +95,7 @@ class Strict(a.Module):
 			@wraps(method)
 			async def wrapped(*args, **kwargs):
 				cls.__validate_input__(signature, args, kwargs)
+
 				output = await method(*args, **kwargs)
 				cls.__validate_output__(signature, output)
 
@@ -106,6 +104,7 @@ class Strict(a.Module):
 			@wraps(method)
 			def wrapped(*args, **kwargs):
 				cls.__validate_input__(signature, args, kwargs)
+
 				output = method(*args, **kwargs)
 				cls.__validate_output__(signature, output)
 
@@ -115,9 +114,13 @@ class Strict(a.Module):
 
 		return wrapped
 
-	# Check a value without changing its type or state.
+	# Return a matching value unchanged or reject its actual type.
 	# ----------------------------------------------------------------------
 	@staticmethod
 	def _check_type(value, annotation):
-		if not a.Annotation(annotation).matches(value):
+		if a.Annotation(annotation).matches(value):
+			result = value
+		else:
 			raise TypeError(f'Expected {annotation!r}, got {type(value)!r}')
+
+		return result
