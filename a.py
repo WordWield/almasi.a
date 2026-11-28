@@ -15,7 +15,8 @@ from almasi import _libraries
 from .lib.imports             import Imports
 from .lib.reflection          import Reflection
 from .lib.reflection_meta     import ReflectionMeta
-from .lib.module              import Module, ModuleMeta
+from .lib.module              import Module
+from .lib.module_meta         import ModuleMeta
 from .lib.singleton           import Singleton
 from .lib.reloadable          import Reloadable, ReloadableModule, ReloadableSingleton
 from .lib.logger              import Logger

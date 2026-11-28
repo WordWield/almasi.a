@@ -225,6 +225,7 @@ class TestModule(a.Tester):
 		assert type(a.Reflection) is a.ReflectionMeta
 		assert type(a.Module) is a.ModuleMeta
 		assert a.ModuleMeta.__bases__ == (a.ReflectionMeta,)
+		assert a.ModuleMeta.__module__.endswith('.lib.module_meta')
 
 		assert a.Module.__get_method__ is a.Reflection.__get_method__
 		assert a.Module.__get_method_signature__.__func__ is a.Reflection.__get_method_signature__.__func__
